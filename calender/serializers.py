@@ -1,12 +1,31 @@
 from rest_framework import serializers
-from .models import Crop, CropVariety, Activity, Product, DayRange, DayRangeProduct
+from .models import Crop,AuditLog, CropVariety, Activity, Product, DayRange, DayRangeProduct
 
 
 class ProductSerializer(serializers.ModelSerializer):
+    discount_percentage = serializers.ReadOnlyField()
+    display_size = serializers.ReadOnlyField()
+    
     class Meta:
         model = Product
-        fields = ['id', 'name', 'name_marathi', 'product_type', 'created_at', 'updated_at']
+        fields = [
+            'id', 'name', 'name_marathi', 'product_type',
+            
+            'mrp', 'price', 
+            'size', 'size_unit', 
+            'image', 'in_stock',
+            
+            'created_at', 'updated_at'
+        ]
 
+
+class AuditLogSerializer(serializers.ModelSerializer):
+    model_display = serializers.CharField(source='get_model_name_display', read_only=True)
+    action_display = serializers.CharField(source='get_action_display', read_only=True)
+    
+    class Meta:
+        model = AuditLog
+        fields = '__all__'
 
 class DayRangeProductSerializer(serializers.ModelSerializer):
     product = ProductSerializer(read_only=True)

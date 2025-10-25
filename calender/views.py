@@ -5,13 +5,127 @@ from .models import Crop, CropVariety, Activity, Product, DayRange, DayRangeProd
 from rest_framework import viewsets, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework import viewsets, status
 from django_filters.rest_framework import DjangoFilterBackend
-from .models import Crop, CropVariety, Activity, Product, DayRange, DayRangeProduct
+from .models import Crop, CropVariety, Activity, Product, DayRange, DayRangeProduct,AuditLog
 from .serializers import (
     CropSerializer, CropScheduleSerializer, CropVarietySerializer, 
     CropVarietyDetailSerializer, ActivitySerializer, ProductSerializer, 
-    DayRangeSerializer, DayRangeProductSerializer
+    DayRangeSerializer, DayRangeProductSerializer, AuditLogSerializer
 )
+from .utils.s3_uploads import upload_image_to_s3
+
+
+class ProductViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint for products with full CRUD operations
+    """
+    queryset = Product.objects.all()
+    serializer_class = ProductSerializer
+    parser_classes = (MultiPartParser, FormParser)
+    
+    def get_client_ip(self, request):
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            ip = x_forwarded_for.split(',')[0]
+        else:
+            ip = request.META.get('REMOTE_ADDR')
+        return ip
+    
+    def create(self, request, *args, **kwargs):
+        try:
+            data = request.data.copy()
+            
+            # Handle image upload
+            if 'image' in request.FILES:
+                image_file = request.FILES['image']
+                image_url = upload_image_to_s3(image_file, folder='products')
+                data['image'] = image_url
+            
+            serializer = self.get_serializer(data=data)
+            serializer.is_valid(raise_exception=True)
+            product = serializer.save()
+            
+            # Create audit log
+            AuditLog.objects.create(
+                model_name='product',
+                object_id=product.id,
+                action='create',
+                user_email=request.data.get('user_email', ''),
+                changes={'created': serializer.data},
+                ip_address=self.get_client_ip(request)
+            )
+            
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
+    def update(self, request, *args, **kwargs):
+        try:
+            instance = self.get_object()
+            old_data = ProductSerializer(instance).data
+            
+            data = request.data.copy()
+            
+            # Handle image upload
+            if 'image' in request.FILES:
+                image_file = request.FILES['image']
+                image_url = upload_image_to_s3(image_file, folder='products')
+                data['image'] = image_url
+            
+            serializer = self.get_serializer(instance, data=data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            product = serializer.save()
+            
+            # Create audit log
+            changes = {
+                'before': old_data,
+                'after': serializer.data
+            }
+            
+            AuditLog.objects.create(
+                model_name='product',
+                object_id=product.id,
+                action='update',
+                user_email=request.data.get('user_email', ''),
+                changes=changes,
+                ip_address=self.get_client_ip(request)
+            )
+            
+            return Response(serializer.data)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['get'])
+    def history(self, request, pk=None):
+        """Get audit history for a product"""
+        logs = AuditLog.objects.filter(model_name='product', object_id=pk)
+        serializer = AuditLogSerializer(logs, many=True)
+        return Response(serializer.data)
+
+
+class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    API endpoint for audit logs
+    """
+    queryset = AuditLog.objects.all()
+    serializer_class = AuditLogSerializer
+    
+    def get_queryset(self):
+        queryset = AuditLog.objects.all()
+        
+        # Filter by model
+        model_name = self.request.query_params.get('model', None)
+        if model_name:
+            queryset = queryset.filter(model_name=model_name)
+        
+        # Filter by object_id
+        object_id = self.request.query_params.get('object_id', None)
+        if object_id:
+            queryset = queryset.filter(object_id=object_id)
+        
+        return queryset
 
 
 class CropViewSet(viewsets.ReadOnlyModelViewSet):
@@ -214,6 +328,9 @@ def crop_management_dashboard(request):
     }
     
     return render(request, 'dashboard.html', context)
+
+def edit(request):
+    return render(request, 'edit.html')
 
 
 def get_varieties_by_crop(request):

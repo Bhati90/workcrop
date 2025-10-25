@@ -48,19 +48,133 @@ class Activity(models.Model):
         verbose_name_plural = "Activities"
 
 
+from django.db import models
+from django.core.validators import MinValueValidator
+from decimal import Decimal
+
+
 class Product(models.Model):
     """Products used in crop management"""
+    # Basic Information
     name = models.CharField(max_length=200, unique=True)
     name_marathi = models.CharField(max_length=200, blank=True, null=True)
     product_type = models.CharField(max_length=100, blank=True, null=True)  # fertilizer, pesticide, etc.
+    
+    # Product Details
+    # description = models.TextField(blank=True, null=True, help_text="Product description")
+    # description_marathi = models.TextField(blank=True, null=True, help_text="Product description in Marathi")
+    
+    # Pricing Information
+    mrp = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        validators=[MinValueValidator(Decimal('0.00'))],
+        blank=True, 
+        null=True,
+        help_text="Maximum Retail Price"
+    )
+    price = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        validators=[MinValueValidator(Decimal('0.00'))],
+        blank=True, 
+        null=True,
+        help_text="Selling Price"
+    )
+    
+    # Size/Quantity Information
+    SIZE_UNIT_CHOICES = [
+        ('gm', 'Gram'),
+        ('kg', 'Kilogram'),
+        ('ml', 'Milliliter'),
+        ('liter', 'Liter'),
+        ('piece', 'Piece'),
+        ('pack', 'Pack'),
+    ]
+    
+    size = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.00'))],
+        blank=True, 
+        null=True,
+        help_text="Product size/quantity"
+    )
+    size_unit = models.CharField(
+        max_length=20, 
+        choices=SIZE_UNIT_CHOICES,
+        blank=True, 
+        null=True,
+        help_text="Unit of measurement for size"
+    )
+    
+    # Image (S3 URL or file path)
+    
+    # Image (S3 URL)
+    image = models.URLField(max_length=500, blank=True, null=True)
+    
+    # Alternative: If you want to use FileField/ImageField with S3 storage
+    # image = models.ImageField(upload_to='products/', blank=True, null=True)
+    
+    # Stock Information (Optional)
+    # in_stock = models.BooleanField(default=True, help_text="Is product available in stock")
+    
+    # Manufacturer Information (Optional)
+    # manufacturer = models.CharField(max_length=200, blank=True, null=True)
+    # manufacturer_marathi = models.CharField(max_length=200, blank=True, null=True)
+    
+    # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
+        if self.size and self.size_unit:
+            return f"{self.name} ({self.size} {self.size_unit})"
         return self.name
+    
+    
+    @property
+    def display_size(self):
+        """Return formatted size with unit"""
+        if self.size and self.size_unit:
+            return f"{self.size} {self.get_size_unit_display()}"
+        return "N/A"
 
     class Meta:
         ordering = ['name']
+
+
+
+class AuditLog(models.Model):
+    """Audit log for tracking all changes"""
+    ACTION_CHOICES = [
+        ('create', 'Created'),
+        ('update', 'Updated'),
+        ('delete', 'Deleted'),
+    ]
+    
+    MODEL_CHOICES = [
+        ('product', 'Product'),
+        ('crop', 'Crop'),
+        ('variety', 'Crop Variety'),
+        ('activity', 'Activity'),
+        ('dayrange', 'Day Range'),
+    ]
+    
+    model_name = models.CharField(max_length=50, choices=MODEL_CHOICES)
+    object_id = models.IntegerField()
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    changes = models.JSONField(default=dict)  # Store what changed
+    timestamp = models.DateTimeField(auto_now_add=True)
+    ip_address = models.GenericIPAddressField(blank=True, null=True)
+    
+    def __str__(self):
+        return f"{self.get_action_display()} {self.get_model_name_display()} #{self.object_id} at {self.timestamp}"
+    
+    class Meta:
+        ordering = ['-timestamp']
+        verbose_name = 'Audit Log'
+        verbose_name_plural = 'Audit Logs'
 
 
 class DayRange(models.Model):
