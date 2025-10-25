@@ -583,7 +583,9 @@
 
             <div class="filter-group search-box">
                 <label for="search">SEARCH</label>
-                <input type="text" name="search" id="search" placeholder="Search crops, varieties, activities, or products..." value="{{ search }}">
+                <!-- NEW - Shows empty string if None -->
+<input type="text" name="search" id="search" placeholder="Search crops, varieties, activities, or products..." value="{% if search %}{{ search }}{% endif %}">
+                <!-- <input type="text" name="search" id="search" placeholder="Search crops, varieties, activities, or products..." value="{{ search }}"> -->
             </div>
         </div>
 

@@ -235,7 +235,7 @@ def get_activities_by_variety(request):
     if variety_id:
         # Get only activities that exist in DayRange for this variety
         activities = Activity.objects.filter(
-            dayrange__crop_variety_id=variety_id
+            day_ranges__crop_variety_id=variety_id
         ).distinct().values('id', 'name').order_by('name')
     else:
         activities = Activity.objects.all().values('id', 'name').order_by('name')
@@ -253,18 +253,18 @@ def get_products_by_filters(request):
     if variety_id and activity_id:
         # Both filters applied - most specific
         products = products.filter(
-            dayrangeproduct__day_range__crop_variety_id=variety_id,
-            dayrangeproduct__day_range__activity_id=activity_id
+            day_range_products__day_range__crop_variety_id=variety_id,
+            day_range_products__day_range__activity_id=activity_id
         )
     elif variety_id:
         # Only variety filter
         products = products.filter(
-            dayrangeproduct__day_range__crop_variety_id=variety_id
+            day_rangep_roducts__day_range__crop_variety_id=variety_id
         )
     elif activity_id:
         # Only activity filter
         products = products.filter(
-            dayrangeproduct__day_range__activity_id=activity_id
+            day_range_products__day_range__activity_id=activity_id
         )
     
     products = products.distinct().values('id', 'name').order_by('name')
