@@ -47,13 +47,23 @@ def crop_management_dashboard(request):
         day_ranges = day_ranges.filter(start_day__lte=day_to)
     
     if search:
-        day_ranges = day_ranges.filter(
+        filters = (
             Q(crop_variety__crop__name__icontains=search) |
             Q(crop_variety__name__icontains=search) |
             Q(activity__name__icontains=search) |
             Q(info__icontains=search) |
             Q(products__product__name__icontains=search)
-        ).distinct()
+        )
+
+        # Allow numeric searches (for start_day, end_day)
+        try:
+            search_number = int(search)
+            filters |= Q(start_day=search_number) | Q(end_day=search_number)
+        except ValueError:
+            pass  # if search is not a number, skip this part
+
+        day_ranges = day_ranges.filter(filters).distinct()
+
     
     # Get all filter options
     crops = Crop.objects.all()

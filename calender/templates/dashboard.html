@@ -573,12 +573,12 @@
 
                         <div class="filter-group">
                             <label for="day_from">Day From</label>
-                            <input type="number" name="day_from" id="day_from" min="0" placeholder="Start day" value="{{ day_from }}">
+                            <input type="number" name="day_from" id="day_from"  placeholder="Start day" value="{{ day_from }}">
                         </div>
 
                         <div class="filter-group">
                             <label for="day_to">Day To</label>
-                            <input type="number" name="day_to" id="day_to" min="0" placeholder="End day" value="{{ day_to }}">
+                            <input type="number" name="day_to" id="day_to" placeholder="End day" value="{{ day_to }}">
                         </div>
 
                         <div class="filter-group search-box">
@@ -622,6 +622,9 @@
 
                     <div class="info-box">
                         {{ day_range.info }}
+                    </div>
+                    <div class="info-box">
+                        {{ day_range.info_marathi }}
                     </div>
 
                     {% if day_range.products.all %}
