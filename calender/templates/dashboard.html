@@ -1,0 +1,673 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crop Management Dashboard</title>
+    <style>
+        :root {
+            --color-white: rgba(255, 255, 255, 1);
+            --color-black: rgba(0, 0, 0, 1);
+            --color-cream-50: rgba(252, 252, 249, 1);
+            --color-cream-100: rgba(255, 255, 253, 1);
+            --color-gray-200: rgba(245, 245, 245, 1);
+            --color-gray-300: rgba(167, 169, 169, 1);
+            --color-gray-400: rgba(119, 124, 124, 1);
+            --color-slate-500: rgba(98, 108, 113, 1);
+            --color-brown-600: rgba(94, 82, 64, 1);
+            --color-charcoal-700: rgba(31, 33, 33, 1);
+            --color-charcoal-800: rgba(38, 40, 40, 1);
+            --color-slate-900: rgba(19, 52, 59, 1);
+            --color-teal-300: rgba(50, 184, 198, 1);
+            --color-teal-400: rgba(45, 166, 178, 1);
+            --color-teal-500: rgba(33, 128, 141, 1);
+            --color-teal-600: rgba(29, 116, 128, 1);
+            --color-teal-700: rgba(26, 104, 115, 1);
+            --color-orange-400: rgba(230, 129, 97, 1);
+            --color-orange-500: rgba(168, 75, 47, 1);
+            --color-brown-600-rgb: 94, 82, 64;
+            --color-teal-500-rgb: 33, 128, 141;
+            --color-slate-900-rgb: 19, 52, 59;
+            --color-slate-500-rgb: 98, 108, 113;
+            --color-background: var(--color-cream-50);
+            --color-surface: var(--color-cream-100);
+            --color-text: var(--color-slate-900);
+            --color-text-secondary: var(--color-slate-500);
+            --color-primary: var(--color-teal-500);
+            --color-primary-hover: var(--color-teal-600);
+            --color-primary-active: var(--color-teal-700);
+            --color-secondary: rgba(var(--color-brown-600-rgb), 0.12);
+            --color-secondary-hover: rgba(var(--color-brown-600-rgb), 0.2);
+            --color-secondary-active: rgba(var(--color-brown-600-rgb), 0.25);
+            --color-border: rgba(var(--color-brown-600-rgb), 0.2);
+            --color-btn-primary-text: var(--color-cream-50);
+            --color-card-border: rgba(var(--color-brown-600-rgb), 0.12);
+            --color-focus-ring: rgba(var(--color-teal-500-rgb), 0.4);
+            --font-family-base: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            --font-size-sm: 12px;
+            --font-size-base: 14px;
+            --font-size-md: 14px;
+            --font-size-lg: 16px;
+            --font-size-xl: 18px;
+            --font-size-2xl: 20px;
+            --font-size-3xl: 24px;
+            --font-size-4xl: 30px;
+            --font-weight-normal: 400;
+            --font-weight-medium: 500;
+            --font-weight-semibold: 550;
+            --font-weight-bold: 600;
+            --line-height-tight: 1.2;
+            --line-height-normal: 1.5;
+            --space-4: 4px;
+            --space-8: 8px;
+            --space-10: 10px;
+            --space-12: 12px;
+            --space-16: 16px;
+            --space-20: 20px;
+            --space-24: 24px;
+            --space-32: 32px;
+            --radius-sm: 6px;
+            --radius-base: 8px;
+            --radius-md: 10px;
+            --radius-lg: 12px;
+            --radius-full: 9999px;
+            --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.04), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.04), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
+            --duration-fast: 150ms;
+            --duration-normal: 250ms;
+            --ease-standard: cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --color-gray-400-rgb: 119, 124, 124;
+                --color-teal-300-rgb: 50, 184, 198;
+                --color-gray-300-rgb: 167, 169, 169;
+                --color-gray-200-rgb: 245, 245, 245;
+                --color-background: var(--color-charcoal-700);
+                --color-surface: var(--color-charcoal-800);
+                --color-text: var(--color-gray-200);
+                --color-text-secondary: rgba(var(--color-gray-300-rgb), 0.7);
+                --color-primary: var(--color-teal-300);
+                --color-primary-hover: var(--color-teal-400);
+                --color-secondary: rgba(var(--color-gray-400-rgb), 0.15);
+                --color-secondary-hover: rgba(var(--color-gray-400-rgb), 0.25);
+                --color-secondary-active: rgba(var(--color-gray-400-rgb), 0.3);
+                --color-border: rgba(var(--color-gray-400-rgb), 0.3);
+                --color-btn-primary-text: var(--color-slate-900);
+                --color-card-border: rgba(var(--color-gray-400-rgb), 0.2);
+                --color-focus-ring: rgba(var(--color-teal-300-rgb), 0.4);
+            }
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            font-size: var(--font-size-base);
+            font-family: var(--font-family-base);
+            line-height: var(--line-height-normal);
+            color: var(--color-text);
+            background-color: var(--color-background);
+            -webkit-font-smoothing: antialiased;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+        }
+
+        .app-container {
+            min-height: 100vh;
+            background-color: var(--color-background);
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--color-teal-500) 0%, var(--color-teal-700) 100%);
+            color: var(--color-white);
+            padding: var(--space-32) var(--space-24);
+            box-shadow: var(--shadow-md);
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header h1 {
+            font-size: var(--font-size-4xl);
+            font-weight: var(--font-weight-bold);
+            margin-bottom: var(--space-8);
+            line-height: var(--line-height-tight);
+        }
+
+        .header-icon {
+            display: inline-block;
+            margin-right: var(--space-8);
+        }
+
+        .header p {
+            font-size: var(--font-size-lg);
+            opacity: 0.95;
+            font-weight: var(--font-weight-normal);
+        }
+
+        .main-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: var(--space-24);
+        }
+
+        .filters-card {
+            background: var(--color-surface);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--color-card-border);
+            box-shadow: var(--shadow-sm);
+            padding: var(--space-24);
+            margin-bottom: var(--space-24);
+        }
+
+        .filters-header {
+            display: flex;
+            align-items: center;
+            gap: var(--space-8);
+            font-size: var(--font-size-xl);
+            font-weight: var(--font-weight-semibold);
+            margin-bottom: var(--space-20);
+            color: var(--color-text);
+        }
+
+        .filters-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: var(--space-16);
+            margin-bottom: var(--space-16);
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .filter-group label {
+            font-weight: var(--font-weight-semibold);
+            margin-bottom: var(--space-8);
+            color: var(--color-text);
+            font-size: var(--font-size-sm);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .filter-group select,
+        .filter-group input {
+            padding: var(--space-10) var(--space-12);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-base);
+            font-size: var(--font-size-base);
+            color: var(--color-text);
+            background-color: var(--color-surface);
+            transition: all var(--duration-fast) var(--ease-standard);
+            font-family: var(--font-family-base);
+        }
+
+        .filter-group select:focus,
+        .filter-group input:focus {
+            outline: 2px solid var(--color-primary);
+            border-color: var(--color-primary);
+            box-shadow: 0 0 0 3px var(--color-focus-ring);
+        }
+
+        .search-box {
+            grid-column: 1 / -1;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: var(--space-12) var(--space-16);
+            font-size: var(--font-size-base);
+        }
+
+        .button-group {
+            display: flex;
+            gap: var(--space-12);
+            margin-top: var(--space-20);
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: var(--space-10) var(--space-20);
+            border-radius: var(--radius-base);
+            font-size: var(--font-size-base);
+            font-weight: var(--font-weight-semibold);
+            cursor: pointer;
+            transition: all var(--duration-normal) var(--ease-standard);
+            border: none;
+            text-decoration: none;
+        }
+
+        .btn:focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 3px var(--color-focus-ring);
+        }
+
+        .btn-primary {
+            background: var(--color-primary);
+            color: var(--color-btn-primary-text);
+        }
+
+        .btn-primary:hover {
+            background: var(--color-primary-hover);
+            transform: translateY(-1px);
+        }
+
+        .btn-primary:active {
+            background: var(--color-primary-active);
+            transform: translateY(0);
+        }
+
+        .btn-secondary {
+            background: var(--color-secondary);
+            color: var(--color-text);
+        }
+
+        .btn-secondary:hover {
+            background: var(--color-secondary-hover);
+        }
+
+        .btn-secondary:active {
+            background: var(--color-secondary-active);
+        }
+
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--space-20);
+        }
+
+        .results-count {
+            font-size: var(--font-size-lg);
+            color: var(--color-text-secondary);
+            font-weight: var(--font-weight-semibold);
+        }
+
+        .crop-card {
+            background: var(--color-surface);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--color-card-border);
+            box-shadow: var(--shadow-sm);
+            padding: var(--space-24);
+            margin-bottom: var(--space-20);
+            transition: all var(--duration-normal) var(--ease-standard);
+        }
+
+        .crop-card:hover {
+            box-shadow: var(--shadow-lg);
+            border-color: var(--color-primary);
+            transform: translateY(-2px);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: var(--space-20);
+            padding-bottom: var(--space-16);
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        .card-title {
+            flex: 1;
+        }
+
+        .crop-name {
+            font-size: var(--font-size-2xl);
+            font-weight: var(--font-weight-bold);
+            color: var(--color-text);
+            margin-bottom: var(--space-4);
+            line-height: var(--line-height-tight);
+        }
+
+        .variety-name {
+            font-size: var(--font-size-base);
+            color: var(--color-text-secondary);
+            font-weight: var(--font-weight-medium);
+        }
+
+        .day-badge {
+            background: linear-gradient(135deg, var(--color-teal-500) 0%, var(--color-teal-700) 100%);
+            color: var(--color-white);
+            padding: var(--space-8) var(--space-16);
+            border-radius: var(--radius-full);
+            font-weight: var(--font-weight-semibold);
+            font-size: var(--font-size-sm);
+            white-space: nowrap;
+        }
+
+        .activity-section {
+            margin-bottom: var(--space-16);
+        }
+
+        .activity-name {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-8);
+            font-size: var(--font-size-lg);
+            font-weight: var(--font-weight-semibold);
+            color: var(--color-text);
+            background: var(--color-secondary);
+            padding: var(--space-8) var(--space-16);
+            border-radius: var(--radius-base);
+        }
+
+        .info-box {
+            background: var(--color-secondary);
+            border-left: 4px solid var(--color-primary);
+            padding: var(--space-16);
+            border-radius: var(--radius-base);
+            line-height: 1.6;
+            color: var(--color-text);
+            margin-bottom: var(--space-20);
+            font-size: var(--font-size-base);
+        }
+
+        .products-section {
+            margin-top: var(--space-20);
+        }
+
+        .products-header {
+            display: flex;
+            align-items: center;
+            gap: var(--space-8);
+            font-weight: var(--font-weight-semibold);
+            color: var(--color-text);
+            margin-bottom: var(--space-12);
+            font-size: var(--font-size-base);
+        }
+
+        .products-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: var(--space-12);
+        }
+
+        .product-item {
+            background: linear-gradient(135deg, rgba(var(--color-teal-500-rgb), 0.1) 0%, rgba(var(--color-teal-500-rgb), 0.05) 100%);
+            border: 1px solid rgba(var(--color-teal-500-rgb), 0.2);
+            padding: var(--space-12) var(--space-16);
+            border-radius: var(--radius-base);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all var(--duration-fast) var(--ease-standard);
+        }
+
+        .product-item:hover {
+            background: linear-gradient(135deg, rgba(var(--color-teal-500-rgb), 0.15) 0%, rgba(var(--color-teal-500-rgb), 0.08) 100%);
+            border-color: var(--color-primary);
+        }
+
+        .product-name {
+            font-weight: var(--font-weight-semibold);
+            color: var(--color-text);
+            font-size: var(--font-size-base);
+        }
+
+        .product-dosage {
+            color: var(--color-primary);
+            font-size: var(--font-size-sm);
+            font-weight: var(--font-weight-bold);
+            padding: var(--space-4) var(--space-8);
+            background: rgba(var(--color-teal-500-rgb), 0.15);
+            border-radius: var(--radius-sm);
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 80px 20px;
+            color: var(--color-text-secondary);
+        }
+
+        .no-results-icon {
+            font-size: 64px;
+            margin-bottom: var(--space-20);
+            opacity: 0.5;
+        }
+
+        .no-results h3 {
+            font-size: var(--font-size-2xl);
+            font-weight: var(--font-weight-semibold);
+            margin-bottom: var(--space-8);
+            color: var(--color-text);
+        }
+
+        .no-results p {
+            font-size: var(--font-size-base);
+            color: var(--color-text-secondary);
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                padding: var(--space-24) var(--space-16);
+            }
+
+            .header h1 {
+                font-size: var(--font-size-3xl);
+            }
+
+            .main-content {
+                padding: var(--space-16);
+            }
+
+            .filters-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .button-group {
+                flex-direction: column;
+            }
+
+            .btn {
+                width: 100%;
+            }
+
+            .card-header {
+                flex-direction: column;
+                gap: var(--space-12);
+            }
+
+            .day-badge {
+                align-self: flex-start;
+            }
+
+            .products-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .filters-card,
+            .crop-card {
+                padding: var(--space-16);
+            }
+
+            .crop-name {
+                font-size: var(--font-size-xl);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="header">
+            <div class="header-content">
+                <h1><span class="header-icon">🌾</span>Crop Management Dashboard</h1>
+                <p>Manage and track your crop activities, products, and schedules</p>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="filters-card">
+                <div class="filters-header">
+                    <span>🔍</span>
+                    <span>Filter Options</span>
+                </div>
+
+                <form method="get" id="filterForm">
+                    <div class="filters-grid">
+                        <div class="filter-group">
+                            <label for="crop">Crop</label>
+                            <select name="crop" id="crop" onchange="updateVarieties()">
+                                <option value="">All Crops</option>
+                                {% for crop in crops %}
+                                <option value="{{ crop.id }}" {% if selected_crop == crop.id|stringformat:"s" %}selected{% endif %}>
+                                    {{ crop.name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="filter-group">
+                            <label for="variety">Variety</label>
+                            <select name="variety" id="variety">
+                                <option value="">All Varieties</option>
+                                {% for variety in varieties %}
+                                <option value="{{ variety.id }}" {% if selected_variety == variety.id|stringformat:"s" %}selected{% endif %}>
+                                    {{ variety.name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="filter-group">
+                            <label for="activity">Activity</label>
+                            <select name="activity" id="activity">
+                                <option value="">All Activities</option>
+                                {% for activity in activities %}
+                                <option value="{{ activity.id }}" {% if selected_activity == activity.id|stringformat:"s" %}selected{% endif %}>
+                                    {{ activity.name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="filter-group">
+                            <label for="product">Product</label>
+                            <select name="product" id="product">
+                                <option value="">All Products</option>
+                                {% for product in products %}
+                                <option value="{{ product.id }}" {% if selected_product == product.id|stringformat:"s" %}selected{% endif %}>
+                                    {{ product.name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="filter-group">
+                            <label for="day_from">Day From</label>
+                            <input type="number" name="day_from" id="day_from" min="0" placeholder="Start day" value="{{ day_from }}">
+                        </div>
+
+                        <div class="filter-group">
+                            <label for="day_to">Day To</label>
+                            <input type="number" name="day_to" id="day_to" min="0" placeholder="End day" value="{{ day_to }}">
+                        </div>
+
+                        <div class="filter-group search-box">
+                            <label for="search">Search</label>
+                            <input type="text" name="search" id="search" placeholder="Search crops, varieties, activities, or products..." value="{{ search }}">
+                        </div>
+                    </div>
+
+                    <div class="button-group">
+                        <button type="submit" class="btn btn-primary">Apply Filters</button>
+                        <button type="button" class="btn btn-secondary" onclick="clearFilters()">Clear All</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="results-header">
+                <div class="results-count">
+                    📊 Found {{ day_ranges.count }} result{{ day_ranges.count|pluralize }}
+                </div>
+            </div>
+
+            {% if day_ranges %}
+                {% for day_range in day_ranges %}
+                <div class="crop-card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <div class="crop-name">{{ day_range.crop_variety.crop.name }}</div>
+                            <div class="variety-name">Variety: {{ day_range.crop_variety.name }}</div>
+                        </div>
+                        <div class="day-badge">
+                            Day {{ day_range.start_day }} - {{ day_range.end_day }}
+                        </div>
+                    </div>
+
+                    <div class="activity-section">
+                        <div class="activity-name">
+                            <span>📋</span>
+                            <span>{{ day_range.activity.name }}</span>
+                        </div>
+                    </div>
+
+                    <div class="info-box">
+                        {{ day_range.info }}
+                    </div>
+
+                    {% if day_range.products.all %}
+                    <div class="products-section">
+                        <div class="products-header">
+                            <span>💊</span>
+                            <span>Required Products ({{ day_range.products.count }})</span>
+                        </div>
+                        <div class="products-grid">
+                            {% for drp in day_range.products.all %}
+                            <div class="product-item">
+                                <span class="product-name">{{ drp.product.name }}</span>
+                                <span class="product-dosage">{{ drp.dosage }} {{ drp.get_dosage_unit_display }}</span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="no-results">
+                    <div class="no-results-icon">🔍</div>
+                    <h3>No Results Found</h3>
+                    <p>Try adjusting your filters to see more results</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+        function clearFilters() {
+            window.location.href = window.location.pathname;
+        }
+
+        function updateVarieties() {
+            const cropId = document.getElementById('crop').value;
+            const varietySelect = document.getElementById('variety');
+
+            if (!cropId) {
+                return;
+            }
+
+            document.getElementById('variety').value = '';
+            document.getElementById('filterForm').submit();
+        }
+    </script>
+</body>
+</html>
