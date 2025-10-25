@@ -16,5 +16,9 @@ router.register(r'day-ranges', views.DayRangeViewSet, basename='dayrange')
 urlpatterns = [
     path('api/', include(router.urls)),
     path('', views.crop_management_dashboard, name='dashboard'),
-    path('api/varieties/', views.get_varieties_by_crop, name='get_varieties'),
+    # path('api/varieties/', views.get_varieties_by_crop, name='get_varieties'),
+    path('api/get-varieties/', views.get_varieties_by_crop, name='get_varieties'),
+    path('api/get-activities/', views.get_activities_by_variety, name='get_activities'),
+    path('api/get-products/', views.get_products_by_filters, name='get_products'),
+
 ]

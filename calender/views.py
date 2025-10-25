@@ -154,7 +154,7 @@ def crop_management_dashboard(request):
             search_number = int(search)
             filters |= Q(start_day=search_number) | Q(end_day=search_number)
         except ValueError:
-            pass  # if search is not a number, skip this part
+            pass
 
         day_ranges = day_ranges.filter(filters).distinct()
 
@@ -162,12 +162,41 @@ def crop_management_dashboard(request):
     # Get all filter options
     crops = Crop.objects.all()
     varieties = CropVariety.objects.select_related('crop').all()
-    activities = Activity.objects.all()
-    products = Product.objects.all()
     
     # Filter varieties based on selected crop
     if crop_id:
         varieties = varieties.filter(crop_id=crop_id)
+    
+    # Get activities based on selected variety
+    # Only show activities that exist in DayRange for the selected variety
+    if variety_id:
+        activities = Activity.objects.filter(
+            day_ranges__crop_variety_id=variety_id
+        ).distinct()
+    else:
+        activities = Activity.objects.all()
+    
+    # Get products based on selected variety and activity
+    # Only show products that exist in DayRange for the selected variety/activity
+    if variety_id and activity_id:
+        # Both variety and activity selected - most specific
+        products = Product.objects.filter(
+            day_range_products__day_range__crop_variety_id=variety_id,
+            day_range_products__day_range__activity_id=activity_id
+        ).distinct()
+    elif variety_id:
+        # Only variety selected
+        products = Product.objects.filter(
+            day_range_products__day_range__crop_variety_id=variety_id
+        ).distinct()
+    elif activity_id:
+        # Only activity selected
+        products = Product.objects.filter(
+            day_range_products__day_range__activity_id=activity_id
+        ).distinct()
+    else:
+        # No filters - show all
+        products = Product.objects.all()
     
     context = {
         'day_ranges': day_ranges,
@@ -190,5 +219,54 @@ def crop_management_dashboard(request):
 def get_varieties_by_crop(request):
     """AJAX endpoint to get varieties for a selected crop"""
     crop_id = request.GET.get('crop_id')
-    varieties = CropVariety.objects.filter(crop_id=crop_id).values('id', 'name')
+    
+    if crop_id:
+        varieties = CropVariety.objects.filter(crop_id=crop_id).values('id', 'name')
+    else:
+        varieties = CropVariety.objects.all().values('id', 'name')
+    
     return JsonResponse(list(varieties), safe=False)
+
+
+def get_activities_by_variety(request):
+    """AJAX endpoint to get activities for a selected variety"""
+    variety_id = request.GET.get('variety_id')
+    
+    if variety_id:
+        # Get only activities that exist in DayRange for this variety
+        activities = Activity.objects.filter(
+            dayrange__crop_variety_id=variety_id
+        ).distinct().values('id', 'name').order_by('name')
+    else:
+        activities = Activity.objects.all().values('id', 'name').order_by('name')
+    
+    return JsonResponse(list(activities), safe=False)
+
+
+def get_products_by_filters(request):
+    """AJAX endpoint to get products based on variety and/or activity"""
+    variety_id = request.GET.get('variety_id')
+    activity_id = request.GET.get('activity_id')
+    
+    products = Product.objects.all()
+    
+    if variety_id and activity_id:
+        # Both filters applied - most specific
+        products = products.filter(
+            dayrangeproduct__day_range__crop_variety_id=variety_id,
+            dayrangeproduct__day_range__activity_id=activity_id
+        )
+    elif variety_id:
+        # Only variety filter
+        products = products.filter(
+            dayrangeproduct__day_range__crop_variety_id=variety_id
+        )
+    elif activity_id:
+        # Only activity filter
+        products = products.filter(
+            dayrangeproduct__day_range__activity_id=activity_id
+        )
+    
+    products = products.distinct().values('id', 'name').order_by('name')
+    
+    return JsonResponse(list(products), safe=False)
