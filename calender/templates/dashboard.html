@@ -515,84 +515,83 @@
         </div>
 
         <div class="main-content">
-            <div class="filters-card">
-                <div class="filters-header">
-                    <span>🔍</span>
-                    <span>Filter Options</span>
-                </div>
+           <div class="filters-card">
+    <div class="filters-header">
+        <span>🔍</span>
+        <span>Filter Options</span>
+    </div>
 
-                <form method="get" id="filterForm">
-                    <div class="filters-grid">
-                        <div class="filter-group">
-                            <label for="crop">Crop</label>
-                            <select name="crop" id="crop" onchange="updateVarieties()">
-                                <option value="">All Crops</option>
-                                {% for crop in crops %}
-                                <option value="{{ crop.id }}" {% if selected_crop == crop.id|stringformat:"s" %}selected{% endif %}>
-                                    {{ crop.name }}
-                                </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-
-                        <div class="filter-group">
-                            <label for="variety">Variety</label>
-                            <select name="variety" id="variety">
-                                <option value="">All Varieties</option>
-                                {% for variety in varieties %}
-                                <option value="{{ variety.id }}" {% if selected_variety == variety.id|stringformat:"s" %}selected{% endif %}>
-                                    {{ variety.name }}
-                                </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-
-                        <div class="filter-group">
-                            <label for="activity">Activity</label>
-                            <select name="activity" id="activity">
-                                <option value="">All Activities</option>
-                                {% for activity in activities %}
-                                <option value="{{ activity.id }}" {% if selected_activity == activity.id|stringformat:"s" %}selected{% endif %}>
-                                    {{ activity.name }}
-                                </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-
-                        <div class="filter-group">
-                            <label for="product">Product</label>
-                            <select name="product" id="product">
-                                <option value="">All Products</option>
-                                {% for product in products %}
-                                <option value="{{ product.id }}" {% if selected_product == product.id|stringformat:"s" %}selected{% endif %}>
-                                    {{ product.name }}
-                                </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-
-                        <div class="filter-group">
-                            <label for="day_from">Day From</label>
-                            <input type="number" name="day_from" id="day_from"  placeholder="Start day" value="{{ day_from }}">
-                        </div>
-
-                        <div class="filter-group">
-                            <label for="day_to">Day To</label>
-                            <input type="number" name="day_to" id="day_to" placeholder="End day" value="{{ day_to }}">
-                        </div>
-
-                        <div class="filter-group search-box">
-                            <label for="search">Search</label>
-                            <input type="text" name="search" id="search" placeholder="Search crops, varieties, activities, or products..." value="{{ search }}">
-                        </div>
-                    </div>
-
-                    <div class="button-group">
-                        <button type="submit" class="btn btn-primary">Apply Filters</button>
-                        <button type="button" class="btn btn-secondary" onclick="clearFilters()">Clear All</button>
-                    </div>
-                </form>
+    <form method="get" id="filterForm">
+        <div class="filters-grid">
+            <div class="filter-group">
+                <label for="crop">Crop</label>
+                <select name="crop" id="crop">
+                    <option value="">All Crops</option>
+                    {% for crop in crops %}
+                    <option value="{{ crop.id }}" {% if selected_crop == crop.id|stringformat:"s" %}selected{% endif %}>
+                        {{ crop.name }}
+                    </option>
+                    {% endfor %}
+                </select>
             </div>
+
+            <div class="filter-group">
+                <label for="variety">Variety</label>
+                <select name="variety" id="variety">
+                    <option value="">All Varieties</option>
+                    {% for variety in varieties %}
+                    <option value="{{ variety.id }}" {% if selected_variety == variety.id|stringformat:"s" %}selected{% endif %}>
+                        {{ variety.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label for="activity">Activity</label>
+                <select name="activity" id="activity">
+                    <option value="">All Activities</option>
+                    {% for activity in activities %}
+                    <option value="{{ activity.id }}" {% if selected_activity == activity.id|stringformat:"s" %}selected{% endif %}>
+                        {{ activity.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label for="product">Product</label>
+                <select name="product" id="product">
+                    <option value="">All Products</option>
+                    {% for product in products %}
+                    <option value="{{ product.id }}" {% if selected_product == product.id|stringformat:"s" %}selected{% endif %}>
+                        {{ product.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label for="day_from">Day From</label>
+                <input type="number" name="day_from" id="day_from" placeholder="Start day" value="{{ day_from }}">
+            </div>
+
+            <div class="filter-group">
+                <label for="day_to">Day To</label>
+                <input type="number" name="day_to" id="day_to" placeholder="End day" value="{{ day_to }}">
+            </div>
+
+            <div class="filter-group search-box">
+                <label for="search">Search</label>
+                <input type="text" name="search" id="search" placeholder="Search crops, varieties, activities, or products..." value="{{ search }}">
+            </div>
+        </div>
+
+        <div class="button-group">
+            <button type="button" class="btn btn-secondary" onclick="clearFilters()">Clear All</button>
+        </div>
+    </form>
+</div>
 
             <div class="results-header">
                 <div class="results-count">
@@ -656,21 +655,189 @@
     </div>
 
     <script>
-        function clearFilters() {
-            window.location.href = window.location.pathname;
+// Auto-submit form on any filter change
+document.addEventListener('DOMContentLoaded', function() {
+    const filterForm = document.getElementById('filterForm');
+    const filterInputs = filterForm.querySelectorAll('select, input');
+    
+    // Add change event listener to all filter inputs
+    filterInputs.forEach(input => {
+        input.addEventListener('change', function() {
+            applyFilters();
+        });
+        
+        // For search input, use debounce to avoid too many requests
+        if (input.id === 'search') {
+            let searchTimeout;
+            input.addEventListener('input', function() {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    applyFilters();
+                }, 500); // Wait 500ms after user stops typing
+            });
         }
+    });
+    
+    // Initialize cascading filters on page load
+    updateCascadingFilters();
+});
 
-        function updateVarieties() {
-            const cropId = document.getElementById('crop').value;
+// Apply filters by submitting the form
+function applyFilters() {
+    const filterForm = document.getElementById('filterForm');
+    filterForm.submit();
+}
+
+// Clear all filters
+function clearFilters() {
+    const filterForm = document.getElementById('filterForm');
+    filterForm.reset();
+    applyFilters();
+}
+
+// Update cascading filters based on selections
+function updateCascadingFilters() {
+    const cropId = document.getElementById('crop').value;
+    const varietyId = document.getElementById('variety').value;
+    const activityId = document.getElementById('activity').value;
+    
+    // Update varieties based on selected crop
+    if (cropId) {
+        updateVarieties(cropId);
+    }
+    
+    // Update activities based on selected variety
+    if (varietyId) {
+        updateActivities(varietyId);
+    }
+    
+    // Update products based on selected variety and activity
+    if (varietyId || activityId) {
+        updateProducts(varietyId, activityId);
+    }
+}
+
+// Fetch and update varieties based on selected crop
+function updateVarieties(cropId) {
+    if (!cropId) {
+        // Reset to show all varieties if no crop selected
+        location.reload();
+        return;
+    }
+    
+    fetch(`/api/get-varieties/?crop_id=${cropId}`)
+        .then(response => response.json())
+        .then(data => {
             const varietySelect = document.getElementById('variety');
-
-            if (!cropId) {
-                return;
+            const currentValue = varietySelect.value;
+            
+            varietySelect.innerHTML = '<option value="">All Varieties</option>';
+            data.varieties.forEach(variety => {
+                const option = document.createElement('option');
+                option.value = variety.id;
+                option.textContent = variety.name;
+                if (variety.id == currentValue) {
+                    option.selected = true;
+                }
+                varietySelect.appendChild(option);
+            });
+            
+            // Update activities after varieties are loaded
+            if (varietySelect.value) {
+                updateActivities(varietySelect.value);
             }
+        })
+        .catch(error => console.error('Error fetching varieties:', error));
+}
 
-            document.getElementById('variety').value = '';
-            document.getElementById('filterForm').submit();
-        }
-    </script>
+// Fetch and update activities based on selected variety
+function updateActivities(varietyId) {
+    if (!varietyId) {
+        return;
+    }
+    
+    fetch(`/api/get-activities/?variety_id=${varietyId}`)
+        .then(response => response.json())
+        .then(data => {
+            const activitySelect = document.getElementById('activity');
+            const currentValue = activitySelect.value;
+            
+            activitySelect.innerHTML = '<option value="">All Activities</option>';
+            data.activities.forEach(activity => {
+                const option = document.createElement('option');
+                option.value = activity.id;
+                option.textContent = activity.name;
+                if (activity.id == currentValue) {
+                    option.selected = true;
+                }
+                activitySelect.appendChild(option);
+            });
+            
+            // Update products after activities are loaded
+            updateProducts(varietyId, activitySelect.value);
+        })
+        .catch(error => console.error('Error fetching activities:', error));
+}
+
+// Fetch and update products based on selected variety and activity
+function updateProducts(varietyId, activityId) {
+    const params = new URLSearchParams();
+    if (varietyId) params.append('variety_id', varietyId);
+    if (activityId) params.append('activity_id', activityId);
+    
+    if (!varietyId && !activityId) {
+        return;
+    }
+    
+    fetch(`/api/get-products/?${params.toString()}`)
+        .then(response => response.json())
+        .then(data => {
+            const productSelect = document.getElementById('product');
+            const currentValue = productSelect.value;
+            
+            productSelect.innerHTML = '<option value="">All Products</option>';
+            data.products.forEach(product => {
+                const option = document.createElement('option');
+                option.value = product.id;
+                option.textContent = product.name;
+                if (product.id == currentValue) {
+                    option.selected = true;
+                }
+                productSelect.appendChild(option);
+            });
+        })
+        .catch(error => console.error('Error fetching products:', error));
+}
+
+// Add event listeners for cascading updates
+document.getElementById('crop').addEventListener('change', function() {
+    const cropId = this.value;
+    if (cropId) {
+        updateVarieties(cropId);
+    } else {
+        // Reset dependent fields
+        document.getElementById('variety').innerHTML = '<option value="">All Varieties</option>';
+        document.getElementById('activity').innerHTML = '<option value="">All Activities</option>';
+        document.getElementById('product').innerHTML = '<option value="">All Products</option>';
+    }
+});
+
+document.getElementById('variety').addEventListener('change', function() {
+    const varietyId = this.value;
+    if (varietyId) {
+        updateActivities(varietyId);
+    } else {
+        // Reset dependent fields
+        document.getElementById('activity').innerHTML = '<option value="">All Activities</option>';
+        document.getElementById('product').innerHTML = '<option value="">All Products</option>';
+    }
+});
+
+document.getElementById('activity').addEventListener('change', function() {
+    const varietyId = document.getElementById('variety').value;
+    const activityId = this.value;
+    updateProducts(varietyId, activityId);
+});
+</script>
 </body>
 </html>

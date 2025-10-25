@@ -2,6 +2,100 @@ from django.shortcuts import render
 from django.db.models import Q, Prefetch
 from django.http import JsonResponse
 from .models import Crop, CropVariety, Activity, Product, DayRange, DayRangeProduct
+from rest_framework import viewsets, filters
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from django_filters.rest_framework import DjangoFilterBackend
+from .models import Crop, CropVariety, Activity, Product, DayRange, DayRangeProduct
+from .serializers import (
+    CropSerializer, CropScheduleSerializer, CropVarietySerializer, 
+    CropVarietyDetailSerializer, ActivitySerializer, ProductSerializer, 
+    DayRangeSerializer, DayRangeProductSerializer
+)
+
+
+class CropViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    API endpoint for crops
+    GET /api/crops/ - List all crops
+    GET /api/crops/{id}/ - Get specific crop
+    GET /api/crops/{id}/schedule/ - Get complete schedule for a crop
+    """
+    queryset = Crop.objects.all()
+    serializer_class = CropSerializer
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['name', 'name_marathi']
+    ordering_fields = ['name', 'created_at']
+    
+    @action(detail=True, methods=['get'])
+    def schedule(self, request, pk=None):
+        """Get complete schedule with all activities and products for a crop"""
+        crop = self.get_object()
+        serializer = CropScheduleSerializer(crop)
+        return Response(serializer.data)
+
+
+class CropVarietyViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    API endpoint for crop varieties
+    GET /api/varieties/ - List all varieties
+    GET /api/varieties/{id}/ - Get specific variety with schedule
+    GET /api/varieties/?crop={crop_id} - Filter by crop
+    """
+    queryset = CropVariety.objects.all()
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['crop']
+    search_fields = ['name', 'name_marathi', 'crop__name']
+    ordering_fields = ['name', 'created_at']
+    
+    def get_serializer_class(self):
+        if self.action == 'retrieve':
+            return CropVarietyDetailSerializer
+        return CropVarietySerializer
+
+
+class ActivityViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    API endpoint for activities
+    GET /api/activities/ - List all activities
+    GET /api/activities/{id}/ - Get specific activity
+    """
+    queryset = Activity.objects.all()
+    serializer_class = ActivitySerializer
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['name', 'name_marathi']
+    ordering_fields = ['name', 'created_at']
+
+
+class ProductViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    API endpoint for products
+    GET /api/products/ - List all products
+    GET /api/products/{id}/ - Get specific product
+    GET /api/products/?product_type={type} - Filter by type
+    """
+    queryset = Product.objects.all()
+    serializer_class = ProductSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['product_type']
+    search_fields = ['name', 'name_marathi', 'product_type']
+    ordering_fields = ['name', 'created_at']
+
+
+class DayRangeViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    API endpoint for day ranges
+    GET /api/day-ranges/ - List all day ranges
+    GET /api/day-ranges/{id}/ - Get specific day range
+    GET /api/day-ranges/?crop_variety={id} - Filter by crop variety
+    GET /api/day-ranges/?activity={id} - Filter by activity
+    """
+    queryset = DayRange.objects.all()
+    serializer_class = DayRangeSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['crop_variety', 'activity', 'crop_variety__crop']
+    search_fields = ['info', 'info_marathi', 'activity__name', 'crop_variety__name']
+    ordering_fields = ['start_day', 'end_day', 'created_at']
 
 
 def crop_management_dashboard(request):
