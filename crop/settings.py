@@ -282,28 +282,28 @@ WSGI_APPLICATION = 'crop.wsgi.application'
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
 # # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',  # use this for normal Postgres
-        'NAME': 'registration_db',
-        'USER': 'postgres',
-        'PASSWORD': 'new_password',
-        'HOST': 'localhost',
-        'PORT': '5432',
-        'OPTIONS': {
-            'client_encoding': 'UTF8',
-        },
-    }
-}
-
-
 # DATABASES = {
-#     'default': dj_database_url.config(
-#         default=os.environ.get('DATABASE_URL'),
-#         conn_max_age=600,
-#         conn_health_checks=True,
-#     )
+#     'default': {
+#         'ENGINE': 'django.db.backends.postgresql',  # use this for normal Postgres
+#         'NAME': 'registration_db',
+#         'USER': 'postgres',
+#         'PASSWORD': 'new_password',
+#         'HOST': 'localhost',
+#         'PORT': '5432',
+#         'OPTIONS': {
+#             'client_encoding': 'UTF8',
+#         },
+#     }
 # }
+
+
+DATABASES = {
+    'default': dj_database_url.config(
+        default=os.environ.get('DATABASE_URL'),
+        conn_max_age=600,
+        conn_health_checks=True,
+    )
+}
 
 CORS_ALLOWED_ORIGINS = config(
     'CORS_ALLOWED_ORIGINS',
