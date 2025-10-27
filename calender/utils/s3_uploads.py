@@ -40,7 +40,7 @@ def upload_image_to_s3(file, folder='media'):
             unique_filename,
             ExtraArgs={
                 "ContentType": f"image/{file_extension}",
-                "ACL": "public-read"
+                
             }
         )
 
