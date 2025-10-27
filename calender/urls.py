@@ -11,7 +11,7 @@ router.register(r'varieties', views.CropVarietyViewSet, basename='variety')
 router.register(r'activities', views.ActivityViewSet, basename='activity')
 router.register(r'products', views.ProductViewSet, basename='product')
 router.register(r'day-ranges', views.DayRangeViewSet, basename='dayrange')
-
+router.register(r'products-readonly', views.ProductReadOnlyViewSet, basename='product-readonly')
 
 urlpatterns = [
     path('api/', include(router.urls)),

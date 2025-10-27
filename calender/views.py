@@ -203,7 +203,7 @@ class ActivityViewSet(viewsets.ReadOnlyModelViewSet):
     ordering_fields = ['name', 'created_at']
 
 
-class ProductViewSet(viewsets.ReadOnlyModelViewSet):
+class ProductReadOnlyViewSet(viewsets.ReadOnlyModelViewSet):
     """
     API endpoint for products
     GET /api/products/ - List all products
