@@ -39,7 +39,7 @@ class ProductSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'name_marathi', 'product_type',
             'mrp', 'price', 'size', 'size_unit', 'display_size',
-            'image_s3_key', 'presigned_image_url',
+            'image', 'presigned_image_url',
             'discount_percentage', 'created_at', 'updated_at'
         ]
 
