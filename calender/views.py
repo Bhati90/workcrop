@@ -16,7 +16,85 @@ from .serializers import (
 )
 from .utils.s3_uploads import upload_image_to_s3
 
-
+class DayRangeProductViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint for day range products with full CRUD operations
+    """
+    queryset = DayRangeProduct.objects.all()
+    serializer_class = DayRangeProductSerializer
+    parser_classes = (JSONParser, MultiPartParser, FormParser)
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['day_range', 'product']
+    search_fields = ['product__name', 'dosage']
+    ordering_fields = ['created_at']
+    
+    def create(self, request, *args, **kwargs):
+        try:
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            drp = serializer.save()
+            
+            # Create audit log
+            AuditLog.objects.create(
+                model_name='dayrangeproduct',
+                object_id=drp.id,
+                action='create',
+                changes={'created': serializer.data},
+            )
+            
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
+    def update(self, request, *args, **kwargs):
+        try:
+            instance = self.get_object()
+            old_data = DayRangeProductSerializer(instance).data
+            
+            serializer = self.get_serializer(instance, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            drp = serializer.save()
+            
+            # Create audit log
+            changes = {
+                'before': old_data,
+                'after': serializer.data
+            }
+            
+            AuditLog.objects.create(
+                model_name='dayrangeproduct',
+                object_id=drp.id,
+                action='update',
+                changes=changes,
+            )
+            
+            return Response(serializer.data)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
+    def partial_update(self, request, *args, **kwargs):
+        """Handle PATCH requests"""
+        return self.update(request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        """Handle DELETE requests"""
+        try:
+            instance = self.get_object()
+            old_data = DayRangeProductSerializer(instance).data
+            
+            # Create audit log before deletion
+            AuditLog.objects.create(
+                model_name='dayrangeproduct',
+                object_id=instance.id,
+                action='delete',
+                changes={'deleted': old_data},
+            )
+            
+            instance.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
 class ProductViewSet(viewsets.ModelViewSet):
     """
     API endpoint for products with full CRUD operations
@@ -125,6 +203,20 @@ class ProductViewSet(viewsets.ModelViewSet):
         logs = AuditLog.objects.filter(model_name='product', object_id=pk)
         serializer = AuditLogSerializer(logs, many=True)
         return Response(serializer.data)
+class ProductReadOnlyViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    API endpoint for products
+    GET /api/products/ - List all products
+    GET /api/products/{id}/ - Get specific product
+    GET /api/products/?product_type={type} - Filter by type
+    """
+    queryset = Product.objects.all()
+    serializer_class = ProductSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['product_type']
+    search_fields = ['name', 'name_marathi', 'product_type']
+    ordering_fields = ['name', 'created_at']
+
 
 
 class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
@@ -150,35 +242,23 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
         return queryset
 
 
-class CropViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    API endpoint for crops
-    GET /api/crops/ - List all crops
-    GET /api/crops/{id}/ - Get specific crop
-    GET /api/crops/{id}/schedule/ - Get complete schedule for a crop
-    """
+class CropViewSet(viewsets.ModelViewSet):  # ← Changed from ReadOnlyModelViewSet
     queryset = Crop.objects.all()
     serializer_class = CropSerializer
+    parser_classes = (JSONParser, MultiPartParser, FormParser)
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'name_marathi']
     ordering_fields = ['name', 'created_at']
     
     @action(detail=True, methods=['get'])
     def schedule(self, request, pk=None):
-        """Get complete schedule with all activities and products for a crop"""
         crop = self.get_object()
         serializer = CropScheduleSerializer(crop)
         return Response(serializer.data)
 
-
-class CropVarietyViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    API endpoint for crop varieties
-    GET /api/varieties/ - List all varieties
-    GET /api/varieties/{id}/ - Get specific variety with schedule
-    GET /api/varieties/?crop={crop_id} - Filter by crop
-    """
+class CropVarietyViewSet(viewsets.ModelViewSet):  # ← Changed from ReadOnlyModelViewSet
     queryset = CropVariety.objects.all()
+    parser_classes = (JSONParser, MultiPartParser, FormParser)
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['crop']
     search_fields = ['name', 'name_marathi', 'crop__name']
@@ -188,51 +268,93 @@ class CropVarietyViewSet(viewsets.ReadOnlyModelViewSet):
         if self.action == 'retrieve':
             return CropVarietyDetailSerializer
         return CropVarietySerializer
-
-
-class ActivityViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    API endpoint for activities
-    GET /api/activities/ - List all activities
-    GET /api/activities/{id}/ - Get specific activity
-    """
+    
+class ActivityViewSet(viewsets.ModelViewSet):  # ← Changed from ReadOnlyModelViewSet
     queryset = Activity.objects.all()
     serializer_class = ActivitySerializer
+    parser_classes = (JSONParser, MultiPartParser, FormParser)
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'name_marathi']
     ordering_fields = ['name', 'created_at']
 
-
-class ProductReadOnlyViewSet(viewsets.ReadOnlyModelViewSet):
+class DayRangeViewSet(viewsets.ModelViewSet):  # ← Changed from ReadOnlyModelViewSet
     """
-    API endpoint for products
-    GET /api/products/ - List all products
-    GET /api/products/{id}/ - Get specific product
-    GET /api/products/?product_type={type} - Filter by type
-    """
-    queryset = Product.objects.all()
-    serializer_class = ProductSerializer
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['product_type']
-    search_fields = ['name', 'name_marathi', 'product_type']
-    ordering_fields = ['name', 'created_at']
-
-
-class DayRangeViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    API endpoint for day ranges
-    GET /api/day-ranges/ - List all day ranges
-    GET /api/day-ranges/{id}/ - Get specific day range
-    GET /api/day-ranges/?crop_variety={id} - Filter by crop variety
-    GET /api/day-ranges/?activity={id} - Filter by activity
+    API endpoint for day ranges with full CRUD operations
     """
     queryset = DayRange.objects.all()
     serializer_class = DayRangeSerializer
+    parser_classes = (JSONParser, MultiPartParser, FormParser)
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['crop_variety', 'activity', 'crop_variety__crop']
     search_fields = ['info', 'info_marathi', 'activity__name', 'crop_variety__name']
     ordering_fields = ['start_day', 'end_day', 'created_at']
-
+    
+    def create(self, request, *args, **kwargs):
+        try:
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            day_range = serializer.save()
+            
+            # Create audit log
+            AuditLog.objects.create(
+                model_name='dayrange',
+                object_id=day_range.id,
+                action='create',
+                changes={'created': serializer.data},
+            )
+            
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
+    def update(self, request, *args, **kwargs):
+        try:
+            instance = self.get_object()
+            old_data = DayRangeSerializer(instance).data
+            
+            serializer = self.get_serializer(instance, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            day_range = serializer.save()
+            
+            # Create audit log
+            changes = {
+                'before': old_data,
+                'after': serializer.data
+            }
+            
+            AuditLog.objects.create(
+                model_name='dayrange',
+                object_id=day_range.id,
+                action='update',
+                changes=changes,
+            )
+            
+            return Response(serializer.data)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
+    def partial_update(self, request, *args, **kwargs):
+        """Handle PATCH requests"""
+        return self.update(request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        """Handle DELETE requests"""
+        try:
+            instance = self.get_object()
+            old_data = DayRangeSerializer(instance).data
+            
+            # Create audit log before deletion
+            AuditLog.objects.create(
+                model_name='dayrange',
+                object_id=instance.id,
+                action='delete',
+                changes={'deleted': old_data},
+            )
+            
+            instance.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 def crop_management_dashboard(request):
     """Main dashboard with comprehensive filtering"""

@@ -12,6 +12,7 @@ router.register(r'activities', views.ActivityViewSet, basename='activity')
 router.register(r'products', views.ProductViewSet, basename='product')
 router.register(r'day-ranges', views.DayRangeViewSet, basename='dayrange')
 router.register(r'products-readonly', views.ProductReadOnlyViewSet, basename='product-readonly')
+router.register(r'day-range-products', views.DayRangeProductViewSet, basename='dayrangeproduct')  # ← ADD THIS
 
 urlpatterns = [
     path('api/', include(router.urls)),

@@ -52,6 +52,38 @@ class ProductSerializer(serializers.ModelSerializer):
             'image', 'presigned_image_url',
             'discount_percentage', 'created_at', 'updated_at'
         ]
+class DayRangeProductSerializer(serializers.ModelSerializer):
+    product = ProductSerializer(read_only=True)
+    product_id = serializers.IntegerField(write_only=True)
+    
+    class Meta:
+        model = DayRangeProduct
+        fields = ['id', 'day_range', 'product', 'product_id', 'dosage', 'dosage_unit', 'created_at', 'updated_at']
+        extra_kwargs = {
+            'day_range': {'required': True}  # Make sure it's required
+        }
+    
+    def create(self, validated_data):
+        # Extract product_id and get the actual product
+        product_id = validated_data.pop('product_id')
+        validated_data['product_id'] = product_id
+        
+        # Create the instance
+        return DayRangeProduct.objects.create(**validated_data)
+    
+    def update(self, instance, validated_data):
+        # Handle product_id if provided
+        product_id = validated_data.pop('product_id', None)
+        if product_id:
+            instance.product_id = product_id
+        
+        # Update other fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        
+        instance.save()
+        return instance   
+     
 class AuditLogSerializer(serializers.ModelSerializer):
     model_display = serializers.CharField(source='get_model_name_display', read_only=True)
     action_display = serializers.CharField(source='get_action_display', read_only=True)

@@ -476,7 +476,58 @@
 .product-edit {
     display: flex;
     gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.product-edit select,
+.product-edit input {
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.product-edit select {
+    flex: 2;
+    min-width: 150px;
+}
+
+.product-edit input {
     flex: 1;
+    min-width: 80px;
+}
+
+.product-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.btn-save, .btn-cancel {
+    padding: 6px 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.btn-save {
+    background-color: #28a745;
+    color: white;
+}
+
+.btn-save:hover {
+    background-color: #218838;
+}
+
+.btn-cancel {
+    background-color: #dc3545;
+    color: white;
+}
+
+.btn-cancel:hover {
+    background-color: #c82333;
 }
 .wizard-form { border: 1px solid #444; border-radius: 10px; padding: 16px; margin: 32px 0; background: #222; }
 .wizard-step { display: none; padding: 12px 0; }
@@ -939,59 +990,113 @@ function saveInfoMarathi(dayRangeId) {
 }
 let currentAddProductDayRangeId = null;
 
-// Show add product form inline for a DayRange
-function addNewProduct(dayRangeId) {
-    // Hide any open add product forms
-    document.querySelectorAll('.add-product-row').forEach(el => el.remove());
-
-    const parent = document.getElementById('products-grid-' + dayRangeId);
-    // Prepare template for add row
-    let html = `
-    <div class="add-product-row" style="display:flex;align-items:center;gap:8px;margin:8px 0;">
-        <select id="add-product-select-${dayRangeId}">
-            ${PRODUCTS_LIST.map(prod => `<option value="${prod.id}">${prod.name}</option>`).join("")}
-        </select>
-        <input type="number" step="0.01" id="add-dosage-${dayRangeId}" placeholder="Dosage">
-        <select id="add-dosage-unit-${dayRangeId}">
-            <option value="gm/acre">Gram per Acre</option>
-            <option value="kg/acre">Kilogram per Acre</option>
-            <option value="ml/acre">Milliliter per Acre</option>
-            <option value="liter/acre">Liter per Acre</option>
-            <option value="gm/liter">Gram per Liter</option>
-            <option value="ml/liter">Milliliter per Liter</option>
-            <option value="gm/plant">Gram per Plant</option>
-            <option value="ml/plant">Milliliter per Plant</option>
-        </select>
-        <button onclick="saveNewProduct(${dayRangeId})">Add</button>
-        <button onclick="this.closest('.add-product-row').remove();">Cancel</button>
-    </div>
+async function addNewProduct(dayRangeId) {
+    // Create the new product form
+    const productsGrid = document.getElementById(`products-grid-${dayRangeId}`);
+    
+    // Check if add form already exists
+    if (document.getElementById(`new-product-form-${dayRangeId}`)) {
+        showAlert('Product form is already open', 'info');
+        return;
+    }
+    
+    // Fetch all products
+    let products = [];
+    try {
+        const response = await fetch('/api/products-readonly/');
+        const data = await response.json();
+        products = data.results || data;
+    } catch (error) {
+        showAlert('Failed to load products', 'error');
+        return;
+    }
+    
+    // Create the form HTML
+    const newProductHtml = `
+        <div class="product-item editable-product" id="new-product-form-${dayRangeId}">
+            <div class="product-edit" style="display: flex;">
+                <select id="new-product-select-${dayRangeId}" style="flex: 2; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    <option value="">Select Product</option>
+                    ${products.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
+                </select>
+                <input type="number" step="0.01" id="new-dosage-input-${dayRangeId}" placeholder="Dosage" 
+                    style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-left: 8px;">
+                <select id="new-dosage-unit-select-${dayRangeId}" 
+                    style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-left: 8px;">
+                    <option value="gram_per_liter">Gram per Liter</option>
+                    <option value="ml_per_liter">ML per Liter</option>
+                    <option value="kg_per_acre">KG per Acre</option>
+                    <option value="liter_per_acre">Liter per Acre</option>
+                    <option value="piece">Piece</option>
+                    <option value="pack">Pack</option>
+                </select>
+            </div>
+            <div class="product-buttons">
+                <button class="btn-save" onclick="saveNewProduct(${dayRangeId})">💾 Add</button>
+                <button class="btn-cancel" onclick="cancelNewProduct(${dayRangeId})">❌ Cancel</button>
+            </div>
+        </div>
     `;
-    parent.insertAdjacentHTML('afterbegin', html);
-    currentAddProductDayRangeId = dayRangeId;
+    
+    // Add to the grid
+    productsGrid.insertAdjacentHTML('beforeend', newProductHtml);
 }
 
-// Replace with your way to expose products array. In Django, pass PRODUCTS_LIST as JSON context var.
-var PRODUCTS_LIST = window.PRODUCTS_LIST || [];
-
-function saveNewProduct(dayRangeId) {
-    const productId = document.getElementById('add-product-select-' + dayRangeId).value;
-    const dosage = document.getElementById('add-dosage-' + dayRangeId).value;
-    const dosageUnit = document.getElementById('add-dosage-unit-' + dayRangeId).value;
-    fetch('/api/day-range-products/', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            day_range: dayRangeId,
-            product: productId,
-            dosage: dosage,
-            dosage_unit: dosageUnit
-        })
-    }).then(resp => {
-        if (resp.ok) location.reload();
-        else alert('Error adding product');
+async function saveNewProduct(dayRangeId) {
+    const productId = document.getElementById(`new-product-select-${dayRangeId}`).value;
+    const dosage = document.getElementById(`new-dosage-input-${dayRangeId}`).value;
+    const dosageUnit = document.getElementById(`new-dosage-unit-select-${dayRangeId}`).value;
+    
+    // Validation
+    if (!productId) {
+        showAlert('Please select a product', 'error');
+        return;
+    }
+    if (!dosage || dosage <= 0) {
+        showAlert('Please enter a valid dosage', 'error');
+        return;
+    }
+    
+    console.log('Sending data:', {
+        day_range: dayRangeId,
+        product_id: productId,
+        dosage: dosage,
+        dosage_unit: dosageUnit
     });
+    
+    try {
+        const response = await fetch('/api/day-range-products/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                day_range: dayRangeId,
+                product_id: productId,
+                dosage: parseFloat(dosage),  // ← Ensure it's a number
+                dosage_unit: dosageUnit
+            })
+        });
+        
+        if (response.ok) {
+            showAlert('Product added successfully!', 'success');
+            location.reload();
+        } else {
+            const error = await response.json();
+            console.error('Error response:', error);  // ← See the actual error
+            showAlert('Failed to add product: ' + JSON.stringify(error), 'error');
+        }
+    } catch (error) {
+        console.error('Catch error:', error);
+        showAlert('Error: ' + error.message, 'error');
+    }
 }
-
+function cancelNewProduct(dayRangeId) {
+    const form = document.getElementById(`new-product-form-${dayRangeId}`);
+    if (form) {
+        form.remove();
+    }
+}
 // ----- DayRange (all fields) Edit support -----
 function enableDayRangeEdit(dayRangeId, start, end) {
     let editBox = document.getElementById('dayrange-edit-box-' + dayRangeId);
@@ -1072,7 +1177,7 @@ async function saveProduct(productId) {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                product: productSelect,
+                product_id: productSelect,
                 dosage: dosage,
                 dosage_unit: dosageUnit
             })
