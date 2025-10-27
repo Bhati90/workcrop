@@ -429,6 +429,62 @@
             background: rgba(var(--color-teal-500-rgb), 0.15);
             border-radius: var(--radius-sm);
         }
+        .editable-info {
+    position: relative;
+}
+
+.info-edit {
+    width: 100%;
+    min-height: 80px;
+    padding: 12px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-base);
+    font-family: inherit;
+    font-size: 14px;
+    resize: vertical;
+}
+
+.edit-buttons {
+    margin-top: 8px;
+    display: flex;
+    gap: 8px;
+}
+
+.btn-edit, .btn-save, .btn-cancel, .btn-delete {
+    padding: 4px 8px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.btn-edit { background: var(--color-primary); color: white; }
+.btn-save { background: var(--color-success); color: white; }
+.btn-cancel { background: var(--color-secondary); color: white; }
+.btn-delete { background: var(--color-danger); color: white; }
+
+.editable-product {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-base);
+}
+
+.product-edit {
+    display: flex;
+    gap: 8px;
+    flex: 1;
+}
+
+.product-edit input, .product-edit select {
+    padding: 4px;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+}
+
 
         .no-results {
             text-align: center;
@@ -625,37 +681,73 @@
                     </div>
 
                     <div class="activity-section">
-                        <div class="activity-name">
-                            <span>📋</span>
-                            <span>{{ day_range.activity.name }}</span>
-                        </div>
-                    </div>
+        <div class="activity-name">
+            <span>📋</span>
+            <span>{{ day_range.activity.name }}</span>
+        </div>
+    </div>
 
-                    <div class="info-box">
-                        {{ day_range.info }}
-                    </div>
-                    <div class="info-box">
-                        {{ day_range.info_marathi }}
-                    </div>
+    <!-- Editable Info Boxes -->
+    <div class="info-box editable-info" id="info-box-{{ day_range.id }}">
+        <div class="info-display" id="info-display-{{ day_range.id }}">{{ day_range.info }}</div>
+        <textarea class="info-edit" id="info-edit-{{ day_range.id }}" style="display: none;">{{ day_range.info }}</textarea>
+        <div class="edit-buttons">
+            <button class="btn-edit" onclick="enableEdit({{ day_range.id }}, 'info')">✏️ Edit</button>
+            <button class="btn-save" id="save-info-{{ day_range.id }}" onclick="saveInfo({{ day_range.id }})" style="display: none;">💾 Save</button>
+            <button class="btn-cancel" id="cancel-info-{{ day_range.id }}" onclick="cancelEdit({{ day_range.id }}, 'info')" style="display: none;">❌ Cancel</button>
+        </div>
+    </div>
 
-                    {% if day_range.products.all %}
-                    <div class="products-section">
-                        <div class="products-header">
-                            <span>💊</span>
-                            <span>Required Products ({{ day_range.products.count }})</span>
-                        </div>
-                        <div class="products-grid">
-                            {% for drp in day_range.products.all %}
-                            <div class="product-item">
-                                <span class="product-name">{{ drp.product.name }}</span>
-                                <span class="product-dosage">{{ drp.dosage }} {{ drp.get_dosage_unit_display }}</span>
-                            </div>
-                            {% endfor %}
-                        </div>
-                    </div>
-                    {% endif %}
+    <div class="info-box editable-info" id="info-marathi-box-{{ day_range.id }}">
+        <div class="info-display" id="info-marathi-display-{{ day_range.id }}">{{ day_range.info_marathi }}</div>
+        <textarea class="info-edit" id="info-marathi-edit-{{ day_range.id }}" style="display: none;">{{ day_range.info_marathi }}</textarea>
+        <div class="edit-buttons">
+            <button class="btn-edit" onclick="enableEdit({{ day_range.id }}, 'info_marathi')">✏️ Edit</button>
+            <button class="btn-save" id="save-info-marathi-{{ day_range.id }}" onclick="saveInfoMarathi({{ day_range.id }})" style="display: none;">💾 Save</button>
+            <button class="btn-cancel" id="cancel-info-marathi-{{ day_range.id }}" onclick="cancelEdit({{ day_range.id }}, 'info_marathi')" style="display: none;">❌ Cancel</button>
+        </div>
+    </div>
+
+    <!-- Editable Products Section -->
+    {% if day_range.products.all %}
+    <div class="products-section">
+        <div class="products-header">
+            <span>💊</span>
+            <span>Required Products ({{ day_range.products.count }})</span>
+            <button class="btn btn-secondary" onclick="addNewProduct({{ day_range.id }})">➕ Add Product</button>
+        </div>
+        <div class="products-grid" id="products-grid-{{ day_range.id }}">
+            {% for drp in day_range.products.all %}
+            <div class="product-item editable-product" id="product-item-{{ drp.id }}">
+                <div class="product-display" id="product-display-{{ drp.id }}">
+                    <span class="product-name">{{ drp.product.name }}</span>
+                    <span class="product-dosage">{{ drp.dosage }} {{ drp.get_dosage_unit_display }}</span>
                 </div>
-                {% endfor %}
+                <div class="product-edit" id="product-edit-{{ drp.id }}" style="display: none;">
+                    <select id="product-select-{{ drp.id }}">
+                        {% for product in products %}
+                        <option value="{{ product.id }}" {% if product.id == drp.product.id %}selected{% endif %}>{{ product.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <input type="number" step="0.01" id="dosage-input-{{ drp.id }}" value="{{ drp.dosage }}">
+                    <select id="dosage-unit-select-{{ drp.id }}">
+                        {% for unit_code, unit_name in drp.DOSAGE_UNIT_CHOICES %}
+                        <option value="{{ unit_code }}" {% if unit_code == drp.dosage_unit %}selected{% endif %}>{{ unit_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="product-buttons">
+                    <button class="btn-edit" onclick="enableProductEdit({{ drp.id }})">✏️</button>
+                    <button class="btn-save" id="save-product-{{ drp.id }}" onclick="saveProduct({{ drp.id }})" style="display: none;">💾</button>
+                    <button class="btn-delete" onclick="deleteProduct({{ drp.id }})">🗑️</button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endfor %}
             {% else %}
                 <div class="no-results">
                     <div class="no-results-icon">🔍</div>
@@ -808,6 +900,117 @@ function updateSelectOptions(selectElement, data, defaultText) {
         selectElement.appendChild(option);
     });
 }
+// Info field editing
+function enableEdit(dayRangeId, field) {
+    document.getElementById(`${field}-display-${dayRangeId}`).style.display = 'none';
+    document.getElementById(`${field}-edit-${dayRangeId}`).style.display = 'block';
+    document.getElementById(`save-${field}-${dayRangeId}`).style.display = 'inline-block';
+    document.getElementById(`cancel-${field}-${dayRangeId}`).style.display = 'inline-block';
+}
+
+function cancelEdit(dayRangeId, field) {
+    const originalText = document.getElementById(`${field}-display-${dayRangeId}`).textContent;
+    document.getElementById(`${field}-edit-${dayRangeId}`).value = originalText;
+    document.getElementById(`${field}-display-${dayRangeId}`).style.display = 'block';
+    document.getElementById(`${field}-edit-${dayRangeId}`).style.display = 'none';
+    document.getElementById(`save-${field}-${dayRangeId}`).style.display = 'none';
+    document.getElementById(`cancel-${field}-${dayRangeId}`).style.display = 'none';
+}
+
+function saveInfo(dayRangeId) {
+    const newInfo = document.getElementById(`info-edit-${dayRangeId}`).value;
+    updateDayRange(dayRangeId, { info: newInfo }, 'info');
+}
+
+function saveInfoMarathi(dayRangeId) {
+    const newInfo = document.getElementById(`info-marathi-edit-${dayRangeId}`).value;
+    updateDayRange(dayRangeId, { info_marathi: newInfo }, 'info_marathi');
+}
+
+async function updateDayRange(dayRangeId, data, field) {
+    try {
+        const response = await fetch(`/api/day-ranges/${dayRangeId}/`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                // Add CSRF token if needed:
+                // 'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify(data)
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+            document.getElementById(`${field}-display-${dayRangeId}`).textContent = result[field];
+            cancelEdit(dayRangeId, field);
+            showAlert('Updated successfully!', 'success');
+        } else {
+            showAlert('Failed to update', 'error');
+        }
+    } catch (error) {
+        showAlert('Error: ' + error.message, 'error');
+    }
+}
+
+// Product editing
+function enableProductEdit(productId) {
+    document.getElementById(`product-display-${productId}`).style.display = 'none';
+    document.getElementById(`product-edit-${productId}`).style.display = 'flex';
+    document.getElementById(`save-product-${productId}`).style.display = 'inline-block';
+}
+
+async function saveProduct(productId) {
+    const productSelect = document.getElementById(`product-select-${productId}`).value;
+    const dosage = document.getElementById(`dosage-input-${productId}`).value;
+    const dosageUnit = document.getElementById(`dosage-unit-select-${productId}`).value;
+
+    try {
+        const response = await fetch(`/api/day-range-products/${productId}/`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                product: productSelect,
+                dosage: dosage,
+                dosage_unit: dosageUnit
+            })
+        });
+
+        if (response.ok) {
+            location.reload(); // Refresh to see changes
+        } else {
+            showAlert('Failed to update product', 'error');
+        }
+    } catch (error) {
+        showAlert('Error: ' + error.message, 'error');
+    }
+}
+
+async function deleteProduct(productId) {
+    if (confirm('Are you sure you want to delete this product?')) {
+        try {
+            const response = await fetch(`/api/day-range-products/${productId}/`, {
+                method: 'DELETE'
+            });
+
+            if (response.ok) {
+                document.getElementById(`product-item-${productId}`).remove();
+                showAlert('Product deleted successfully!', 'success');
+            } else {
+                showAlert('Failed to delete product', 'error');
+            }
+        } catch (error) {
+            showAlert('Error: ' + error.message, 'error');
+        }
+    }
+}
+
+function showAlert(message, type = 'info') {
+    // Implement your alert system here
+    alert(message);
+}
+
 
 // Helper function to reset select
 function resetSelect(selectElement, defaultText) {
