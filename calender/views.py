@@ -40,7 +40,7 @@ class ProductViewSet(viewsets.ModelViewSet):
             # Handle image upload
             if 'image' in request.FILES:
                 image_file = request.FILES['image']
-                image_url = upload_image_to_s3(image_file, folder='products')
+                image_url = upload_image_to_s3(image_file, folder='media')
                 data['image'] = image_url
             
             serializer = self.get_serializer(data=data)
@@ -71,7 +71,7 @@ class ProductViewSet(viewsets.ModelViewSet):
             # Handle image upload
             if 'image' in request.FILES:
                 image_file = request.FILES['image']
-                image_url = upload_image_to_s3(image_file, folder='products')
+                image_url = upload_image_to_s3(image_file, folder='media')
                 data['image'] = image_url
             
             serializer = self.get_serializer(instance, data=data, partial=True)
