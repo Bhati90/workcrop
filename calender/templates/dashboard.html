@@ -516,10 +516,19 @@
 
         <div class="main-content">
            <div class="filters-card">
-    <div class="filters-header">
+    <div class="filters-header" style="display: flex; align-items: center; justify-content: space-between;">
+    <div style="display: flex; align-items: center; gap: 10px;">
         <span>🔍</span>
         <span>Filter Options</span>
     </div>
+    <button class="btn btn-primary"
+        style="font-size: 15px; padding: 10px 24px; border-radius: 8px; box-shadow: 0 2px 8px rgba(33,128,141,0.07); letter-spacing: 0.02em; display: flex; gap: 8px; align-items: center;"
+        onclick="goToEdit()">
+        <span style="font-size: 20px; margin-right: 3px;">✏️</span>
+        Edit Product Details
+    </button>
+</div>
+
 
     <form method="get" id="filterForm">
         <div class="filters-grid">
@@ -593,6 +602,7 @@
             <button type="button" class="btn btn-secondary" onclick="clearFilters()">Clear All</button>
         </div>
     </form>
+    
 </div>
 
             <div class="results-header">
@@ -669,6 +679,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const searchInput = document.getElementById('search');
     
     let searchTimeout;
+    
     
     // Auto-submit on crop change
     cropSelect.addEventListener('change', function() {
@@ -808,6 +819,11 @@ function resetSelect(selectElement, defaultText) {
 function clearFilters() {
     document.getElementById('filterForm').reset();
     window.location.href = window.location.pathname;
+}
+
+function goToEdit() {
+    // Adjust the URL below to your dashboard route
+    window.location.href = "/edit";
 }
 </script>
 

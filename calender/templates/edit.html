@@ -399,7 +399,7 @@
     <div class="container">
         <div class="header">
             <h1>🛠️ Product Management Admin</h1>
-            <p>Manage products with S3 image uploads and complete audit history</p>
+            <p>Manage products with image uploads and complete audit history</p>
         </div>
 
         <div id="alertContainer"></div>
@@ -408,16 +408,21 @@
             <button class="tab active" onclick="switchTab('products')">📦 Products</button>
             <button class="tab" onclick="switchTab('add')">➕ Add Product</button>
             <button class="tab" onclick="switchTab('history')">📜 Audit History</button>
+            <button class="tab" onclick="goToDashboard()">⬅️ Back to Dashboard</button>
+
         </div>
 
         <div id="products-tab" class="tab-content active">
-            <div class="card">
-                <h2 style="margin-bottom: 20px;">All Products</h2>
-                <div id="productsList" class="products-list">
-                    <div class="loading">Loading products...</div>
-                </div>
-            </div>
+    <div class="card">
+        <h2 style="margin-bottom: 20px;">All Products</h2>
+        <div style="margin-bottom:16px;">
+            <input type="text" id="productSearchInput" class="form-group" placeholder="🔍 Search products by name..." style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--color-border);font-size:15px;">
         </div>
+        <div id="productsList" class="products-list">
+            <div class="loading">Loading products...</div>
+        </div>
+    </div>
+</div>
 
         <div id="add-tab" class="tab-content">
             <div class="card">
@@ -791,6 +796,28 @@
                 document.getElementById('historyList').innerHTML = '<p class="loading">Failed to load history</p>';
             }
         }
+        
+        document.addEventListener('DOMContentLoaded', function() {
+    // Use let allProducts from global script (already loaded)
+    const searchInput = document.getElementById('productSearchInput');
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            const term = searchInput.value.toLowerCase();
+            // If term is empty, render all; else filtered
+            if (!term) {
+                renderProducts(allProducts);
+            } else {
+                const filtered = allProducts.filter(p => p.name && p.name.toLowerCase().includes(term));
+                renderProducts(filtered);
+            }
+        });
+    }
+});
+
+function goToDashboard() {
+    // Adjust the URL below to your dashboard route
+    window.location.href = "/";
+}
 
         function renderHistory(logs) {
             const container = document.getElementById('historyList');
