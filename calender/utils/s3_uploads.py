@@ -5,10 +5,10 @@ import uuid
 from PIL import Image
 import io
 
-
 def upload_image_to_s3(file, folder='products'):
     """
     Upload image to S3 and return the URL
+    Uses upload_fileobj for compatibility with InMemoryUploadedFile
     """
     try:
         # Initialize S3 client
@@ -18,36 +18,34 @@ def upload_image_to_s3(file, folder='products'):
             aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
             region_name=settings.AWS_S3_REGION_NAME
         )
-        
+
         # Generate unique filename
-        file_extension = file.name.split('.')[-1]
+        file_extension = file.name.split('.')[-1].lower()
         unique_filename = f"{folder}/{uuid.uuid4()}.{file_extension}"
-        
-        # Compress image if it's too large
+
+        # Compress and/or resize image (optional)
         image = Image.open(file)
-        
-        # Resize if larger than 1920px
         max_size = (1920, 1920)
         image.thumbnail(max_size, Image.Resampling.LANCZOS)
-        
-        # Save to bytes
+
         output = io.BytesIO()
-        image_format = 'JPEG' if file_extension.lower() in ['jpg', 'jpeg'] else 'PNG'
+        image_format = 'JPEG' if file_extension in ['jpg', 'jpeg'] else 'PNG'
         image.save(output, format=image_format, quality=85, optimize=True)
         output.seek(0)
-        
-        # Upload to S3
-        s3_client.put_object(
-            Bucket=settings.AWS_STORAGE_BUCKET_NAME,
-            Key=unique_filename,
-            Body=output,
-            ContentType=f'image/{file_extension.lower()}',
-            ACL='public-read'  # Make image publicly accessible
+
+        # Use upload_fileobj (recommended for file-like objects)
+        s3_client.upload_fileobj(
+            output,
+            settings.AWS_STORAGE_BUCKET_NAME,
+            unique_filename,
+            ExtraArgs={
+                "ContentType": f"image/{file_extension}",
+                "ACL": "public-read"
+            }
         )
-        
-        # Return the URL
+
         url = f"https://{settings.AWS_S3_CUSTOM_DOMAIN}/{unique_filename}"
         return url
-        
+
     except Exception as e:
         raise Exception(f"Failed to upload image: {str(e)}")
