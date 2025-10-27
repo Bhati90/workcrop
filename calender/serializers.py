@@ -98,13 +98,6 @@ class AuditLogSerializer(serializers.ModelSerializer):
         model = AuditLog
         fields = '__all__'
 
-class DayRangeProductSerializer(serializers.ModelSerializer):
-    product = ProductSerializer(read_only=True)
-    product_id = serializers.IntegerField(write_only=True)
-    
-    class Meta:
-        model = DayRangeProduct
-        fields = ['id', 'product', 'product_id', 'dosage', 'dosage_unit', 'created_at', 'updated_at']
 
 
 class ActivitySerializer(serializers.ModelSerializer):
