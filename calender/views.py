@@ -96,6 +96,30 @@ class ProductViewSet(viewsets.ModelViewSet):
             return Response(serializer.data)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    def partial_update(self, request, *args, **kwargs):
+        """Handle PATCH requests"""
+        return self.update(request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        """Handle DELETE requests"""
+        try:
+            instance = self.get_object()
+            old_data = ProductSerializer(instance).data
+            
+            # Create audit log before deletion
+            AuditLog.objects.create(
+                model_name='product',
+                object_id=instance.id,
+                action='delete',
+                user_email=request.data.get('user_email', ''),
+                changes={'deleted': old_data},
+                ip_address=self.get_client_ip(request)
+            )
+            
+            instance.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     
     @action(detail=True, methods=['get'])
     def history(self, request, pk=None):
