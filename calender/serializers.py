@@ -52,35 +52,38 @@ class ProductSerializer(serializers.ModelSerializer):
             'image', 'presigned_image_url',
             'discount_percentage', 'created_at', 'updated_at'
         ]
+
 class DayRangeProductSerializer(serializers.ModelSerializer):
     product = ProductSerializer(read_only=True)
     product_id = serializers.IntegerField(write_only=True)
-    day_range_id = serializers.IntegerField(write_only=True, required=False)  # Add this explicit field
+    day_range_id = serializers.IntegerField(write_only=True)  # Remove required=False
     
     class Meta:
         model = DayRangeProduct
         fields = ['id', 'day_range', 'day_range_id', 'product', 'product_id', 'dosage', 'dosage_unit', 'created_at', 'updated_at']
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'day_range', 'created_at', 'updated_at']  # ← Make day_range read-only
+        extra_kwargs = {
+            'day_range': {'required': False}  # ← Not required for creation
+        }
     
     def create(self, validated_data):
-        # Handle both day_range and day_range_id
-        if 'day_range_id' in validated_data:
-            day_range_id = validated_data.pop('day_range_id')
-            validated_data['day_range_id'] = day_range_id
+        # Get day_range_id and set it directly
+        day_range_id = validated_data.pop('day_range_id')
+        product_id = validated_data.pop('product_id')
         
-        # Handle product_id
-        if 'product_id' in validated_data:
-            product_id = validated_data.pop('product_id')
-            validated_data['product_id'] = product_id
-        
-        return DayRangeProduct.objects.create(**validated_data)
+        # Create with the IDs directly
+        return DayRangeProduct.objects.create(
+            day_range_id=day_range_id,
+            product_id=product_id,
+            **validated_data
+        )
     
     def update(self, instance, validated_data):
-        # Handle day_range_id
+        # Handle day_range_id if provided
         if 'day_range_id' in validated_data:
             instance.day_range_id = validated_data.pop('day_range_id')
         
-        # Handle product_id
+        # Handle product_id if provided
         if 'product_id' in validated_data:
             instance.product_id = validated_data.pop('product_id')
         
@@ -89,7 +92,7 @@ class DayRangeProductSerializer(serializers.ModelSerializer):
             setattr(instance, attr, value)
         
         instance.save()
-        return instance    
+        return instance
 class AuditLogSerializer(serializers.ModelSerializer):
     model_display = serializers.CharField(source='get_model_name_display', read_only=True)
     action_display = serializers.CharField(source='get_action_display', read_only=True)

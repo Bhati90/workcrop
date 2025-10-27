@@ -4,7 +4,7 @@
 
 # import os
 # from pathlib import Path
-from decouple import config, Csv
+
 
 # # Build paths inside the project like this: BASE_DIR / 'subdir'.
 # BASE_DIR = Path(__file__).resolve().parent.parent
@@ -210,6 +210,8 @@ from pathlib import Path
 import os
 import dj_database_url
 
+from decouple import config, Csv
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -222,14 +224,20 @@ SECRET_KEY = 'django-insecure-l6c$=vdsv7n-ng7cd_^6fvi7lig^+_a2!dzg5oy1^a6qklw$9t
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
-ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1,workcrop-1.onrender.com").split(",")
 
+# Add this for Render
+CSRF_TRUSTED_ORIGINS = [
+    'https://workcrop-1.onrender.com',
+    'http://localhost:8000',
+    'http://127.0.0.1:8000',
+]
 REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 100,
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',
-    
+    'rest_framework.renderers.BrowsableAPIRenderer',  # For API browsing
     ],
 }
 # Application definition
@@ -250,10 +258,11 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # Add this for static files
+    'corsheaders.middleware.CorsMiddleware',  # Move CORS up
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -323,9 +332,11 @@ DATABASES = {
 
 CORS_ALLOWED_ORIGINS = config(
     'CORS_ALLOWED_ORIGINS',
-    default='http://localhost:3000,http://127.0.0.1:3000,http://127.0.0.1:8000',
+    default='https://workcrop-1.onrender.com,http://localhost:3000,http://127.0.0.1:3000,http://127.0.0.1:8000',
     cast=Csv()
 )
+
+CORS_ALLOW_CREDENTIALS = True
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
 
