@@ -4,10 +4,10 @@ import uuid
 import os
 from PIL import Image
 import io
-
+# utils/s3_uploads.py
 def upload_image_to_s3(file, folder='media'):
     """
-    Upload image to S3, return the S3 key (not the URL).
+    Upload image to S3, return the full S3 URL.
     """
     try:
         s3_client = boto3.client(
@@ -24,9 +24,21 @@ def upload_image_to_s3(file, folder='media'):
         image = Image.open(file)
         max_size = (1920, 1920)
         image.thumbnail(max_size, Image.Resampling.LANCZOS)
+
         output = io.BytesIO()
         image_format = 'JPEG' if file_extension in ['jpg', 'jpeg'] else 'PNG'
-        image.save(output, format=image_format, quality=85, optimize=True)
+
+        if image_format == 'JPEG':
+            if image.mode in ("RGBA", "LA"):
+                background = Image.new("RGB", image.size, (255, 255, 255))
+                background.paste(image, mask=image.split()[-1])
+                image = background
+            else:
+                image = image.convert("RGB")
+            image.save(output, format=image_format, quality=85, optimize=True)
+        else:
+            image.save(output, format=image_format, optimize=True)
+
         output.seek(0)
 
         s3_client.upload_fileobj(
@@ -35,7 +47,10 @@ def upload_image_to_s3(file, folder='media'):
             unique_filename,
             ExtraArgs={"ContentType": f"image/{file_extension}"}
         )
-        return unique_filename  # <--- S3 key only!
+        
+        # Return the full URL instead of just the key
+        full_url = f"https://{settings.AWS_STORAGE_BUCKET_NAME}.s3.{settings.AWS_S3_REGION_NAME}.amazonaws.com/{unique_filename}"
+        return full_url  # <--- Full URL!
 
     except Exception as e:
         raise Exception(f"Failed to upload image: {str(e)}")

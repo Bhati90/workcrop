@@ -111,7 +111,7 @@ class Product(models.Model):
     # Image (S3 URL or file path)
     
     # Image (S3 URL)
-    image = models.URLField(max_length=500, blank=True, null=True)
+    image = models.CharField(max_length=500, blank=True, null=True)
     
     # Alternative: If you want to use FileField/ImageField with S3 storage
     # image = models.ImageField(upload_to='products/', blank=True, null=True)
