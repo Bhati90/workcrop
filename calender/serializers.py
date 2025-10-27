@@ -13,7 +13,7 @@ class ProductSerializer(serializers.ModelSerializer):
             
             'mrp', 'price', 
             'size', 'size_unit', 'display_size',
-            'image', 'in_stock',
+            'image', 
             'discount_percentage',
             'created_at', 'updated_at'
         ]
