@@ -52,9 +52,9 @@ class ProductViewSet(viewsets.ModelViewSet):
                 model_name='product',
                 object_id=product.id,
                 action='create',
-                user_email=request.data.get('user_email', ''),
+                
                 changes={'created': serializer.data},
-                ip_address=self.get_client_ip(request)
+                
             )
             
             return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -88,9 +88,9 @@ class ProductViewSet(viewsets.ModelViewSet):
                 model_name='product',
                 object_id=product.id,
                 action='update',
-                user_email=request.data.get('user_email', ''),
+                
                 changes=changes,
-                ip_address=self.get_client_ip(request)
+                
             )
             
             return Response(serializer.data)
