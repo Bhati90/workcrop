@@ -5,7 +5,7 @@ import uuid
 from PIL import Image
 import io
 
-def upload_image_to_s3(file, folder='products'):
+def upload_image_to_s3(file, folder='media'):
     """
     Upload image to S3 and return the URL
     Uses upload_fileobj for compatibility with InMemoryUploadedFile
