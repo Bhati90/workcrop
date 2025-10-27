@@ -2,13 +2,15 @@
 import boto3
 from django.conf import settings
 import uuid
+import os
 from PIL import Image
 import io
 
+
 def upload_image_to_s3(file, folder='media'):
     """
-    Upload image to S3 and return the URL
-    Uses upload_fileobj for compatibility with InMemoryUploadedFile
+    Upload image to S3 and return the URL.
+    Uses the original file name with a UUID to avoid collisions.
     """
     try:
         # Initialize S3 client
@@ -19,11 +21,13 @@ def upload_image_to_s3(file, folder='media'):
             region_name=settings.AWS_S3_REGION_NAME
         )
 
-        # Generate unique filename
+        # Prepare filename: prepend UUID to original name to ensure uniqueness
+        original_filename = os.path.splitext(file.name)[0]
         file_extension = file.name.split('.')[-1].lower()
-        unique_filename = f"{folder}/{uuid.uuid4()}.{file_extension}"
+        safe_name = "".join(c for c in original_filename if c.isalnum() or c in (' ', '-', '_')).rstrip()
+        unique_filename = f"{folder}/{uuid.uuid4().hex}_{safe_name}.{file_extension}"
 
-        # Compress and/or resize image (optional)
+        # Compress and/or resize image (optional, keeps most EXIF)
         image = Image.open(file)
         max_size = (1920, 1920)
         image.thumbnail(max_size, Image.Resampling.LANCZOS)
@@ -33,17 +37,17 @@ def upload_image_to_s3(file, folder='media'):
         image.save(output, format=image_format, quality=85, optimize=True)
         output.seek(0)
 
-        # Use upload_fileobj (recommended for file-like objects)
+        # Upload to S3 without ACL
         s3_client.upload_fileobj(
             output,
             settings.AWS_STORAGE_BUCKET_NAME,
             unique_filename,
             ExtraArgs={
-                "ContentType": f"image/{file_extension}",
-                
+                "ContentType": f"image/{file_extension}"
             }
         )
 
+        # Return public S3 URL (or use presigned later based on your setup)
         url = f"https://{settings.AWS_S3_CUSTOM_DOMAIN}/{unique_filename}"
         return url
 
