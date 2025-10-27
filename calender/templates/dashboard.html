@@ -568,58 +568,7 @@ button { padding: 6px 14px; margin: 10px 0; border-radius: 4px; background: #08d
 </head>
 <body>
     <div class="app-container">
-        <div class="wizard-form" id="wizardForm">
-  <!-- Step 1: Crop -->
-  <div class="wizard-step active" id="step-crop">
-    <h3>Add Crop</h3>
-    <input type="text" id="crop-name" placeholder="Crop Name" required>
-    <input type="text" id="crop-name-marathi" placeholder="Crop Name (Marathi)">
-    <button onclick="saveCrop()">Save & Next</button>
-  </div>
-  <!-- Step 2: Variety -->
-  <div class="wizard-step" id="step-variety">
-    <h3>Add Variety</h3>
-    <span id="current-crop"></span>
-    <input type="text" id="variety-name" placeholder="Variety Name" required>
-    <input type="text" id="variety-name-marathi" placeholder="Variety Name (Marathi)">
-    <button onclick="saveVariety()">Save & Next</button>
-  </div>
-  <!-- Step 3: Activity -->
-  <div class="wizard-step" id="step-activity">
-    <h3>Add Activity</h3>
-    <input type="text" id="activity-name" placeholder="Activity Name" required>
-    <input type="text" id="activity-name-marathi" placeholder="Activity Name (Marathi)">
-    <button onclick="saveActivity()">Save & Next</button>
-  </div>
-  <!-- Step 4: DayRange -->
-  <div class="wizard-step" id="step-dayrange">
-    <h3>Add Day Range</h3>
-    <input type="number" id="start-day" placeholder="Start Day" required>
-    <input type="number" id="end-day" placeholder="End Day" required>
-    <textarea id="info" placeholder="Activity Info"></textarea>
-    <textarea id="info-marathi" placeholder="Activity Info (Marathi)"></textarea>
-    <button onclick="saveDayRange()">Save & Next</button>
-  </div>
-  <!-- Step 5: Products for this DayRange -->
-  <div class="wizard-step" id="step-products">
-    <h3>Add Product for This Activity</h3>
-    <select id="product-id"></select>
-    <input type="number" step="0.01" id="dosage" placeholder="Dosage">
-    <select id="dosage-unit">
-      <option value="gm/acre">Gram per Acre</option>
-      <option value="kg/acre">Kilogram per Acre</option>
-      <option value="ml/acre">Milliliter per Acre</option>
-      <option value="liter/acre">Liter per Acre</option>
-      <option value="gm/liter">Gram per Liter</option>
-      <option value="ml/liter">Milliliter per Liter</option>
-      <option value="gm/plant">Gram per Plant</option>
-      <option value="ml/plant">Milliliter per Plant</option>
-    </select>
-    <button onclick="saveDayRangeProduct()">Add Product (repeat)</button>
-    <button onclick="endWizard()">Finish</button>
-    <div id="product-msg"></div>
-  </div>
-</div>
+   
 
         <div class="header">
             <div class="header-content">
@@ -727,16 +676,19 @@ button { padding: 6px 14px; margin: 10px 0; border-radius: 4px; background: #08d
 
             {% if day_ranges %}
                 {% for day_range in day_ranges %}
-                <div class="crop-card">
-                    <div class="card-header">
-                        <div class="card-title">
-                            <div class="crop-name">{{ day_range.crop_variety.crop.name }}</div>
-                            <div class="variety-name">Variety: {{ day_range.crop_variety.name }}</div>
-                        </div>
-                        <div class="day-badge">
-                            Day {{ day_range.start_day }} - {{ day_range.end_day }}
-                        </div>
-                    </div>
+                <div class="crop-card" data-dayrange-id="{{ day_range.id }}">
+<div class="card-header" >
+   <div class="card-title">
+     <div class="crop-name">{{ day_range.crop_variety.crop.name }}</div>
+     <div class="variety-name">Variety: {{ day_range.crop_variety.name }}</div>
+   </div>
+   <div class="day-badge">
+     Day {{ day_range.start_day }} - {{ day_range.end_day }}
+     <button class="btn-edit" onclick="enableDayRangeEdit({{ day_range.id }}, {{ day_range.start_day }}, {{ day_range.end_day }})">
+        ✏️ Edit Range
+     </button>
+   </div>
+</div>
 
                     <div class="activity-section">
         <div class="activity-name">
@@ -818,6 +770,7 @@ button { padding: 6px 14px; margin: 10px 0; border-radius: 4px; background: #08d
 
     
 <script>
+    
 document.addEventListener('DOMContentLoaded', function() {
     const filterForm = document.getElementById('filterForm');
     const cropSelect = document.getElementById('crop');
@@ -984,6 +937,96 @@ function saveInfoMarathi(dayRangeId) {
     const newInfo = document.getElementById(`info-marathi-edit-${dayRangeId}`).value;
     updateDayRange(dayRangeId, { info_marathi: newInfo }, 'info_marathi');
 }
+let currentAddProductDayRangeId = null;
+
+// Show add product form inline for a DayRange
+function addNewProduct(dayRangeId) {
+    // Hide any open add product forms
+    document.querySelectorAll('.add-product-row').forEach(el => el.remove());
+
+    const parent = document.getElementById('products-grid-' + dayRangeId);
+    // Prepare template for add row
+    let html = `
+    <div class="add-product-row" style="display:flex;align-items:center;gap:8px;margin:8px 0;">
+        <select id="add-product-select-${dayRangeId}">
+            ${PRODUCTS_LIST.map(prod => `<option value="${prod.id}">${prod.name}</option>`).join("")}
+        </select>
+        <input type="number" step="0.01" id="add-dosage-${dayRangeId}" placeholder="Dosage">
+        <select id="add-dosage-unit-${dayRangeId}">
+            <option value="gm/acre">Gram per Acre</option>
+            <option value="kg/acre">Kilogram per Acre</option>
+            <option value="ml/acre">Milliliter per Acre</option>
+            <option value="liter/acre">Liter per Acre</option>
+            <option value="gm/liter">Gram per Liter</option>
+            <option value="ml/liter">Milliliter per Liter</option>
+            <option value="gm/plant">Gram per Plant</option>
+            <option value="ml/plant">Milliliter per Plant</option>
+        </select>
+        <button onclick="saveNewProduct(${dayRangeId})">Add</button>
+        <button onclick="this.closest('.add-product-row').remove();">Cancel</button>
+    </div>
+    `;
+    parent.insertAdjacentHTML('afterbegin', html);
+    currentAddProductDayRangeId = dayRangeId;
+}
+
+// Replace with your way to expose products array. In Django, pass PRODUCTS_LIST as JSON context var.
+var PRODUCTS_LIST = window.PRODUCTS_LIST || [];
+
+function saveNewProduct(dayRangeId) {
+    const productId = document.getElementById('add-product-select-' + dayRangeId).value;
+    const dosage = document.getElementById('add-dosage-' + dayRangeId).value;
+    const dosageUnit = document.getElementById('add-dosage-unit-' + dayRangeId).value;
+    fetch('/api/day-range-products/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            day_range: dayRangeId,
+            product: productId,
+            dosage: dosage,
+            dosage_unit: dosageUnit
+        })
+    }).then(resp => {
+        if (resp.ok) location.reload();
+        else alert('Error adding product');
+    });
+}
+
+// ----- DayRange (all fields) Edit support -----
+function enableDayRangeEdit(dayRangeId, start, end) {
+    let editBox = document.getElementById('dayrange-edit-box-' + dayRangeId);
+    if (editBox) {
+        editBox.style.display = 'block';
+        return;
+    }
+
+    // Dynamically create an edit form inline after card-header
+    let card = document.querySelector(`[data-dayrange-id="${dayRangeId}"] .card-header`);
+console.log(card);
+let formHtml = `
+    <div id="dayrange-edit-box-${dayRangeId}" style="margin:10px 0;">
+        <input type="number" id="edit-start-${dayRangeId}" value="${start}" style="width:70px;">
+        <input type="number" id="edit-end-${dayRangeId}" value="${end}" style="width:70px;">
+        <button onclick="saveDayRangeEdit(${dayRangeId})">Save</button>
+        <button onclick="document.getElementById('dayrange-edit-box-${dayRangeId}').style.display='none'">Cancel</button>
+    </div>
+    `;
+    card.insertAdjacentHTML('afterend', formHtml);
+}
+
+function saveDayRangeEdit(dayRangeId) {
+    const start = document.getElementById('edit-start-' + dayRangeId).value;
+    const end = document.getElementById('edit-end-' + dayRangeId).value;
+    fetch(`/api/day-ranges/${dayRangeId}/`, {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({start_day: start, end_day: end})
+    }).then(resp => {
+        if (resp.ok) location.reload();
+        else alert('Failed to update Day Range');
+    });
+}
+
 
 async function updateDayRange(dayRangeId, data, field) {
     try {
