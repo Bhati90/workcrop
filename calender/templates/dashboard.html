@@ -991,16 +991,14 @@ function saveInfoMarathi(dayRangeId) {
 let currentAddProductDayRangeId = null;
 
 async function addNewProduct(dayRangeId) {
-    // Create the new product form
     const productsGrid = document.getElementById(`products-grid-${dayRangeId}`);
     
-    // Check if add form already exists
     if (document.getElementById(`new-product-form-${dayRangeId}`)) {
         showAlert('Product form is already open', 'info');
         return;
     }
     
-    // Fetch all products
+    // Fetch products
     let products = [];
     try {
         const response = await fetch('/api/products-readonly/');
@@ -1011,7 +1009,6 @@ async function addNewProduct(dayRangeId) {
         return;
     }
     
-    // Create the form HTML
     const newProductHtml = `
         <div class="product-item editable-product" id="new-product-form-${dayRangeId}">
             <div class="product-edit" style="display: flex;">
@@ -1023,12 +1020,14 @@ async function addNewProduct(dayRangeId) {
                     style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-left: 8px;">
                 <select id="new-dosage-unit-select-${dayRangeId}" 
                     style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-left: 8px;">
-                    <option value="gram_per_liter">Gram per Liter</option>
-                    <option value="ml_per_liter">ML per Liter</option>
-                    <option value="kg_per_acre">KG per Acre</option>
-                    <option value="liter_per_acre">Liter per Acre</option>
-                    <option value="piece">Piece</option>
-                    <option value="pack">Pack</option>
+                    <option value="gm/acre">Gram per Acre</option>
+                    <option value="kg/acre">Kilogram per Acre</option>
+                    <option value="ml/acre">Milliliter per Acre</option>
+                    <option value="liter/acre">Liter per Acre</option>
+                    <option value="gm/liter">Gram per Liter</option>
+                    <option value="ml/liter">Milliliter per Liter</option>
+                    <option value="gm/plant">Gram per Plant</option>
+                    <option value="ml/plant">Milliliter per Plant</option>
                 </select>
             </div>
             <div class="product-buttons">
@@ -1038,7 +1037,6 @@ async function addNewProduct(dayRangeId) {
         </div>
     `;
     
-    // Add to the grid
     productsGrid.insertAdjacentHTML('beforeend', newProductHtml);
 }
 
@@ -1056,11 +1054,15 @@ async function saveNewProduct(dayRangeId) {
         showAlert('Please enter a valid dosage', 'error');
         return;
     }
+    if (!dosageUnit) {
+        showAlert('Please select a dosage unit', 'error');
+        return;
+    }
     
     console.log('Sending data:', {
-        day_range: dayRangeId,
-        product_id: productId,
-        dosage: dosage,
+        day_range_id: parseInt(dayRangeId),  // ← Changed from day_range
+        product_id: parseInt(productId),
+        dosage: parseFloat(dosage),
         dosage_unit: dosageUnit
     });
     
@@ -1071,9 +1073,9 @@ async function saveNewProduct(dayRangeId) {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                day_range: dayRangeId,
-                product_id: productId,
-                dosage: parseFloat(dosage),  // ← Ensure it's a number
+                day_range_id: parseInt(dayRangeId),  // ← Changed from day_range
+                product_id: parseInt(productId),
+                dosage: parseFloat(dosage),
                 dosage_unit: dosageUnit
             })
         });
@@ -1083,7 +1085,7 @@ async function saveNewProduct(dayRangeId) {
             location.reload();
         } else {
             const error = await response.json();
-            console.error('Error response:', error);  // ← See the actual error
+            console.error('Error response:', error);
             showAlert('Failed to add product: ' + JSON.stringify(error), 'error');
         }
     } catch (error) {

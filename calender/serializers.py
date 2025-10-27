@@ -55,35 +55,41 @@ class ProductSerializer(serializers.ModelSerializer):
 class DayRangeProductSerializer(serializers.ModelSerializer):
     product = ProductSerializer(read_only=True)
     product_id = serializers.IntegerField(write_only=True)
+    day_range_id = serializers.IntegerField(write_only=True, required=False)  # Add this explicit field
     
     class Meta:
         model = DayRangeProduct
-        fields = ['id', 'day_range', 'product', 'product_id', 'dosage', 'dosage_unit', 'created_at', 'updated_at']
-        extra_kwargs = {
-            'day_range': {'required': True}  # Make sure it's required
-        }
+        fields = ['id', 'day_range', 'day_range_id', 'product', 'product_id', 'dosage', 'dosage_unit', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
     
     def create(self, validated_data):
-        # Extract product_id and get the actual product
-        product_id = validated_data.pop('product_id')
-        validated_data['product_id'] = product_id
+        # Handle both day_range and day_range_id
+        if 'day_range_id' in validated_data:
+            day_range_id = validated_data.pop('day_range_id')
+            validated_data['day_range_id'] = day_range_id
         
-        # Create the instance
+        # Handle product_id
+        if 'product_id' in validated_data:
+            product_id = validated_data.pop('product_id')
+            validated_data['product_id'] = product_id
+        
         return DayRangeProduct.objects.create(**validated_data)
     
     def update(self, instance, validated_data):
-        # Handle product_id if provided
-        product_id = validated_data.pop('product_id', None)
-        if product_id:
-            instance.product_id = product_id
+        # Handle day_range_id
+        if 'day_range_id' in validated_data:
+            instance.day_range_id = validated_data.pop('day_range_id')
+        
+        # Handle product_id
+        if 'product_id' in validated_data:
+            instance.product_id = validated_data.pop('product_id')
         
         # Update other fields
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         
         instance.save()
-        return instance   
-     
+        return instance    
 class AuditLogSerializer(serializers.ModelSerializer):
     model_display = serializers.CharField(source='get_model_name_display', read_only=True)
     action_display = serializers.CharField(source='get_action_display', read_only=True)
