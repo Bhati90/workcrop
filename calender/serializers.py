@@ -18,6 +18,15 @@ class ProductSerializer(serializers.ModelSerializer):
         key = getattr(obj, 'image', None)
         if not key:
             return None
+        
+        # Make sure key doesn't already contain a full URL
+        if key.startswith('http'):
+            # Extract just the key part
+            if 'amazonaws.com/' in key:
+                key = key.split('amazonaws.com/')[-1]
+            else:
+                return None
+        
         s3_client = boto3.client(
             's3',
             aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
@@ -31,7 +40,8 @@ class ProductSerializer(serializers.ModelSerializer):
                 ExpiresIn=3600
             )
             return url
-        except Exception:
+        except Exception as e:
+            print(f"Error generating presigned URL: {e}")
             return None
 
     class Meta:
@@ -42,8 +52,6 @@ class ProductSerializer(serializers.ModelSerializer):
             'image', 'presigned_image_url',
             'discount_percentage', 'created_at', 'updated_at'
         ]
-
-
 class AuditLogSerializer(serializers.ModelSerializer):
     model_display = serializers.CharField(source='get_model_name_display', read_only=True)
     action_display = serializers.CharField(source='get_action_display', read_only=True)

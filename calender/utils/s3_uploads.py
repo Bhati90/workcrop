@@ -1,13 +1,14 @@
+# utils/s3_uploads.py
 import boto3
 from django.conf import settings
 import uuid
 import os
 from PIL import Image
 import io
-# utils/s3_uploads.py
+
 def upload_image_to_s3(file, folder='media'):
     """
-    Upload image to S3, return the full S3 URL.
+    Upload image to S3, return the S3 key (not the URL).
     """
     try:
         s3_client = boto3.client(
@@ -48,9 +49,8 @@ def upload_image_to_s3(file, folder='media'):
             ExtraArgs={"ContentType": f"image/{file_extension}"}
         )
         
-        # Return the full URL instead of just the key
-        full_url = f"https://{settings.AWS_STORAGE_BUCKET_NAME}.s3.{settings.AWS_S3_REGION_NAME}.amazonaws.com/{unique_filename}"
-        return full_url  # <--- Full URL!
+        # Return ONLY the S3 key, not the full URL
+        return unique_filename  # ✅ Just: "media/abc123_filename.jpg"
 
     except Exception as e:
         raise Exception(f"Failed to upload image: {str(e)}")
