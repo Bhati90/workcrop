@@ -666,7 +666,9 @@
 
             container.innerHTML = products.map(product => `
                 <div class="product-item">
-                    <img src="${product.image || 'https://via.placeholder.com/100'}" alt="${product.name}" class="product-image">
+                    
+                    <img src="${product.presigned_image_url || 'https://via.placeholder.com/100'}" alt="${product.name}" class="product-image">
+
                     <div class="product-info">
                         <div class="product-name">${product.name}</div>
                         <div class="product-meta">

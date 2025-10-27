@@ -1,21 +1,46 @@
 from rest_framework import serializers
 from .models import Crop, CropVariety,AuditLog, Activity, Product, DayRange, DayRangeProduct
-
+from django.conf import settings
+from rest_framework import serializers
+import boto3
+from urllib.parse import urlparse
+from rest_framework import serializers
+from .models import Product
+import boto3
+from django.conf import settings
 
 class ProductSerializer(serializers.ModelSerializer):
     discount_percentage = serializers.ReadOnlyField()
     display_size = serializers.ReadOnlyField()
-    
+    presigned_image_url = serializers.SerializerMethodField()
+
+    def get_presigned_image_url(self, obj):
+        key = getattr(obj, 'image_s3_key', None)
+        if not key:
+            return None
+        s3_client = boto3.client(
+            's3',
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+            region_name=settings.AWS_S3_REGION_NAME,
+        )
+        try:
+            url = s3_client.generate_presigned_url(
+                ClientMethod="get_object",
+                Params={"Bucket": settings.AWS_STORAGE_BUCKET_NAME, "Key": key},
+                ExpiresIn=3600
+            )
+            return url
+        except Exception:
+            return None
+
     class Meta:
         model = Product
         fields = [
             'id', 'name', 'name_marathi', 'product_type',
-            
-            'mrp', 'price', 
-            'size', 'size_unit', 'display_size',
-            'image', 
-            'discount_percentage',
-            'created_at', 'updated_at'
+            'mrp', 'price', 'size', 'size_unit', 'display_size',
+            'image_s3_key', 'presigned_image_url',
+            'discount_percentage', 'created_at', 'updated_at'
         ]
 
 
