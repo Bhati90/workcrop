@@ -15,7 +15,7 @@ class ProductSerializer(serializers.ModelSerializer):
     presigned_image_url = serializers.SerializerMethodField()
 
     def get_presigned_image_url(self, obj):
-        key = getattr(obj, 'image_s3_key', None)
+        key = getattr(obj, 'image', None)
         if not key:
             return None
         s3_client = boto3.client(
