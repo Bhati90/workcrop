@@ -5,7 +5,7 @@ from .models import Crop, CropVariety, Activity, Product, DayRange, DayRangeProd
 from rest_framework import viewsets, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework import viewsets, status
 from django_filters.rest_framework import DjangoFilterBackend
 from .models import Crop, CropVariety, Activity, Product, DayRange, DayRangeProduct,AuditLog
@@ -23,7 +23,7 @@ class ProductViewSet(viewsets.ModelViewSet):
     """
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
-    parser_classes = (MultiPartParser, FormParser)
+    parser_classes = (MultiPartParser,JSONParser, FormParser)
     
     def get_client_ip(self, request):
         x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
@@ -111,10 +111,8 @@ class ProductViewSet(viewsets.ModelViewSet):
                 model_name='product',
                 object_id=instance.id,
                 action='delete',
-                user_email=request.data.get('user_email', ''),
                 changes={'deleted': old_data},
-                ip_address=self.get_client_ip(request)
-            )
+               )
             
             instance.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
