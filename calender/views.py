@@ -12,7 +12,7 @@ from .models import Crop, CropVariety, Activity, Product, DayRange, DayRangeProd
 from .serializers import (
     CropSerializer, CropScheduleSerializer, CropVarietySerializer, 
     CropVarietyDetailSerializer, ActivitySerializer, ProductSerializer, 
-    DayRangeSerializer, DayRangeProductSerializer, AuditLogSerializer
+    DayRangeSerializer, DayRangeProductSerializer,AuditLogSerializer
 )
 from .utils.s3_uploads import upload_image_to_s3
 

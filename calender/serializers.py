@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Crop,AuditLog, CropVariety, Activity, Product, DayRange, DayRangeProduct
+from .models import Crop, CropVariety,AuditLog, Activity, Product, DayRange, DayRangeProduct
 
 
 class ProductSerializer(serializers.ModelSerializer):
@@ -12,7 +12,7 @@ class ProductSerializer(serializers.ModelSerializer):
             'id', 'name', 'name_marathi', 'product_type',
             
             'mrp', 'price', 
-            'size', 'size_unit', 
+            'size', 'size_unit', 'display_size',
             'image', 'in_stock',
             
             'created_at', 'updated_at'
