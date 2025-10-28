@@ -671,7 +671,7 @@ let searchTimeout = null;  // ⭐ Add this for debouncing
             return;
         }
 
-        container.innerHTML = products.map(product => `  // ⭐ Use 'products' not 'allProducts'
+        container.innerHTML = products.map(product => `  
             <div class="product-item">
                 <img src="${product.presigned_image_url || 'https://via.placeholder.com/100'}" 
                      class="product-image-large"

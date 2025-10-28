@@ -4,7 +4,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db.models import Prefetch, Q
-
+from django.core.paginator import Paginator
 from .models import Product, Crop, CropVariety, Activity, DayRange, DayRangeProduct, AuditLog
 from .serializers import (
     ProductListSerializer, 
