@@ -14,6 +14,7 @@ from .serializers import (
     CropVarietyDetailSerializer, ActivitySerializer, ProductSerializer, 
     DayRangeSerializer, DayRangeProductSerializer,AuditLogSerializer
 )
+from django.core.paginator import Paginator
 from .utils.s3_uploads import upload_image_to_s3
 
 class DayRangeProductViewSet(viewsets.ModelViewSet):
@@ -455,9 +456,12 @@ def crop_management_dashboard(request):
     else:
         # No filters - show all
         products = Product.objects.all()
-    
+    paginator = Paginator(day_ranges, 50)  # 50 items per page
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
     context = {
-        'day_ranges': day_ranges,
+        'day_ranges': page_obj,  # Use page_obj instead of day_ranges
+        'page_obj': page_obj,
         'crops': crops,
         'varieties': varieties,
         'activities': activities,
