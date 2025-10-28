@@ -723,7 +723,7 @@ def crop_management_dashboard(request):
     else:
         # No filters - show all
         products = Product.objects.all()
-    paginator = Paginator(day_ranges, 25)  # 50 items per page
+    paginator = Paginator(day_ranges, 10)  # 50 items per page
     page_number = request.GET.get('page', 1)
     page_obj = paginator.get_page(page_number)
     context = {
