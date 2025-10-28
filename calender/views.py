@@ -40,12 +40,12 @@ class DayRangeProductViewSet(viewsets.ModelViewSet):
             drp = serializer.save()
             
             # Create audit log
-            AuditLog.objects.create(
-                model_name='dayrangeproduct',
-                object_id=drp.id,
-                action='create',
-                changes={'created': serializer.data},
-            )
+            # AuditLog.objects.create(
+            #     model_name='dayrangeproduct',
+            #     object_id=drp.id,
+            #     action='create',
+            #     changes={'created': serializer.data},
+            # )
             
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         except Exception as e:
@@ -66,12 +66,12 @@ class DayRangeProductViewSet(viewsets.ModelViewSet):
                 'after': serializer.data
             }
             
-            AuditLog.objects.create(
-                model_name='dayrangeproduct',
-                object_id=drp.id,
-                action='update',
-                changes=changes,
-            )
+            # AuditLog.objects.create(
+            #     model_name='dayrangeproduct',
+            #     object_id=drp.id,
+            #     action='update',
+            #     changes=changes,
+            # )
             
             return Response(serializer.data)
         except Exception as e:
@@ -88,12 +88,12 @@ class DayRangeProductViewSet(viewsets.ModelViewSet):
             old_data = DayRangeProductSerializer(instance).data
             
             # Create audit log before deletion
-            AuditLog.objects.create(
-                model_name='dayrangeproduct',
-                object_id=instance.id,
-                action='delete',
-                changes={'deleted': old_data},
-            )
+            # AuditLog.objects.create(
+            #     model_name='dayrangeproduct',
+            #     object_id=instance.id,
+            #     action='delete',
+            #     changes={'deleted': old_data},
+            # )
             
             instance.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
@@ -131,14 +131,14 @@ class ProductViewSet(viewsets.ModelViewSet):
             product = serializer.save()
             
             # Create audit log
-            AuditLog.objects.create(
-                model_name='product',
-                object_id=product.id,
-                action='create',
+            # AuditLog.objects.create(
+            #     model_name='product',
+            #     object_id=product.id,
+            #     action='create',
                 
-                changes={'created': serializer.data},
+            #     changes={'created': serializer.data},
                 
-            )
+            # )
             
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         except Exception as e:
@@ -167,14 +167,14 @@ class ProductViewSet(viewsets.ModelViewSet):
                 'after': serializer.data
             }
             
-            AuditLog.objects.create(
-                model_name='product',
-                object_id=product.id,
-                action='update',
+            # AuditLog.objects.create(
+            #     model_name='product',
+            #     object_id=product.id,
+            #     action='update',
                 
-                changes=changes,
+            #     changes=changes,
                 
-            )
+            # )
             
             return Response(serializer.data)
         except Exception as e:
@@ -190,12 +190,12 @@ class ProductViewSet(viewsets.ModelViewSet):
             old_data = ProductSerializer(instance).data
             
             # Create audit log before deletion
-            AuditLog.objects.create(
-                model_name='product',
-                object_id=instance.id,
-                action='delete',
-                changes={'deleted': old_data},
-               )
+            # AuditLog.objects.create(
+            #     model_name='product',
+            #     object_id=instance.id,
+            #     action='delete',
+            #     changes={'deleted': old_data},
+            #    )
             
             instance.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
@@ -301,12 +301,12 @@ class DayRangeViewSet(viewsets.ModelViewSet):  # ← Changed from ReadOnlyModelV
             day_range = serializer.save()
             
             # Create audit log
-            AuditLog.objects.create(
-                model_name='dayrange',
-                object_id=day_range.id,
-                action='create',
-                changes={'created': serializer.data},
-            )
+            # AuditLog.objects.create(
+            #     model_name='dayrange',
+            #     object_id=day_range.id,
+            #     action='create',
+            #     changes={'created': serializer.data},
+            # )
             
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         except Exception as e:
@@ -327,12 +327,12 @@ class DayRangeViewSet(viewsets.ModelViewSet):  # ← Changed from ReadOnlyModelV
                 'after': serializer.data
             }
             
-            AuditLog.objects.create(
-                model_name='dayrange',
-                object_id=day_range.id,
-                action='update',
-                changes=changes,
-            )
+            # AuditLog.objects.create(
+            #     model_name='dayrange',
+            #     object_id=day_range.id,
+            #     action='update',
+            #     changes=changes,
+            # )
             
             return Response(serializer.data)
         except Exception as e:
@@ -349,12 +349,12 @@ class DayRangeViewSet(viewsets.ModelViewSet):  # ← Changed from ReadOnlyModelV
             old_data = DayRangeSerializer(instance).data
             
             # Create audit log before deletion
-            AuditLog.objects.create(
-                model_name='dayrange',
-                object_id=instance.id,
-                action='delete',
-                changes={'deleted': old_data},
-            )
+            # AuditLog.objects.create(
+            #     model_name='dayrange',
+            #     object_id=instance.id,
+            #     action='delete',
+            #     changes={'deleted': old_data},
+            # )
             
             instance.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)

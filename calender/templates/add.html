@@ -735,18 +735,26 @@
                 
                 // 4. Create Day Range
                 const dayRangeResponse = await fetch('/api/day-ranges/', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        crop_variety: variety.id,
-                        activity: activity.id,
-                        start_day: parseInt(document.getElementById('start-day').value),
-                        end_day: parseInt(document.getElementById('end-day').value),
-                        info: document.getElementById('info').value,
-                        info_marathi: document.getElementById('info-marathi').value
-                    })
-                });
-                const dayRange = await dayRangeResponse.json();
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+        crop_variety_id: variety.id,  // Changed from crop_variety
+        activity_id: activity.id,      // Changed from activity
+        start_day: parseInt(document.getElementById('start-day').value),
+        end_day: parseInt(document.getElementById('end-day').value),
+        info: document.getElementById('info').value,
+        info_marathi: document.getElementById('info-marathi').value
+    })
+});
+
+if (!dayRangeResponse.ok) {
+    const errorData = await dayRangeResponse.json();
+    console.error('Day Range Error:', errorData);
+    throw new Error(`Failed to create day range: ${JSON.stringify(errorData)}`);
+}
+
+const dayRange = await dayRangeResponse.json();
+
                 
                 statusDiv.innerHTML = '<div class="status-message" style="background: #cce5ff;">Adding Products...</div>';
                 
@@ -767,16 +775,23 @@
                         statusDiv.innerHTML = `<div class="status-message" style="background: #cce5ff;">Creating new product: ${newProductName.value}...</div>`;
                         
                         const newProductResponse = await fetch('/api/products/', {
-                            method: 'POST',
-                            headers: {'Content-Type': 'application/json'},
-                            body: JSON.stringify({
-                                name: newProductName.value.trim(),
-                                name_marathi: newProductMarathi.value.trim() || null
-                            })
-                        });
-                        const newProduct = await newProductResponse.json();
-                        productId = newProduct.id;
-                        
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+        name: newProductName.value.trim(),
+        name_marathi: newProductMarathi.value.trim() || null
+    })
+});
+
+if (!newProductResponse.ok) {
+    const errorData = await newProductResponse.json();
+    console.error('Product Error:', errorData);
+    throw new Error(`Failed to create product: ${JSON.stringify(errorData)}`);
+}
+
+const newProduct = await newProductResponse.json();
+productId = newProduct.id;
+
                         // Reload products list for future use
                         await loadProducts();
                     } else {

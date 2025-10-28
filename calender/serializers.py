@@ -19,9 +19,7 @@ class ProductSerializer(serializers.ModelSerializer):
         if not key:
             return None
         
-        # Make sure key doesn't already contain a full URL
         if key.startswith('http'):
-            # Extract just the key part
             if 'amazonaws.com/' in key:
                 key = key.split('amazonaws.com/')[-1]
             else:
@@ -52,6 +50,12 @@ class ProductSerializer(serializers.ModelSerializer):
             'image', 'presigned_image_url',
             'discount_percentage', 'created_at', 'updated_at'
         ]
+    
+    def validate_name(self, value):
+        # Check for uniqueness during creation
+        if not self.instance and Product.objects.filter(name=value).exists():
+            raise serializers.ValidationError("Product with this name already exists.")
+        return value
 
 class DayRangeProductSerializer(serializers.ModelSerializer):
     product = ProductSerializer(read_only=True)
@@ -111,13 +115,19 @@ class ActivitySerializer(serializers.ModelSerializer):
 
 class DayRangeSerializer(serializers.ModelSerializer):
     activity = ActivitySerializer(read_only=True)
+    activity_id = serializers.IntegerField(write_only=True)
+    crop_variety_id = serializers.IntegerField(write_only=True)
     products = DayRangeProductSerializer(many=True, read_only=True)
     
     class Meta:
         model = DayRange
-        fields = ['id', 'activity', 'start_day', 'end_day', 'info', 'info_marathi', 
+        fields = ['id', 'crop_variety_id', 'activity', 'activity_id', 
+                  'start_day', 'end_day', 'info', 'info_marathi', 
                   'products', 'created_at', 'updated_at']
-
+        read_only_fields = ['id', 'activity', 'created_at', 'updated_at']
+    
+    def create(self, validated_data):
+        return DayRange.objects.create(**validated_data)
 
 class CropVarietyDetailSerializer(serializers.ModelSerializer):
     day_ranges = DayRangeSerializer(many=True, read_only=True)
