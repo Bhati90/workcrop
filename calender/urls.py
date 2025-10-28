@@ -25,5 +25,5 @@ urlpatterns = [
     path('api/get-varieties/', views.get_varieties_by_crop, name='get_varieties'),
     path('api/get-activities/', views.get_activities_by_variety, name='get_activities'),
     path('api/get-products/', views.get_products_by_filters, name='get_products'),
-
+    path('api/upload-image/', views.ImageUploadAPIView.as_view(), name='upload_image'),
 ]

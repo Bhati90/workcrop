@@ -830,35 +830,37 @@ productId = newProduct.id;
         });
 
         // ===== CROPS =====
-        async function loadCrops() {
-            try {
-                const response = await fetch('/api/crops/');
-                const crops = await response.json();
-                ALL_CROPS = crops.results || crops;
-                
-                if (crops.length === 0) {
-                    document.getElementById('crop-list').innerHTML = '<div class="empty-state">No crops found. Add one above!</div>';
-                    return;
-                }
-                
-                let html = '<table class="data-table"><thead><tr><th>Name</th><th>Name (Marathi)</th><th>Actions</th></tr></thead><tbody>';
-                crops.forEach(crop => {
-                    html += `
-                        <tr>
-                            <td>${crop.name}</td>
-                            <td>${crop.name_marathi || '-'}</td>
-                            <td class="action-buttons">
-                                <button class="btn btn-danger" onclick="deleteCrop(${crop.id}, '${crop.name}')">Delete</button>
-                            </td>
-                        </tr>
-                    `;
-                });
-                html += '</tbody></table>';
-                document.getElementById('crop-list').innerHTML = html;
-            } catch (error) {
-                document.getElementById('crop-list').innerHTML = '<div class="status-message status-error">Error loading crops</div>';
-            }
+      async function loadCrops() {
+    try {
+        const response = await fetch('/api/crops/');
+        const data = await response.json();
+        ALL_CROPS = data.results || data;
+        console.log(ALL_CROPS); // <- shows array
+
+        if (!ALL_CROPS.length) {
+            document.getElementById('crop-list').innerHTML = '<div class="empty-state">No crops found. Add one above!</div>';
+            return;
         }
+
+        let html = '<table class="data-table"><thead><tr><th>Name</th><th>Name (Marathi)</th><th>Actions</th></tr></thead><tbody>';
+        ALL_CROPS.forEach(crop => {
+            html += `
+                <tr>
+                    <td>${crop.name}</td>
+                    <td>${crop.name_marathi || '-'}</td>
+                    <td class="action-buttons">
+                        <button class="btn btn-danger" onclick="deleteCrop(${crop.id}, '${crop.name}')">Delete</button>
+                    </td>
+                </tr>
+            `;
+        });
+        html += '</tbody></table>';
+        document.getElementById('crop-list').innerHTML = html;
+    } catch (error) {
+        document.getElementById('crop-list').innerHTML = '<div class="status-message status-error">Error loading crops</div>';
+        console.error('Error loading crops:', error);
+    }
+}
 
         document.getElementById('crop-form').addEventListener('submit', async function(e) {
             e.preventDefault();
@@ -895,7 +897,9 @@ productId = newProduct.id;
         async function loadCropsForSelect() {
             try {
                 const response = await fetch('/api/crops/');
-                const crops = await response.json();
+                const data = await response.json();
+        const crops = data.results || data;
+
                 const select = document.getElementById('variety-crop-select');
                 select.innerHTML = '<option value="">Select a crop...</option>' +
                     crops.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
@@ -907,7 +911,8 @@ productId = newProduct.id;
         async function loadVarieties() {
             try {
                 const response = await fetch('/api/varieties/');
-                const varieties = await response.json();
+                const data = await response.json();
+                const varieties = data.results
                 
                 if (varieties.length === 0) {
                     document.getElementById('variety-list').innerHTML = '<div class="empty-state">No varieties found. Add one above!</div>';
@@ -971,15 +976,15 @@ productId = newProduct.id;
             try {
                 const response = await fetch('/api/activities/');
                 const activities = await response.json();
-                ALL_ACTIVITIES = activities.results || activities;
+                ALL_ACTIVITIES = activities.results ;
                 
-                if (activities.length === 0) {
+                if (ALL_ACTIVITIES.length === 0) {
                     document.getElementById('activity-list').innerHTML = '<div class="empty-state">No activities found. Add one above!</div>';
                     return;
                 }
                 
                 let html = '<table class="data-table"><thead><tr><th>Name</th><th>Name (Marathi)</th><th>Actions</th></tr></thead><tbody>';
-                activities.forEach(activity => {
+                ALL_ACTIVITIES.forEach(activity => {
                     html += `
                         <tr>
                             <td>${activity.name}</td>
@@ -1032,7 +1037,8 @@ productId = newProduct.id;
         async function loadProductsSingle() {
             try {
                 const response = await fetch('/api/products/');
-                const products = await response.json();
+                const data = await response.json();
+                const products = data.results || data;
                 
                 if (products.length === 0) {
                     document.getElementById('product-list-single').innerHTML = '<div class="empty-state">No products found. Add one above!</div>';
@@ -1097,7 +1103,8 @@ productId = newProduct.id;
         async function loadCropsForDayRange() {
             try {
                 const response = await fetch('/api/crops/');
-                const crops = await response.json();
+                const data = await response.json();
+        const crops = data.results || data;
                 const select = document.getElementById('dayrange-crop-select');
                 select.innerHTML = '<option value="">Select a crop...</option>' +
                     crops.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
@@ -1116,8 +1123,9 @@ productId = newProduct.id;
             }
             
             try {
-                const response = await fetch(`/api/get-varieties/?crop_id=${cropId}`);
-                const varieties = await response.json();
+                const response = await fetch(`/api/varieties/?crop_id=${cropId}`);
+                const data = await response.json();
+                const varieties = data.results ;
                 select.innerHTML = '<option value="">Select a variety...</option>' +
                     varieties.map(v => `<option value="${v.id}">${v.name}</option>`).join('');
             } catch (error) {
@@ -1128,7 +1136,8 @@ productId = newProduct.id;
         async function loadActivitiesForDayRange() {
             try {
                 const response = await fetch('/api/activities/');
-                const activities = await response.json();
+                const data = await response.json();
+        const activities = data.results || data;
                 const select = document.getElementById('dayrange-activity-select');
                 select.innerHTML = '<option value="">Select an activity...</option>' +
                     activities.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
@@ -1262,7 +1271,8 @@ productId = newProduct.id;
         async function loadDayRanges() {
             try {
                 const response = await fetch('/api/day-ranges/');
-                const dayRanges = await response.json();
+                const data = await response.json();
+                const dayRanges = data.results ;
                 
                 if (dayRanges.length === 0) {
                     document.getElementById('dayrange-list').innerHTML = '<div class="empty-state">No day ranges found. Add one above!</div>';

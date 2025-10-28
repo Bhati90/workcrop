@@ -421,7 +421,7 @@
         <div class="tabs">
             <button class="tab active" onclick="switchTab('products')">📦 Products</button>
             <button class="tab" onclick="switchTab('add')">➕ Add Product</button>
-            <button class="tab" onclick="switchTab('history')">📜 Audit History</button>
+            <!-- <button class="tab" onclick="switchTab('history')">📜 Audit History</button> -->
             <button class="tab" onclick="goToDashboard()">⬅️ Back to Dashboard</button>
 
         </div>
@@ -616,6 +616,17 @@
     // let allProducts = [];  // ⭐ Commented out - no longer needed
 let currentPage = 1;
 let searchTimeout = null;  // ⭐ Add this for debouncing
+async function uploadImageAndGetKey(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await fetch('/api/upload-image/', {
+        method: 'POST',
+        body: formData
+    });
+    if (!response.ok) throw new Error('Image upload failed');
+    const data = await response.json();
+    return data.key;
+}
 
     function switchTab(tab) {
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -655,7 +666,7 @@ let searchTimeout = null;  // ⭐ Add this for debouncing
     
     try {
         // ⭐ Build URL with server-side filtering
-        let url = `${API_BASE}/products-readonly/?page=${page}`;  // ⭐ Changed endpoint
+        let url = `api/products-readonly/?page=${page}`;  // ⭐ Changed endpoint
         if (searchTerm) {
             url += `&search=${encodeURIComponent(searchTerm)}`;  // ⭐ Server-side search
         }
@@ -732,36 +743,55 @@ let searchTimeout = null;  // ⭐ Add this for debouncing
     }
 }
     async function handleAddProduct(event) {
-        event.preventDefault();
-        const formData = new FormData(event.target);
-        
-        const imageFile = document.getElementById('imageFile').files[0];
-        if (imageFile) formData.append('image', imageFile);
-
-        try {
-            const response = await fetch(`${API_BASE}/products/`, {
-                method: 'POST',
-                body: formData
-            });
-
-            if (response.ok) {
-                showAlert('Product added successfully!');
-                event.target.reset();
-                document.getElementById('addImagePreview').style.display = 'none';
-                switchTab('products');
-            } else {
-                const error = await response.json();
-                showAlert('Error: ' + JSON.stringify(error), 'error');
-            }
-        } catch (error) {
-            showAlert('Failed to add product', 'error');
-        }
+    event.preventDefault();
+    const form = event.target;
+    const imageFile = document.getElementById('imageFile').files[0];
+    let imageKey = "";
+    if (imageFile) {
+        imageKey = await uploadImageAndGetKey(imageFile);
     }
+
+    // collect form data
+    const data = {
+        name: form.name.value,
+        name_marathi: form.name_marathi.value,
+        product_type: form.product_type.value,
+        manufacturer: form.manufacturer.value,
+        mrp: form.mrp.value || null,
+        price: form.price.value || null,
+        size: form.size.value || null,
+        size_unit: form.size_unit.value,
+        description: form.description.value,
+        user_email: form.user_email.value
+    };
+    if (imageKey) data.image = imageKey;
+
+    // do not use FormData here - send as JSON!
+    try {
+        const response = await fetch(`api/products/`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+
+        if (response.ok) {
+            showAlert('Product added successfully!');
+            form.reset();
+            document.getElementById('addImagePreview').style.display = 'none';
+            switchTab('products');
+        } else {
+            const error = await response.json();
+            showAlert('Error: ' + JSON.stringify(error), 'error');
+        }
+    } catch (error) {
+        showAlert('Failed to add product', 'error');
+    }
+}
 
     async function openEditModal(productId) {  // ⭐ Make it async
     try {
         // ⭐ Fetch single product from server
-        const response = await fetch(`${API_BASE}/products/${productId}/`);
+        const response = await fetch(`api/products/${productId}/`);
         if (!response.ok) throw new Error('Failed to fetch product');
         
         const product = await response.json();
@@ -798,21 +828,37 @@ let searchTimeout = null;  // ⭐ Add this for debouncing
     async function handleEditProduct(event) {
     event.preventDefault();
     const productId = document.getElementById('edit_product_id').value;
-    const formData = new FormData(event.target);
-    
+    const form = event.target;
+
+    let imageKey = "";
     const imageFile = document.getElementById('editImageFile').files[0];
-    if (imageFile) formData.append('image', imageFile);
+    if (imageFile) {
+        imageKey = await uploadImageAndGetKey(imageFile);
+    }
+    const data = {
+        name: form.edit_name.value,
+        name_marathi: form.edit_name_marathi.value,
+        product_type: form.edit_product_type.value,
+        manufacturer: form.edit_manufacturer.value,
+        mrp: form.edit_mrp.value || null,
+        price: form.edit_price.value || null,
+        size: form.edit_size.value || null,
+        size_unit: form.edit_size_unit.value,
+        description: form.edit_description.value,
+        user_email: form.edit_user_email.value
+    };
+    if (imageKey) data.image = imageKey;
 
     try {
-        const response = await fetch(`${API_BASE}/products/${productId}/`, {
+        const response = await fetch(`api/products/${productId}/`, {
             method: 'PATCH',
-            body: formData
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
         });
 
         if (response.ok) {
             showAlert('Product updated successfully!');
             closeEditModal();
-            // ⭐ Pass search term when reloading
             loadProducts(currentPage, document.getElementById('productSearchInput').value);
         } else {
             const error = await response.json();
@@ -822,10 +868,10 @@ let searchTimeout = null;  // ⭐ Add this for debouncing
         showAlert('Failed to update product', 'error');
     }
 }
-    async function viewHistory(productId) {
+async function viewHistory(productId) {
         switchTab('history');
         try {
-            const response = await fetch(`${API_BASE}/products/${productId}/history/`);
+            const response = await fetch(`api/products/${productId}/history/`);
             const logs = await response.json();
             renderHistory(logs);
         } catch (error) {
@@ -835,7 +881,7 @@ let searchTimeout = null;  // ⭐ Add this for debouncing
 
     async function loadHistory() {
         try {
-            const response = await fetch(`${API_BASE}/audit-logs/?model=product`);
+            const response = await fetch(`api/audit-logs/?model=product`);
             const data = await response.json();
             const logs = data.results || data;
             renderHistory(logs);

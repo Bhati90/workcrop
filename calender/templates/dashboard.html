@@ -753,6 +753,12 @@ button { padding: 6px 14px; margin: 10px 0; border-radius: 4px; background: #08d
         <span>🔍</span>
         <span>Filter Options</span>
     </div>
+        <button class="btn btn-primary"
+        style="font-size: 15px; padding: 10px 24px; border-radius: 8px; box-shadow: 0 2px 8px rgba(33,128,141,0.07); letter-spacing: 0.02em; display: flex; gap: 8px; align-items: center;"
+        onclick="goToEditFull()">
+        <span style="font-size: 20px; margin-right: 3px;">✏️</span>
+        Edit All Detail
+    </button>
     <button class="btn btn-primary"
         style="font-size: 15px; padding: 10px 24px; border-radius: 8px; box-shadow: 0 2px 8px rgba(33,128,141,0.07); letter-spacing: 0.02em; display: flex; gap: 8px; align-items: center;"
         onclick="goToEdit()">
@@ -1497,6 +1503,11 @@ function resetSelect(selectElement, defaultText) {
 function clearFilters() {
     document.getElementById('filterForm').reset();
     window.location.href = window.location.pathname;
+}
+
+function goToEditFull() {
+    // Adjust the URL below to your dashboard route
+    window.location.href = "/add";
 }
 
 function goToEdit() {

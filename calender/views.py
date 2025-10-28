@@ -16,6 +16,24 @@ from .serializers import (
     DayRangeProductSerializer,
     AuditLogSerializer
 )
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.parsers import MultiPartParser
+from rest_framework import status
+from .utils.s3_uploads import upload_image_to_s3  # Import the upload function
+
+class ImageUploadAPIView(APIView):
+    parser_classes = [MultiPartParser]
+
+    def post(self, request, format=None):
+        image_file = request.FILES.get('file')
+        if not image_file:
+            return Response({'error': 'No file provided'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            s3_key = upload_image_to_s3(image_file)
+            return Response({'key': s3_key})
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 # ============================================
