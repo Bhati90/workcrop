@@ -17,6 +17,10 @@ from .serializers import (
 from django.core.paginator import Paginator
 from .utils.s3_uploads import upload_image_to_s3
 
+
+def add(request):
+    return render(request, 'add.html')
+
 class DayRangeProductViewSet(viewsets.ModelViewSet):
     """
     API endpoint for day range products with full CRUD operations

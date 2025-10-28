@@ -132,10 +132,16 @@ class CropVarietyDetailSerializer(serializers.ModelSerializer):
 
 class CropVarietySerializer(serializers.ModelSerializer):
     crop_name = serializers.CharField(source='crop.name', read_only=True)
+    crop = serializers.PrimaryKeyRelatedField(
+        queryset=Crop.objects.all(), 
+        write_only=True,
+        required=True
+    )
     
     class Meta:
         model = CropVariety
-        fields = ['id', 'name', 'name_marathi', 'crop_name', 'created_at', 'updated_at']
+        fields = ['id', 'crop', 'name', 'name_marathi', 'crop_name', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'crop_name', 'created_at', 'updated_at']
 
 
 class CropSerializer(serializers.ModelSerializer):

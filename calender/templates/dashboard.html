@@ -564,7 +564,48 @@ button { padding: 6px 14px; margin: 10px 0; border-radius: 4px; background: #08d
     border-radius: 4px;
 }
 
+.pagination-section {
+    margin: 30px 0;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
 
+.pagination-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+}
+
+.page-info {
+    font-weight: 500;
+    color: #495057;
+}
+
+.btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.btn-primary {
+    background-color: #007bff;
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: #0056b3;
+}
+
+.btn-secondary {
+    background-color: #6c757d;
+    color: white;
+    opacity: 0.6;
+}
         .no-results {
             text-align: center;
             padding: 80px 20px;
@@ -798,12 +839,12 @@ button { padding: 6px 14px; margin: 10px 0; border-radius: 4px; background: #08d
 
             <div class="results-header">
                 <div class="results-count">
-                    📊 Found {{ day_ranges.count }} result{{ day_ranges.count|pluralize }}
+                📊 Found {{ page_obj.paginator.count }} result{{ page_obj.paginator.count|pluralize }}
                 </div>
             </div>
 
             {% if day_ranges %}
-                {% for day_range in day_ranges %}
+                {% for day_range in page_obj %}
                 <div class="crop-card" data-dayrange-id="{{ day_range.id }}">
 <div class="card-header" >
    <div class="card-title">
@@ -885,7 +926,38 @@ button { padding: 6px 14px; margin: 10px 0; border-radius: 4px; background: #08d
     </div>
     {% endif %}
 </div>
+
 {% endfor %}
+<div class="pagination-section">
+    {% if page_obj.has_other_pages %}
+        <div class="pagination-controls">
+            <!-- Previous Button -->
+            {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}{% if selected_crop %}&crop={{ selected_crop }}{% endif %}{% if selected_variety %}&variety={{ selected_variety }}{% endif %}{% if selected_activity %}&activity={{ selected_activity }}{% endif %}{% if selected_product %}&product={{ selected_product }}{% endif %}{% if day_from %}&day_from={{ day_from }}{% endif %}{% if day_to %}&day_to={{ day_to }}{% endif %}{% if search %}&search={{ search }}{% endif %}" class="btn btn-primary">
+                    ← Previous
+                </a>
+            {% else %}
+                <button class="btn btn-secondary" disabled>← Previous</button>
+            {% endif %}
+            
+            <!-- Page Info -->
+            <span class="page-info">
+                Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                ({{ page_obj.start_index }}-{{ page_obj.end_index }} of {{ page_obj.paginator.count }} total)
+            </span>
+            
+            <!-- Next Button -->
+            {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}{% if selected_crop %}&crop={{ selected_crop }}{% endif %}{% if selected_variety %}&variety={{ selected_variety }}{% endif %}{% if selected_activity %}&activity={{ selected_activity }}{% endif %}{% if selected_product %}&product={{ selected_product }}{% endif %}{% if day_from %}&day_from={{ day_from }}{% endif %}{% if day_to %}&day_to={{ day_to }}{% endif %}{% if search %}&search={{ search }}{% endif %}" class="btn btn-primary">
+                    Next →
+                </a>
+            {% else %}
+                <button class="btn btn-secondary" disabled>Next →</button>
+            {% endif %}
+        </div>
+    {% endif %}
+</div>
+
             {% else %}
                 <div class="no-results">
                     <div class="no-results-icon">🔍</div>
@@ -1023,141 +1095,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 500);
     });
 });
-// Wizard state
-let currentCrop, currentVariety, currentActivity, currentDayRange;
-let currentProductsAdded = [];
 
-// 1. Add Crop
-function saveCrop() {
-  fetch('/api/crops/', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({
-      name: document.getElementById('crop-name').value,
-      name_marathi: document.getElementById('crop-name-marathi').value
-    })
-  })
-  .then(r => r.json())
-  .then(data => {
-    currentCrop = data;
-    document.getElementById('current-crop').textContent = data.name;
-    showStep('variety');
-  });
-}
-
-// 2. Add Variety
-function saveVariety() {
-  fetch('/api/varieties/', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({
-      crop: currentCrop.id,
-      name: document.getElementById('variety-name').value,
-      name_marathi: document.getElementById('variety-name-marathi').value
-    })
-  })
-  .then(r => r.json())
-  .then(data => {
-    currentVariety = data;
-    showStep('activity');
-  });
-}
-
-// 3. Add Activity
-function saveActivity() {
-  fetch('/api/activities/', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({
-      name: document.getElementById('activity-name').value,
-      name_marathi: document.getElementById('activity-name-marathi').value
-    })
-  })
-  .then(r => r.json())
-  .then(data => {
-    currentActivity = data;
-    showStep('dayrange');
-  });
-}
-
-// 4. Add DayRange
-function saveDayRange() {
-  fetch('/api/day-ranges/', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({
-      crop_variety: currentVariety.id,
-      activity: currentActivity.id,
-      start_day: document.getElementById('start-day').value,
-      end_day: document.getElementById('end-day').value,
-      info: document.getElementById('info').value,
-      info_marathi: document.getElementById('info-marathi').value
-    })
-  })
-  .then(r => r.json())
-  .then(data => {
-    currentDayRange = data;
-    loadProducts();
-    showStep('products');
-  });
-}
-
-// 5. Add Products To DayRange
-function loadProducts() {
-  fetch('/api/products-readonly/')
-    .then(r => r.json())
-    .then(data => {
-      let sel = document.getElementById('product-select');
-      sel.innerHTML = '';
-      (data.results || data).forEach(p => {
-        sel.innerHTML += `<option value="${p.id}">${p.name}</option>`;
-      });
-      // Insert units
-      let unitSel = document.getElementById('dosage-unit');
-      unitSel.innerHTML = `
-        <option value="gm/acre">Gram per Acre</option>
-        <option value="kg/acre">Kilogram per Acre</option>
-        <option value="ml/acre">Milliliter per Acre</option>
-        <option value="liter/acre">Liter per Acre</option>
-        <option value="gm/liter">Gram per Liter</option>
-        <option value="ml/liter">Milliliter per Liter</option>
-        <option value="gm/plant">Gram per Plant</option>
-        <option value="ml/plant">Milliliter per Plant</option>
-      `;
-    });
-}
-
-function saveDayRangeProduct() {
-  fetch('/api/day-range-products/', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({
-      day_range: currentDayRange.id,
-      product: document.getElementById('product-select').value,
-      dosage: document.getElementById('dosage').value,
-      dosage_unit: document.getElementById('dosage-unit').value
-    })
-  })
-  .then(r => r.json())
-  .then(data => {
-    currentProductsAdded.push(data);
-    document.getElementById('added-products-list').innerHTML += `
-      <div>${data.product} - ${data.dosage} ${data.dosage_unit}</div>
-    `;
-    document.getElementById('dosage').value = ''; // clear for next
-  });
-}
-
-// Wizard navigation
-function showStep(step) {
-  document.querySelectorAll('.wizard-step').forEach(s => s.classList.remove('active'));
-  document.getElementById('step-' + step).classList.add('active');
-}
-
-function finishWizard() {
-  alert('Entry complete! Reload to add more.');
-  // Optionally reload or reset wizard
-}
 
 // 1. Populate products select fields
 function populateProductDropdowns(products) {
