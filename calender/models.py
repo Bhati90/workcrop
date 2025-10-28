@@ -141,7 +141,13 @@ class Product(models.Model):
         return "N/A"
 
     class Meta:
-        ordering = ['name']
+        indexes = [
+            models.Index(fields=['name']),
+            models.Index(fields=['product_type']),
+            models.Index(fields=['-created_at']),
+            models.Index(fields=['name', 'product_type']),
+        ]
+        ordering = ['-created_at']
 
 
 

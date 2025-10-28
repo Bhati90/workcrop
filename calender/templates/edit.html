@@ -613,8 +613,9 @@
     <script>
         
     const API_BASE = 'https://workcrop.onrender.com/api';
-    let allProducts = [];
-    let currentPage = 1;
+    // let allProducts = [];  // ⭐ Commented out - no longer needed
+let currentPage = 1;
+let searchTimeout = null;  // ⭐ Add this for debouncing
 
     function switchTab(tab) {
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -647,80 +648,89 @@
         }
     }
 
-    async function loadProducts(page = 1) {
-        currentPage = page;
-        try {
-            const response = await fetch(`${API_BASE}/products/?page=${page}`);
-            const data = await response.json();
-            
-            allProducts = data.results || data;
-            
-            const container = document.getElementById('productsList');
-            
-            // Render products
-            if (!allProducts.length) {
-                container.innerHTML = '<p class="loading">No products found</p>';
-                return;
-            }
+    async function loadProducts(page = 1, searchTerm = '') {  // ⭐ Add searchTerm parameter
+    currentPage = page;
+    const container = document.getElementById('productsList');
+    container.innerHTML = '<p class="loading">Loading products...</p>';  // ⭐ Show loading
+    
+    try {
+        // ⭐ Build URL with server-side filtering
+        let url = `${API_BASE}/products-readonly/?page=${page}`;  // ⭐ Changed endpoint
+        if (searchTerm) {
+            url += `&search=${encodeURIComponent(searchTerm)}`;  // ⭐ Server-side search
+        }
+        
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Failed to fetch');
+        
+        const data = await response.json();
+        const products = data.results || data;  // ⭐ Don't store in allProducts
+        
+        if (!products.length) {
+            container.innerHTML = '<p class="loading">No products found</p>';
+            return;
+        }
 
-            container.innerHTML = allProducts.map(product => `
-                <div class="product-item">
-                    <img src="${product.presigned_image_url || 'https://via.placeholder.com/100'}" class="product-image-large">
-                    <div class="product-info">
-                        <div class="product-name">${product.name}</div>
-                        <div class="product-meta">
-                            ${product.product_type || 'N/A'} | 
-                            ${product.size ? product.size + ' ' + product.size_unit : 'N/A'}
-                        </div>
-                        <div class="product-price">
-                            ${product.price ? '₹' + product.price : 'Price not set'}
-                            ${product.mrp ? '<span style="text-decoration: line-through; font-size: 14px; color: var(--color-text-secondary); margin-left: 8px;">₹' + product.mrp + '</span>' : ''}
-                        </div>
+        container.innerHTML = products.map(product => `  // ⭐ Use 'products' not 'allProducts'
+            <div class="product-item">
+                <img src="${product.presigned_image_url || 'https://via.placeholder.com/100'}" 
+                     class="product-image-large"
+                     loading="lazy"  // ⭐ Add lazy loading
+                     alt="${product.name}">
+                <div class="product-info">
+                    <div class="product-name">${product.name}</div>
+                    <div class="product-meta">
+                        ${product.product_type || 'N/A'} | 
+                        ${product.size ? product.size + ' ' + product.size_unit : 'N/A'}
                     </div>
-                    <div class="product-actions">
-                        <button class="btn btn-secondary" onclick="openEditModal(${product.id})">✏️ Edit</button>
-                        <button class="btn btn-secondary" onclick="viewHistory(${product.id})">📜 History</button>
+                    <div class="product-price">
+                        ${product.price ? '₹' + product.price : 'Price not set'}
+                        ${product.mrp ? '<span style="text-decoration: line-through; font-size: 14px; color: var(--color-text-secondary); margin-left: 8px;">₹' + product.mrp + '</span>' : ''}
                     </div>
                 </div>
-            `).join('');
+                <div class="product-actions">
+                    <button class="btn btn-secondary" onclick="openEditModal(${product.id})">✏️ Edit</button>
+                    <button class="btn btn-secondary" onclick="viewHistory(${product.id})">📜 History</button>
+                </div>
+            </div>
+        `).join('');
 
-            // Add pagination if data has count/next/previous
-            if (data.count) {
-                const totalPages = Math.ceil(data.count / 10);
-                container.innerHTML += `
-                    <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid #e0e0e0;">
-                        <div style="margin-bottom: 16px; text-align: center; color: #666; font-size: 15px;">
-                            📊 Found ${data.count} product${data.count !== 1 ? 's' : ''}
-                        </div>
-                        <div style="display: flex; justify-content: center; align-items: center; gap: 16px;">
-                            <button onclick="loadProducts(${currentPage - 1})" 
-                                    class="btn ${data.previous ? 'btn-primary' : 'btn-secondary'}" 
-                                    ${!data.previous ? 'disabled' : ''}>
-                                ← Previous
-                            </button>
-                            
-                            <span style="padding: 10px 20px; background: #f5f5f5; border-radius: 8px; font-weight: 500;">
-                                Page ${currentPage} of ${totalPages}
-                            </span>
-                            
-                            <button onclick="loadProducts(${currentPage + 1})" 
-                                    class="btn ${data.next ? 'btn-primary' : 'btn-secondary'}" 
-                                    ${!data.next ? 'disabled' : ''}>
-                                Next →
-                            </button>
-                        </div>
+        // Pagination (update the onclick handlers)
+        if (data.count) {
+            const totalPages = Math.ceil(data.count / 10);
+            container.innerHTML += `
+                <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid #e0e0e0;">
+                    <div style="margin-bottom: 16px; text-align: center; color: #666; font-size: 15px;">
+                        📊 Found ${data.count} product${data.count !== 1 ? 's' : ''}
                     </div>
-                `;
-            }
-        } catch (error) {
-            console.error('Error:', error);
-            document.getElementById('productsList').innerHTML = `
-                <p class="loading">Failed to load products</p>
-                <button class="btn btn-primary" onclick="loadProducts(1)" style="margin: 20px auto; display: block;">🔄 Retry</button>
+                    <div style="display: flex; justify-content: center; align-items: center; gap: 16px;">
+                        <button onclick="loadProducts(${currentPage - 1}, document.getElementById('productSearchInput').value)" 
+                                class="btn ${data.previous ? 'btn-primary' : 'btn-secondary'}" 
+                                ${!data.previous ? 'disabled' : ''}>
+                            ← Previous
+                        </button>
+                        
+                        <span style="padding: 10px 20px; background: #f5f5f5; border-radius: 8px; font-weight: 500;">
+                            Page ${currentPage} of ${totalPages}
+                        </span>
+                        
+                        <button onclick="loadProducts(${currentPage + 1}, document.getElementById('productSearchInput').value)" 
+                                class="btn ${data.next ? 'btn-primary' : 'btn-secondary'}" 
+                                ${!data.next ? 'disabled' : ''}>
+                            Next →
+                        </button>
+                    </div>
+                </div>
             `;
         }
+    } catch (error) {
+        console.error('Error:', error);
+        container.innerHTML = `
+            <p class="loading">Failed to load products</p>
+            <button class="btn btn-primary" onclick="loadProducts(1)" style="margin: 20px auto; display: block;">🔄 Retry</button>
+        `;
     }
-
+}
     async function handleAddProduct(event) {
         event.preventDefault();
         const formData = new FormData(event.target);
@@ -748,10 +758,14 @@
         }
     }
 
-    function openEditModal(productId) {
-        const product = allProducts.find(p => p.id === productId);
-        if (!product) return;
-
+    async function openEditModal(productId) {  // ⭐ Make it async
+    try {
+        // ⭐ Fetch single product from server
+        const response = await fetch(`${API_BASE}/products/${productId}/`);
+        if (!response.ok) throw new Error('Failed to fetch product');
+        
+        const product = await response.json();
+        
         document.getElementById('edit_product_id').value = product.id;
         document.getElementById('edit_name').value = product.name || '';
         document.getElementById('edit_name_marathi').value = product.name_marathi || '';
@@ -773,39 +787,41 @@
         
         document.getElementById('editImagePreview').style.display = 'none';
         document.getElementById('editModal').classList.add('active');
+    } catch (error) {
+        showAlert('Failed to load product details', 'error');  // ⭐ Show error
     }
-
+}
     function closeEditModal() {
         document.getElementById('editModal').classList.remove('active');
     }
 
     async function handleEditProduct(event) {
-        event.preventDefault();
-        const productId = document.getElementById('edit_product_id').value;
-        const formData = new FormData(event.target);
-        
-        const imageFile = document.getElementById('editImageFile').files[0];
-        if (imageFile) formData.append('image', imageFile);
+    event.preventDefault();
+    const productId = document.getElementById('edit_product_id').value;
+    const formData = new FormData(event.target);
+    
+    const imageFile = document.getElementById('editImageFile').files[0];
+    if (imageFile) formData.append('image', imageFile);
 
-        try {
-            const response = await fetch(`${API_BASE}/products/${productId}/`, {
-                method: 'PATCH',
-                body: formData
-            });
+    try {
+        const response = await fetch(`${API_BASE}/products/${productId}/`, {
+            method: 'PATCH',
+            body: formData
+        });
 
-            if (response.ok) {
-                showAlert('Product updated successfully!');
-                closeEditModal();
-                loadProducts(currentPage);
-            } else {
-                const error = await response.json();
-                showAlert('Error: ' + JSON.stringify(error), 'error');
-            }
-        } catch (error) {
-            showAlert('Failed to update product', 'error');
+        if (response.ok) {
+            showAlert('Product updated successfully!');
+            closeEditModal();
+            // ⭐ Pass search term when reloading
+            loadProducts(currentPage, document.getElementById('productSearchInput').value);
+        } else {
+            const error = await response.json();
+            showAlert('Error: ' + JSON.stringify(error), 'error');
         }
+    } catch (error) {
+        showAlert('Failed to update product', 'error');
     }
-
+}
     async function viewHistory(productId) {
         switchTab('history');
         try {
@@ -848,35 +864,32 @@
         `).join('');
     }
 
-    document.addEventListener('DOMContentLoaded', function() {
-        const searchInput = document.getElementById('productSearchInput');
-        if (searchInput) {
-            searchInput.addEventListener('input', function() {
-                const term = searchInput.value.toLowerCase();
-                if (!term) {
-                    loadProducts(currentPage);
-                } else {
-                    const filtered = allProducts.filter(p => p.name && p.name.toLowerCase().includes(term));
-                    const container = document.getElementById('productsList');
-                    container.innerHTML = filtered.map(product => `
-                        <div class="product-item">
-                            <img src="${product.presigned_image_url || 'https://via.placeholder.com/100'}" class="product-image-large">
-                            <div class="product-info">
-                                <div class="product-name">${product.name}</div>
-                                <div class="product-meta">${product.product_type || 'N/A'} | ${product.size ? product.size + ' ' + product.size_unit : 'N/A'}</div>
-                                <div class="product-price">${product.price ? '₹' + product.price : 'Price not set'}</div>
-                            </div>
-                            <div class="product-actions">
-                                <button class="btn btn-secondary" onclick="openEditModal(${product.id})">✏️ Edit</button>
-                                <button class="btn btn-secondary" onclick="viewHistory(${product.id})">📜 History</button>
-                            </div>
-                        </div>
-                    `).join('');
-                }
-            });
-        }
-    });
+    // ⭐ Add debounce variable at the top (with other variables)
+// let searchTimeout = null;  // ⭐ ADD THIS at line 4 with other variables
 
+// ⭐ Add new debounced search function
+function handleSearch(event) {
+    const searchTerm = event.target.value;
+    
+    // Clear previous timeout
+    if (searchTimeout) {
+        clearTimeout(searchTimeout);
+    }
+    
+    // ⭐ Debounce: wait 300ms after user stops typing
+    searchTimeout = setTimeout(() => {
+        loadProducts(1, searchTerm);  // ⭐ Server-side search
+    }, 300);
+}
+
+// ⭐ Update the DOMContentLoaded listener
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('productSearchInput');
+    if (searchInput) {
+        // ⭐ Use debounced search instead of immediate filtering
+        searchInput.addEventListener('input', handleSearch);
+    }
+});
     function goToDashboard() {
         window.location.href = "/";
     }
