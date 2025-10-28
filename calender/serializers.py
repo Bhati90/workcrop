@@ -1,3 +1,5 @@
+# serializers.py - FIXED VERSION (Remove bulk URL generation for now)
+
 from rest_framework import serializers
 from .models import Product, DayRangeProduct, AuditLog, Activity, DayRange, CropVariety, Crop
 from django.conf import settings
@@ -5,7 +7,7 @@ import boto3
 from functools import lru_cache
 
 # ============================================
-# SOLUTION 1: Cached S3 Client (Reuse connection)
+# Cached S3 Client (Keep this)
 # ============================================
 @lru_cache(maxsize=1)
 def get_s3_client():
@@ -19,46 +21,7 @@ def get_s3_client():
 
 
 # ============================================
-# SOLUTION 2: Batch Presigned URL Generation
-# ============================================
-def generate_presigned_urls_bulk(image_keys):
-    """
-    Generate presigned URLs for multiple images at once
-    Returns dict: {image_key: presigned_url}
-    """
-    if not image_keys:
-        return {}
-    
-    s3_client = get_s3_client()
-    urls = {}
-    
-    for key in image_keys:
-        if not key:
-            continue
-            
-        # Extract S3 key from full URL if needed
-        if key.startswith('http'):
-            if 'amazonaws.com/' in key:
-                key = key.split('amazonaws.com/')[-1]
-            else:
-                continue
-        
-        try:
-            url = s3_client.generate_presigned_url(
-                ClientMethod="get_object",
-                Params={"Bucket": settings.AWS_STORAGE_BUCKET_NAME, "Key": key},
-                ExpiresIn=3600
-            )
-            urls[key] = url
-        except Exception as e:
-            print(f"Error generating presigned URL for {key}: {e}")
-            urls[key] = None
-    
-    return urls
-
-
-# ============================================
-# SOLUTION 3: Optimized List Serializer
+# SIMPLIFIED: List Serializer WITHOUT presigned URLs
 # ============================================
 class ProductListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for list view - NO presigned URLs"""
@@ -81,10 +44,10 @@ class ProductListSerializer(serializers.ModelSerializer):
 
 
 # ============================================
-# SOLUTION 4: Optimized Detail Serializer with Bulk URLs
+# SIMPLIFIED: Detail Serializer with SIMPLE URL generation
 # ============================================
 class ProductDetailSerializer(serializers.ModelSerializer):
-    """Full serializer with presigned URL - optimized for bulk operations"""
+    """Detail serializer with simple presigned URL generation"""
     discount_percentage = serializers.ReadOnlyField()
     display_size = serializers.ReadOnlyField()
     presigned_image_url = serializers.SerializerMethodField()
@@ -99,27 +62,16 @@ class ProductDetailSerializer(serializers.ModelSerializer):
         ]
     
     def get_presigned_image_url(self, obj):
-        # Check if bulk URLs were pre-generated and stored in context
-        presigned_urls = self.context.get('presigned_urls', {})
-        
+        """Generate presigned URL - simplified version"""
         key = getattr(obj, 'image', None)
         if not key:
             return None
         
         # Extract S3 key if full URL provided
-        original_key = key
         if key.startswith('http') and 'amazonaws.com/' in key:
             key = key.split('amazonaws.com/')[-1]
         
-        # Return pre-generated URL if available
-        if key in presigned_urls:
-            return presigned_urls[key]
-        
-        # Fallback: generate single URL (for detail view of single product)
-        return self._generate_single_url(key)
-    
-    def _generate_single_url(self, key):
-        """Fallback for single product detail view"""
+        # Generate URL
         s3_client = get_s3_client()
         try:
             return s3_client.generate_presigned_url(
@@ -133,37 +85,16 @@ class ProductDetailSerializer(serializers.ModelSerializer):
 
 
 # ============================================
-# SOLUTION 5: Custom List Serializer for Bulk Operations
+# Remove the bulk URL generation code - it's too slow!
 # ============================================
-class ProductDetailListSerializer(serializers.ListSerializer):
-    """Custom list serializer that generates presigned URLs in bulk"""
-    
-    def to_representation(self, data):
-        # Extract all image keys
-        image_keys = [
-            item.image for item in data 
-            if hasattr(item, 'image') and item.image
-        ]
-        
-        # Generate all presigned URLs at once
-        presigned_urls = generate_presigned_urls_bulk(image_keys)
-        
-        # Add to context so child serializer can access them
-        self.child.context['presigned_urls'] = presigned_urls
-        
-        # Let parent class handle the rest
-        return super().to_representation(data)
-
-
-# Update ProductDetailSerializer to use the custom list serializer
-ProductDetailSerializer.Meta.list_serializer_class = ProductDetailListSerializer
+# ProductDetailSerializer.Meta.list_serializer_class = ProductDetailListSerializer  # COMMENTED OUT
 
 
 # ============================================
-# Other Serializers (unchanged but shown for completeness)
+# Other Serializers (unchanged)
 # ============================================
 class DayRangeProductSerializer(serializers.ModelSerializer):
-    product = ProductListSerializer(read_only=True)  # Use lightweight serializer
+    product = ProductListSerializer(read_only=True)
     product_id = serializers.IntegerField(write_only=True)
     day_range_id = serializers.IntegerField(write_only=True)
     
