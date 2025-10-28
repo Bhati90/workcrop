@@ -354,6 +354,12 @@
         .modal-header h2 {
             font-size: 24px;
         }
+        .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
 
         .close-btn {
             background: none;
@@ -605,78 +611,61 @@
     </div>
 
     <script>
-        const API_BASE = 'https://workcrop-1.onrender.com/api';
-        let allProducts = [];
+        
+    const API_BASE = 'https://workcrop-1.onrender.com/api';
+    let allProducts = [];
+    let currentPage = 1;
 
-        function switchTab(tab) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    function switchTab(tab) {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        
+        event.target.classList.add('active');
+        document.getElementById(`${tab}-tab`).classList.add('active');
+
+        if (tab === 'products') loadProducts(1);
+        if (tab === 'history') loadHistory();
+    }
+
+    function showAlert(message, type = 'success') {
+        const alert = document.createElement('div');
+        alert.className = `alert alert-${type}`;
+        alert.textContent = message;
+        document.getElementById('alertContainer').appendChild(alert);
+        setTimeout(() => alert.remove(), 5000);
+    }
+
+    function previewImage(event, previewId) {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById(previewId).src = e.target.result;
+                document.getElementById(previewId).style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+
+    async function loadProducts(page = 1) {
+        currentPage = page;
+        try {
+            const response = await fetch(`${API_BASE}/products/?page=${page}`);
+            const data = await response.json();
             
-            event.target.classList.add('active');
-            document.getElementById(`${tab}-tab`).classList.add('active');
-
-            if (tab === 'products') loadProducts();
-            if (tab === 'history') loadHistory();
-        }
-
-        function showAlert(message, type = 'success') {
-            const alert = document.createElement('div');
-            alert.className = `alert alert-${type}`;
-            alert.textContent = message;
-            document.getElementById('alertContainer').appendChild(alert);
-            setTimeout(() => alert.remove(), 5000);
-        }
-
-        function previewImage(event, previewId) {
-            const file = event.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    const preview = document.getElementById(previewId);
-                    preview.src = e.target.result;
-                    preview.style.display = 'block';
-                };
-                reader.readAsDataURL(file);
-            }
-        }
-
-        async function loadProducts() {
-            try {
-                const response = await fetch(`${API_BASE}/products/`);
-                const data = await response.json();
-                
-                // Handle both paginated and non-paginated responses
-                if (Array.isArray(data)) {
-                    allProducts = data;
-                } else if (data.results) {
-                    allProducts = data.results;
-                } else {
-                    allProducts = [];
-                }
-                
-                console.log('Loaded products:', allProducts.length);
-                renderProducts(allProducts);
-            } catch (error) {
-                console.error('Failed to load products:', error);
-                document.getElementById('productsList').innerHTML = `
-                    <p class="loading">Failed to load products: ${error.message}</p>
-                    <button class="btn btn-primary" onclick="loadProducts()" style="margin: 20px auto; display: block;">🔄 Retry</button>
-                `;
-            }
-        }
-
-        function renderProducts(products) {
+            allProducts = data.results || data;
+            
             const container = document.getElementById('productsList');
-            if (!products.length) {
+            
+            // Render products
+            if (!allProducts.length) {
                 container.innerHTML = '<p class="loading">No products found</p>';
                 return;
             }
 
-            container.innerHTML = products.map(product => `
+            container.innerHTML = allProducts.map(product => `
                 <div class="product-item">
-                    
-                    <img src="${product.presigned_image_url || 'https://via.placeholder.com/100'}" class ="product-image-large">
-
+                    <img src="${product.presigned_image_url || 'https://via.placeholder.com/100'}" class="product-image-large">
                     <div class="product-info">
                         <div class="product-name">${product.name}</div>
                         <div class="product-meta">
@@ -694,162 +683,206 @@
                     </div>
                 </div>
             `).join('');
-        }
 
-        async function handleAddProduct(event) {
-            event.preventDefault();
-            const formData = new FormData(event.target);
-            
-            const imageFile = document.getElementById('imageFile').files[0];
-            if (imageFile) {
-                formData.append('image', imageFile);
+            // Add pagination if data has count/next/previous
+            if (data.count) {
+                const totalPages = Math.ceil(data.count / 10);
+                container.innerHTML += `
+                    <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid #e0e0e0;">
+                        <div style="margin-bottom: 16px; text-align: center; color: #666; font-size: 15px;">
+                            📊 Found ${data.count} product${data.count !== 1 ? 's' : ''}
+                        </div>
+                        <div style="display: flex; justify-content: center; align-items: center; gap: 16px;">
+                            <button onclick="loadProducts(${currentPage - 1})" 
+                                    class="btn ${data.previous ? 'btn-primary' : 'btn-secondary'}" 
+                                    ${!data.previous ? 'disabled' : ''}>
+                                ← Previous
+                            </button>
+                            
+                            <span style="padding: 10px 20px; background: #f5f5f5; border-radius: 8px; font-weight: 500;">
+                                Page ${currentPage} of ${totalPages}
+                            </span>
+                            
+                            <button onclick="loadProducts(${currentPage + 1})" 
+                                    class="btn ${data.next ? 'btn-primary' : 'btn-secondary'}" 
+                                    ${!data.next ? 'disabled' : ''}>
+                                Next →
+                            </button>
+                        </div>
+                    </div>
+                `;
             }
-
-            try {
-                const response = await fetch(`${API_BASE}/products/`, {
-                    method: 'POST',
-                    body: formData
-                });
-
-                if (response.ok) {
-                    showAlert('Product added successfully!');
-                    event.target.reset();
-                    document.getElementById('addImagePreview').style.display = 'none';
-                    switchTab('products');
-                } else {
-                    const error = await response.json();
-                    showAlert('Error: ' + JSON.stringify(error), 'error');
-                }
-            } catch (error) {
-                showAlert('Failed to add product', 'error');
-            }
+        } catch (error) {
+            console.error('Error:', error);
+            document.getElementById('productsList').innerHTML = `
+                <p class="loading">Failed to load products</p>
+                <button class="btn btn-primary" onclick="loadProducts(1)" style="margin: 20px auto; display: block;">🔄 Retry</button>
+            `;
         }
+    }
 
-        function openEditModal(productId) {
-            const product = allProducts.find(p => p.id === productId);
-            if (!product) return;
+    async function handleAddProduct(event) {
+        event.preventDefault();
+        const formData = new FormData(event.target);
+        
+        const imageFile = document.getElementById('imageFile').files[0];
+        if (imageFile) formData.append('image', imageFile);
 
-            document.getElementById('edit_product_id').value = product.id;
-            document.getElementById('edit_name').value = product.name || '';
-            document.getElementById('edit_name_marathi').value = product.name_marathi || '';
-            document.getElementById('edit_product_type').value = product.product_type || '';
-            document.getElementById('edit_manufacturer').value = product.manufacturer || '';
-            document.getElementById('edit_mrp').value = product.mrp || '';
-            document.getElementById('edit_price').value = product.price || '';
-            document.getElementById('edit_size').value = product.size || '';
-            document.getElementById('edit_size_unit').value = product.size_unit || '';
-            document.getElementById('edit_description').value = product.description || '';
-            
-            const currentImage = document.getElementById('edit_current_image');
-            if (product.image) {
-                currentImage.src = product.image;
-                currentImage.style.display = 'block';
+        try {
+            const response = await fetch(`${API_BASE}/products/`, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (response.ok) {
+                showAlert('Product added successfully!');
+                event.target.reset();
+                document.getElementById('addImagePreview').style.display = 'none';
+                switchTab('products');
             } else {
-                currentImage.style.display = 'none';
+                const error = await response.json();
+                showAlert('Error: ' + JSON.stringify(error), 'error');
             }
-            
-            document.getElementById('editImagePreview').style.display = 'none';
-            document.getElementById('editModal').classList.add('active');
+        } catch (error) {
+            showAlert('Failed to add product', 'error');
         }
+    }
 
-        function closeEditModal() {
-            document.getElementById('editModal').classList.remove('active');
-        }
+    function openEditModal(productId) {
+        const product = allProducts.find(p => p.id === productId);
+        if (!product) return;
 
-        async function handleEditProduct(event) {
-            event.preventDefault();
-            const productId = document.getElementById('edit_product_id').value;
-            const formData = new FormData(event.target);
-            
-            const imageFile = document.getElementById('editImageFile').files[0];
-            if (imageFile) {
-                formData.append('image', imageFile);
-            }
-
-            try {
-                const response = await fetch(`${API_BASE}/products/${productId}/`, {
-                    method: 'PATCH',
-                    body: formData
-                });
-
-                if (response.ok) {
-                    showAlert('Product updated successfully!');
-                    closeEditModal();
-                    loadProducts();
-                } else {
-                    const error = await response.json();
-                    showAlert('Error: ' + JSON.stringify(error), 'error');
-                }
-            } catch (error) {
-                showAlert('Failed to update product', 'error');
-            }
-        }
-
-        async function viewHistory(productId) {
-            switchTab('history');
-            try {
-                const response = await fetch(`${API_BASE}/products/${productId}/history/`);
-                const logs = await response.json();
-                renderHistory(logs);
-            } catch (error) {
-                document.getElementById('historyList').innerHTML = '<p class="loading">Failed to load history</p>';
-            }
-        }
-
-        async function loadHistory() {
-            try {
-                const response = await fetch(`${API_BASE}/audit-logs/?model=product`);
-                const data = await response.json();
-                const logs = data.results || data;
-                renderHistory(logs);
-            } catch (error) {
-                document.getElementById('historyList').innerHTML = '<p class="loading">Failed to load history</p>';
-            }
+        document.getElementById('edit_product_id').value = product.id;
+        document.getElementById('edit_name').value = product.name || '';
+        document.getElementById('edit_name_marathi').value = product.name_marathi || '';
+        document.getElementById('edit_product_type').value = product.product_type || '';
+        document.getElementById('edit_manufacturer').value = product.manufacturer || '';
+        document.getElementById('edit_mrp').value = product.mrp || '';
+        document.getElementById('edit_price').value = product.price || '';
+        document.getElementById('edit_size').value = product.size || '';
+        document.getElementById('edit_size_unit').value = product.size_unit || '';
+        document.getElementById('edit_description').value = product.description || '';
+        
+        const currentImage = document.getElementById('edit_current_image');
+        if (product.presigned_image_url) {
+            currentImage.src = product.presigned_image_url;
+            currentImage.style.display = 'block';
+        } else {
+            currentImage.style.display = 'none';
         }
         
-        document.addEventListener('DOMContentLoaded', function() {
-    // Use let allProducts from global script (already loaded)
-    const searchInput = document.getElementById('productSearchInput');
-    if (searchInput) {
-        searchInput.addEventListener('input', function() {
-            const term = searchInput.value.toLowerCase();
-            // If term is empty, render all; else filtered
-            if (!term) {
-                renderProducts(allProducts);
-            } else {
-                const filtered = allProducts.filter(p => p.name && p.name.toLowerCase().includes(term));
-                renderProducts(filtered);
-            }
-        });
+        document.getElementById('editImagePreview').style.display = 'none';
+        document.getElementById('editModal').classList.add('active');
     }
-});
 
-function goToDashboard() {
-    // Adjust the URL below to your dashboard route
-    window.location.href = "/";
-}
+    function closeEditModal() {
+        document.getElementById('editModal').classList.remove('active');
+    }
 
-        function renderHistory(logs) {
-            const container = document.getElementById('historyList');
-            if (!logs.length) {
-                container.innerHTML = '<p class="loading">No history found</p>';
-                return;
+    async function handleEditProduct(event) {
+        event.preventDefault();
+        const productId = document.getElementById('edit_product_id').value;
+        const formData = new FormData(event.target);
+        
+        const imageFile = document.getElementById('editImageFile').files[0];
+        if (imageFile) formData.append('image', imageFile);
+
+        try {
+            const response = await fetch(`${API_BASE}/products/${productId}/`, {
+                method: 'PATCH',
+                body: formData
+            });
+
+            if (response.ok) {
+                showAlert('Product updated successfully!');
+                closeEditModal();
+                loadProducts(currentPage);
+            } else {
+                const error = await response.json();
+                showAlert('Error: ' + JSON.stringify(error), 'error');
             }
+        } catch (error) {
+            showAlert('Failed to update product', 'error');
+        }
+    }
 
-            container.innerHTML = logs.map(log => `
-                <div class="history-item">
-                    <div class="history-header">
-                        <span>${log.action_display} ${log.model_display} #${log.object_id}</span>
-                        <span>${new Date(log.timestamp).toLocaleString()}</span>
-                    </div>
-                    <div class="history-changes">
-                        User: ${log.user_email || 'Unknown'} | IP: ${log.ip_address || 'N/A'}
-                    </div>
-                </div>
-            `).join('');
+    async function viewHistory(productId) {
+        switchTab('history');
+        try {
+            const response = await fetch(`${API_BASE}/products/${productId}/history/`);
+            const logs = await response.json();
+            renderHistory(logs);
+        } catch (error) {
+            document.getElementById('historyList').innerHTML = '<p class="loading">Failed to load history</p>';
+        }
+    }
+
+    async function loadHistory() {
+        try {
+            const response = await fetch(`${API_BASE}/audit-logs/?model=product`);
+            const data = await response.json();
+            const logs = data.results || data;
+            renderHistory(logs);
+        } catch (error) {
+            document.getElementById('historyList').innerHTML = '<p class="loading">Failed to load history</p>';
+        }
+    }
+
+    function renderHistory(logs) {
+        const container = document.getElementById('historyList');
+        if (!logs.length) {
+            container.innerHTML = '<p class="loading">No history found</p>';
+            return;
         }
 
-        loadProducts();
-    </script>
+        container.innerHTML = logs.map(log => `
+            <div class="history-item">
+                <div class="history-header">
+                    <span>${log.action_display} ${log.model_display} #${log.object_id}</span>
+                    <span>${new Date(log.timestamp).toLocaleString()}</span>
+                </div>
+                <div class="history-changes">
+                    User: ${log.user_email || 'Unknown'} | IP: ${log.ip_address || 'N/A'}
+                </div>
+            </div>
+        `).join('');
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchInput = document.getElementById('productSearchInput');
+        if (searchInput) {
+            searchInput.addEventListener('input', function() {
+                const term = searchInput.value.toLowerCase();
+                if (!term) {
+                    loadProducts(currentPage);
+                } else {
+                    const filtered = allProducts.filter(p => p.name && p.name.toLowerCase().includes(term));
+                    const container = document.getElementById('productsList');
+                    container.innerHTML = filtered.map(product => `
+                        <div class="product-item">
+                            <img src="${product.presigned_image_url || 'https://via.placeholder.com/100'}" class="product-image-large">
+                            <div class="product-info">
+                                <div class="product-name">${product.name}</div>
+                                <div class="product-meta">${product.product_type || 'N/A'} | ${product.size ? product.size + ' ' + product.size_unit : 'N/A'}</div>
+                                <div class="product-price">${product.price ? '₹' + product.price : 'Price not set'}</div>
+                            </div>
+                            <div class="product-actions">
+                                <button class="btn btn-secondary" onclick="openEditModal(${product.id})">✏️ Edit</button>
+                                <button class="btn btn-secondary" onclick="viewHistory(${product.id})">📜 History</button>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            });
+        }
+    });
+
+    function goToDashboard() {
+        window.location.href = "/";
+    }
+
+    loadProducts(1);
+</script>
+
 </body>
 </html>
