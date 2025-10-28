@@ -184,10 +184,10 @@ class DayRange(models.Model):
         ('pruning', 'Pruning'),
     ]
 
-    crop_variety = models.ForeignKey(CropVariety, on_delete=models.CASCADE, related_name='day_ranges')
-    activity = models.ForeignKey(Activity, on_delete=models.CASCADE, related_name='day_ranges')
-    start_day = models.IntegerField(validators=[MinValueValidator(0)])
-    end_day = models.IntegerField(validators=[MinValueValidator(0)])
+    crop_variety = models.ForeignKey(CropVariety, on_delete=models.CASCADE, related_name='day_ranges', db_index=True)
+    activity = models.ForeignKey(Activity, on_delete=models.CASCADE, related_name='day_ranges', db_index=True)
+    start_day = models.IntegerField(db_index=True)
+    end_day = models.IntegerField(db_index=True)
     info = models.TextField(help_text="Information about what to do in this activity")
     info_marathi = models.TextField(blank=True, null=True, help_text="Information in Marathi")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -197,8 +197,10 @@ class DayRange(models.Model):
         return f"{self.crop_variety} - {self.activity} (Day {self.start_day}-{self.end_day})"
 
     class Meta:
-        ordering = ['crop_variety', 'start_day']
-        verbose_name_plural = "Day Ranges"
+        indexes = [
+            models.Index(fields=['crop_variety', 'activity']),  # ✅ Composite index
+            models.Index(fields=['start_day', 'end_day']),
+        ]
 
     def clean(self):
         from django.core.exceptions import ValidationError
@@ -219,8 +221,8 @@ class DayRangeProduct(models.Model):
         ('ml/plant', 'Milliliter per Plant'),
     ]
 
-    day_range = models.ForeignKey(DayRange, on_delete=models.CASCADE, related_name='products')
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='day_range_products')
+    day_range = models.ForeignKey(DayRange, on_delete=models.CASCADE, related_name='products', db_index=True)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='day_range_products', db_index=True)
     dosage = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0)])
     dosage_unit = models.CharField(max_length=20, choices=DOSAGE_UNIT_CHOICES)
     created_at = models.DateTimeField(auto_now_add=True)

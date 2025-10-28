@@ -9,11 +9,33 @@ from .models import Product
 import boto3
 from django.conf import settings
 
-class ProductSerializer(serializers.ModelSerializer):
+class ProductListSerializer(serializers.ModelSerializer):
+    discount_percentage = serializers.ReadOnlyField()
+    display_size = serializers.ReadOnlyField()
+    
+    
+    class Meta:
+        model = Product
+        fields = [
+            'id', 'name', 'name_marathi', 'product_type',
+            'mrp', 'price', 'size', 'size_unit', 'display_size',
+            'image', 
+            'discount_percentage', 'created_at', 'updated_at'
+        ]
+    
+    def validate_name(self, value):
+        # Check for uniqueness during creation
+        if not self.instance and Product.objects.filter(name=value).exists():
+            raise serializers.ValidationError("Product with this name already exists.")
+        return value
+
+
+class ProductDetailSerializer(serializers.ModelSerializer):
+    """Full serializer with presigned URL for detail view only"""
     discount_percentage = serializers.ReadOnlyField()
     display_size = serializers.ReadOnlyField()
     presigned_image_url = serializers.SerializerMethodField()
-
+    
     def get_presigned_image_url(self, obj):
         key = getattr(obj, 'image', None)
         if not key:
@@ -42,6 +64,8 @@ class ProductSerializer(serializers.ModelSerializer):
             print(f"Error generating presigned URL: {e}")
             return None
 
+    # Keep your existing get_presigned_image_url method
+    
     class Meta:
         model = Product
         fields = [
@@ -50,15 +74,10 @@ class ProductSerializer(serializers.ModelSerializer):
             'image', 'presigned_image_url',
             'discount_percentage', 'created_at', 'updated_at'
         ]
-    
-    def validate_name(self, value):
-        # Check for uniqueness during creation
-        if not self.instance and Product.objects.filter(name=value).exists():
-            raise serializers.ValidationError("Product with this name already exists.")
-        return value
+
 
 class DayRangeProductSerializer(serializers.ModelSerializer):
-    product = ProductSerializer(read_only=True)
+    product = ProductListSerializer(read_only=True)
     product_id = serializers.IntegerField(write_only=True)
     day_range_id = serializers.IntegerField(write_only=True)  # Remove required=False
     
@@ -97,6 +116,7 @@ class DayRangeProductSerializer(serializers.ModelSerializer):
         
         instance.save()
         return instance
+    
 class AuditLogSerializer(serializers.ModelSerializer):
     model_display = serializers.CharField(source='get_model_name_display', read_only=True)
     action_display = serializers.CharField(source='get_action_display', read_only=True)

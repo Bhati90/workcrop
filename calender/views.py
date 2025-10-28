@@ -11,7 +11,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from .models import Crop, CropVariety, Activity, Product, DayRange, DayRangeProduct,AuditLog
 from .serializers import (
     CropSerializer, CropScheduleSerializer, CropVarietySerializer, 
-    CropVarietyDetailSerializer, ActivitySerializer, ProductSerializer, 
+    CropVarietyDetailSerializer, ActivitySerializer, ProductListSerializer, ProductDetailSerializer,
     DayRangeSerializer, DayRangeProductSerializer,AuditLogSerializer
 )
 from django.core.paginator import Paginator
@@ -32,7 +32,12 @@ class DayRangeProductViewSet(viewsets.ModelViewSet):
     filterset_fields = ['day_range', 'product']
     search_fields = ['product__name', 'dosage']
     ordering_fields = ['created_at']
-    
+    def get_queryset(self):  # ✅ Add this method
+        return DayRangeProduct.objects.select_related(
+            'day_range__crop_variety__crop',
+            'day_range__activity',
+            'product'
+        )
     def create(self, request, *args, **kwargs):
         try:
             serializer = self.get_serializer(data=request.data)
@@ -105,7 +110,7 @@ class ProductViewSet(viewsets.ModelViewSet):
     API endpoint for products with full CRUD operations
     """
     queryset = Product.objects.all()
-    serializer_class = ProductSerializer
+    serializer_class = ProductListSerializer  #
     parser_classes = (MultiPartParser,JSONParser, FormParser)
     
     def get_client_ip(self, request):
@@ -143,6 +148,10 @@ class ProductViewSet(viewsets.ModelViewSet):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    def get_serializer_class(self):  # ✅ Add this method
+        if self.action == 'retrieve':  # Only for detail view
+            return ProductDetailSerializer
+        return ProductListSerializer
     
     def update(self, request, *args, **kwargs):
         try:
@@ -216,7 +225,7 @@ class ProductReadOnlyViewSet(viewsets.ReadOnlyModelViewSet):
     GET /api/products/?product_type={type} - Filter by type
     """
     queryset = Product.objects.all()
-    serializer_class = ProductSerializer
+    serializer_class = ProductListSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['product_type']
     search_fields = ['name', 'name_marathi', 'product_type']
@@ -248,7 +257,7 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class CropViewSet(viewsets.ModelViewSet):  # ← Changed from ReadOnlyModelViewSet
-    queryset = Crop.objects.all()
+    queryset = Crop.objects.prefetch_related('varieties')
     serializer_class = CropSerializer
     parser_classes = (JSONParser, MultiPartParser, FormParser)
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
@@ -263,16 +272,18 @@ class CropViewSet(viewsets.ModelViewSet):  # ← Changed from ReadOnlyModelViewS
 
 class CropVarietyViewSet(viewsets.ModelViewSet):  # ← Changed from ReadOnlyModelViewSet
     queryset = CropVariety.objects.all()
+    serializer_class = CropVarietySerializer
     parser_classes = (JSONParser, MultiPartParser, FormParser)
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['crop']
     search_fields = ['name', 'name_marathi', 'crop__name']
     ordering_fields = ['name', 'created_at']
     
-    def get_serializer_class(self):
-        if self.action == 'retrieve':
-            return CropVarietyDetailSerializer
-        return CropVarietySerializer
+    def get_queryset(self):  # ✅ Add this method
+        return CropVariety.objects.select_related('crop').prefetch_related(
+            'day_ranges__activity',
+            'day_ranges__products__product'
+        )
     
 class ActivityViewSet(viewsets.ModelViewSet):  # ← Changed from ReadOnlyModelViewSet
     queryset = Activity.objects.all()
@@ -337,7 +348,16 @@ class DayRangeViewSet(viewsets.ModelViewSet):  # ← Changed from ReadOnlyModelV
             return Response(serializer.data)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-    
+    def get_queryset(self):  # ✅ Add this method
+        return DayRange.objects.select_related(
+            'crop_variety__crop',
+            'activity'
+        ).prefetch_related(
+            Prefetch(
+                'products',
+                queryset=DayRangeProduct.objects.select_related('product')
+            )
+        )
     def partial_update(self, request, *args, **kwargs):
         """Handle PATCH requests"""
         return self.update(request, *args, **kwargs)
@@ -421,6 +441,7 @@ def crop_management_dashboard(request):
 
         day_ranges = day_ranges.filter(filters).distinct()
 
+    day_ranges = day_ranges.order_by('crop_variety__crop__name', 'start_day')
     
     # Get all filter options
     crops = Crop.objects.all()
@@ -460,7 +481,7 @@ def crop_management_dashboard(request):
     else:
         # No filters - show all
         products = Product.objects.all()
-    paginator = Paginator(day_ranges, 50)  # 50 items per page
+    paginator = Paginator(day_ranges, 25)  # 50 items per page
     page_number = request.GET.get('page', 1)
     page_obj = paginator.get_page(page_number)
     context = {
