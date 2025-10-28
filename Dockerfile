@@ -13,7 +13,6 @@ RUN apt-get update && apt-get install -y \
     gcc \
     postgresql-client \
     libpq-dev \
-    netcat-traditional \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
@@ -27,15 +26,17 @@ COPY . /app/
 # Create directory for static and media files
 RUN mkdir -p /app/staticfiles /app/media
 
-# Collect static files
-RUN python manage.py collectstatic --noinput || true
-
 # Create a non-root user
 RUN useradd -m -u 1000 appuser && \
     chown -R appuser:appuser /app
+
+# Make start script executable
+RUN chmod +x /app/start.sh
+
 USER appuser
 
-# Expose port
-EXPOSE 8000
-# Run gunicorn
-CMD ["sh", "-c", "gunicorn crop.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers 3 --timeout 120"]
+# Expose port (Render uses PORT env variable)
+EXPOSE 10000
+
+# Use start script
+CMD ["/app/start.sh"]
