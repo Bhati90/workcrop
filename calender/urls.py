@@ -15,6 +15,7 @@ router.register(r'products-readonly', views.ProductReadOnlyViewSet, basename='pr
 # Add this line to urls.py router:
 # router.register(r'products-readonly', views.ProductReadOnlyViewSet, basename='product-readonly')
 router.register(r'day-range-products', views.DayRangeProductViewSet, basename='dayrangeproduct')  # ← ADD THIS
+router.register(r'audit-logs', views.AuditLogViewSet, basename='auditlog')  # ← ADD THIS LINE
 
 urlpatterns = [
     path('api/', include(router.urls)),

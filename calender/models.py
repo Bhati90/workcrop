@@ -165,6 +165,7 @@ class AuditLog(models.Model):
         ('variety', 'Crop Variety'),
         ('activity', 'Activity'),
         ('dayrange', 'Day Range'),
+        ('dayrange_product', 'Day Range Product'),  # ← ADD THIS LINE
     ]
     
     model_name = models.CharField(max_length=50, choices=MODEL_CHOICES)
@@ -173,6 +174,7 @@ class AuditLog(models.Model):
     changes = models.JSONField(default=dict)  # Store what changed
     timestamp = models.DateTimeField(auto_now_add=True)
     ip_address = models.GenericIPAddressField(blank=True, null=True)
+    user_email = models.EmailField(blank=True, null=True)  # ← ADD THIS for tracking who made changes
     
     def __str__(self):
         return f"{self.get_action_display()} {self.get_model_name_display()} #{self.object_id} at {self.timestamp}"
@@ -181,8 +183,10 @@ class AuditLog(models.Model):
         ordering = ['-timestamp']
         verbose_name = 'Audit Log'
         verbose_name_plural = 'Audit Logs'
-
-
+        indexes = [
+            models.Index(fields=['model_name', 'object_id']),
+            models.Index(fields=['-timestamp']),
+        ]
 class DayRange(models.Model):
     """Day ranges for activities tracked from pruning/plantation"""
     TRACKING_FROM_CHOICES = [

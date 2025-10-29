@@ -128,10 +128,52 @@ class DayRangeProductSerializer(serializers.ModelSerializer):
 class AuditLogSerializer(serializers.ModelSerializer):
     model_display = serializers.CharField(source='get_model_name_display', read_only=True)
     action_display = serializers.CharField(source='get_action_display', read_only=True)
+    formatted_changes = serializers.SerializerMethodField()
     
     class Meta:
         model = AuditLog
-        fields = '__all__'
+        fields = [
+            'id', 'model_name', 'model_display', 'object_id', 
+            'action', 'action_display', 'changes', 'formatted_changes',
+            'timestamp', 'ip_address', 'user_email'
+        ]
+    
+    def get_formatted_changes(self, obj):
+        """Format changes in a human-readable way"""
+        changes = obj.changes
+        
+        if obj.action == 'create':
+            return {
+                'type': 'create',
+                'summary': changes.get('summary', 'Item created'),
+                'data': changes.get('created', {})
+            }
+        
+        elif obj.action == 'update':
+            formatted = {
+                'type': 'update',
+                'summary': changes.get('summary', 'Item updated'),
+                'fields_changed': []
+            }
+            
+            updated_fields = changes.get('updated_fields', {})
+            for field_name, field_changes in updated_fields.items():
+                formatted['fields_changed'].append({
+                    'field': field_name,
+                    'old_value': field_changes.get('old'),
+                    'new_value': field_changes.get('new')
+                })
+            
+            return formatted
+        
+        elif obj.action == 'delete':
+            return {
+                'type': 'delete',
+                'summary': changes.get('summary', 'Item deleted'),
+                'data': changes.get('deleted', {})
+            }
+        
+        return changes
 
 
 class ActivitySerializer(serializers.ModelSerializer):
