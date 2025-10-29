@@ -19,7 +19,11 @@ router.register(r'day-range-products', views.DayRangeProductViewSet, basename='d
 router.register(r'audit-logs', views.AuditLogViewSet, basename='auditlog')  # ← ADD THIS LINE
 
 urlpatterns = [
+    
     path('api/', include(router.urls)),
+
+    path('api/get-dayrange-by-day/', views.get_dayrange_by_variety_and_day, name='get_dayrange_by_day'),
+
     path('edit',views.edit, name='edit'),
     path('add', views.add, name='add'),
     path('', views.crop_management_dashboard, name='dashboard'),

@@ -163,6 +163,161 @@ class ProductRelationshipViewSet(viewsets.ReadOnlyModelViewSet):
             'grouped_by_crop': crops_list,
             'all_relationships': relationships
         })
+from rest_framework.decorators import api_view  # ✅ Add this import
+
+@api_view(['GET'])
+def get_dayrange_by_variety_and_day(request):
+    """
+    Get day range information for a specific crop variety and day
+    Returns the matching or closest day range with all product details
+    
+    Query Parameters:
+    - variety_id: ID of the crop variety (required)
+    - day: The day number to search for (required)
+    
+    Example: /api/get-dayrange-by-day/?variety_id=1&day=56
+    """
+    variety_id = request.GET.get('variety_id')
+    day = request.GET.get('day')
+    
+    # Validation
+    if not variety_id:
+        return Response({'error': 'variety_id is required'}, status=400)
+    
+    if not day:
+        return Response({'error': 'day is required'}, status=400)
+    
+    try:
+        day = int(day)
+        variety_id = int(variety_id)
+    except ValueError:
+        return Response({'error': 'variety_id and day must be valid integers'}, status=400)
+    
+    # Check if variety exists
+    try:
+        variety = CropVariety.objects.select_related('crop').get(id=variety_id)
+    except CropVariety.DoesNotExist:
+        return Response({'error': f'Crop variety with id {variety_id} not found'}, status=404)
+    
+    # Try to find exact match (day falls within start_day and end_day)
+    exact_match = DayRange.objects.filter(
+        crop_variety_id=variety_id,
+        start_day__lte=day,
+        end_day__gte=day
+    ).select_related('activity', 'crop_variety__crop').prefetch_related(
+        Prefetch(
+            'products',
+            queryset=DayRangeProduct.objects.select_related('product')
+        )
+    ).first()
+    
+    if exact_match:
+        day_range = exact_match
+        match_type = 'exact'
+    else:
+        # Find closest future range (start_day > day)
+        future_range = DayRange.objects.filter(
+            crop_variety_id=variety_id,
+            start_day__gt=day
+        ).select_related('activity', 'crop_variety__crop').prefetch_related(
+            Prefetch(
+                'products',
+                queryset=DayRangeProduct.objects.select_related('product')
+            )
+        ).order_by('start_day').first()
+        
+        # Find closest past range (end_day < day)
+        past_range = DayRange.objects.filter(
+            crop_variety_id=variety_id,
+            end_day__lt=day
+        ).select_related('activity', 'crop_variety__crop').prefetch_related(
+            Prefetch(
+                'products',
+                queryset=DayRangeProduct.objects.select_related('product')
+            )
+        ).order_by('-end_day').first()
+        
+        # Choose the closest one
+        if future_range and past_range:
+            future_distance = future_range.start_day - day
+            past_distance = day - past_range.end_day
+            
+            if future_distance <= past_distance:
+                day_range = future_range
+                match_type = 'next_closest'
+            else:
+                day_range = past_range
+                match_type = 'previous_closest'
+        elif future_range:
+            day_range = future_range
+            match_type = 'next_closest'
+        elif past_range:
+            day_range = past_range
+            match_type = 'previous_closest'
+        else:
+            return Response({
+                'error': f'No day ranges found for crop variety {variety.name}',
+                'variety': {
+                    'id': variety.id,
+                    'name': variety.name,
+                    'name_marathi': variety.name_marathi,
+                    'crop': {
+                        'id': variety.crop.id,
+                        'name': variety.crop.name,
+                        'name_marathi': variety.crop.name_marathi,
+                    }
+                }
+            }, status=404)
+    
+    # Build response with all information
+    products_data = []
+    for drp in day_range.products.all():
+        products_data.append({
+            'day_range_product_id': drp.id,
+            'product_id': drp.product.id,
+            'product_name': drp.product.name,
+            'product_name_marathi': drp.product.name_marathi,
+            'product_type': drp.product.product_type,
+            'dosage': float(drp.dosage),
+            'dosage_unit': drp.dosage_unit,
+            'dosage_unit_display': drp.get_dosage_unit_display(),
+            'manufacturer': drp.product.manufacturer,
+            'manufacturer_marathi': drp.product.manufacturer_marathi,
+            'size': float(drp.product.size) if drp.product.size else None,
+            'size_unit': drp.product.size_unit,
+            'display_size': drp.product.display_size,
+        })
+    
+    response_data = {
+        'match_type': match_type,
+        'searched_day': day,
+        'variety': {
+            'id': variety.id,
+            'name': variety.name,
+            'name_marathi': variety.name_marathi,
+            'crop': {
+                'id': variety.crop.id,
+                'name': variety.crop.name,
+                'name_marathi': variety.crop.name_marathi,
+            }
+        },
+        'day_range': {
+            'id': day_range.id,
+            'start_day': day_range.start_day,
+            'end_day': day_range.end_day,
+            'info': day_range.info,
+            'info_marathi': day_range.info_marathi,
+            'activity': {
+                'id': day_range.activity.id,
+                'name': day_range.activity.name,
+                'name_marathi': day_range.activity.name_marathi,
+            } if day_range.activity else None,
+        },
+        'products': products_data,
+        'total_products': len(products_data)
+    }
+    
+    return Response(response_data)
 
 class ImageUploadAPIView(APIView):
     parser_classes = [MultiPartParser]
@@ -329,7 +484,6 @@ class DayRangeProductViewSet(viewsets.ModelViewSet):
 
 # ============================================
 # SOLUTION 9: Optimized Utility Functions
-from rest_framework.decorators import api_view  # ✅ Add this import
 
 
 # ============================================
