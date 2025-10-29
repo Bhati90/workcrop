@@ -839,57 +839,69 @@
         }
 
         // Global data storage
-        let ALL_PRODUCTS = [];
-        let ALL_CROPS = [];
-        let ALL_ACTIVITIES = [];
+        let ALL_PRODUCTS = [];  // ✅ Changed const to let
+let ALL_CROPS = [];
+let ALL_ACTIVITIES = [];
 
+async function loadProducts() {
+    try {
+        const response = await fetch('/api/products-readonly/?page_size=1000');  // ✅ Added page_size
+        const data = await response.json();
+        ALL_PRODUCTS = data.results || data;  // ✅ No const! Updates global variable
+        console.log(`✅ Loaded ${ALL_PRODUCTS.length} products`);  // ✅ Verify
+    } catch (error) {
+        console.error('Error loading products:', error);
+    }
+}
         // Load initial data
         document.addEventListener('DOMContentLoaded', function() {
-            loadProducts();
-        });
+    loadProducts();
+});
 
-        async function loadProducts() {
-            try {
-                const response = await fetch('/api/products-readonly/');
-                const data = await response.json();
-                ALL_PRODUCTS = data.results || data;
-            } catch (error) {
-                console.error('Error loading products:', error);
-            }
-        }
-
-        // Product row management for complete form
-        function addProductRow() {
-            const container = document.getElementById('product-list');
-            const row = document.createElement('div');
-            row.className = 'product-row';
-            row.style.gridTemplateColumns = '2fr 2fr 1fr 1fr auto'; // Adjusted for new field
-            row.innerHTML = `
-                <div style="display: flex; flex-direction: column; gap: 5px;">
-                    <select class="product-id" onchange="toggleNewProductInput(this)" style="padding: 10px; border: 2px solid #e0e0e0; border-radius: 8px;">
-                        <option value="">Select Existing Product...</option>
-                        ${ALL_PRODUCTS.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
-                        <option value="new">➕ Add New Product</option>
-                    </select>
-                    <input type="text" class="new-product-name" placeholder="New product name..." style="padding: 10px; border: 2px solid #e0e0e0; border-radius: 8px; display: none;">
-                </div>
-                <input type="text" class="new-product-marathi" placeholder="Product name (Marathi) - Optional" style="padding: 10px; border: 2px solid #e0e0e0; border-radius: 8px; display: none;">
-                <input type="number" step="0.01" class="dosage" placeholder="Dosage" required style="padding: 10px; border: 2px solid #e0e0e0; border-radius: 8px;">
-                <select class="dosage-unit" required style="padding: 10px; border: 2px solid #e0e0e0; border-radius: 8px;">
-                    <option value="gm/acre">Gram per Acre</option>
-                    <option value="kg/acre">Kilogram per Acre</option>
-                    <option value="ml/acre">Milliliter per Acre</option>
-                    <option value="liter/acre">Liter per Acre</option>
-                    <option value="gm/liter">Gram per Liter</option>
-                    <option value="ml/liter">Milliliter per Liter</option>
-                    <option value="gm/plant">Gram per Plant</option>
-                    <option value="ml/plant">Milliliter per Plant</option>
-                </select>
-                <button type="button" class="btn btn-danger" onclick="this.parentElement.remove()">🗑️</button>
-            `;
-            container.appendChild(row);
-        }
-        
+// Product row management for complete form
+function addProductRow() {
+    const container = document.getElementById('product-list');
+    const row = document.createElement('div');
+    row.className = 'product-row';
+    row.style.gridTemplateColumns = '2fr 2fr 1fr 1fr auto';
+    
+    // ✅ Check if products are loaded
+    console.log(`Products available: ${ALL_PRODUCTS.length}`);
+    
+    if (ALL_PRODUCTS.length === 0) {
+        console.warn('⚠️ Products not loaded yet! Retrying...');
+        // Wait a bit and try again
+        setTimeout(addProductRow, 500);
+        return;
+    }
+    
+    row.innerHTML = `
+        <div style="display: flex; flex-direction: column; gap: 5px;">
+            <select class="product-id" onchange="toggleNewProductInput(this)" style="padding: 10px; border: 2px solid #e0e0e0; border-radius: 8px;">
+                <option value="">Select Existing Product...</option>
+                ${ALL_PRODUCTS.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
+                <option value="new">➕ Add New Product</option>
+            </select>
+            <input type="text" class="new-product-name" placeholder="New product name..." style="padding: 10px; border: 2px solid #e0e0e0; border-radius: 8px; display: none;">
+        </div>
+        <input type="text" class="new-product-marathi" placeholder="Product name (Marathi) - Optional" style="padding: 10px; border: 2px solid #e0e0e0; border-radius: 8px; display: none;">
+        <input type="number" step="0.01" class="dosage" placeholder="Dosage" required style="padding: 10px; border: 2px solid #e0e0e0; border-radius: 8px;">
+        <select class="dosage-unit" required style="padding: 10px; border: 2px solid #e0e0e0; border-radius: 8px;">
+            <option value="gm/acre">Gram per Acre</option>
+            <option value="kg/acre">Kilogram per Acre</option>
+            <option value="ml/acre">Milliliter per Acre</option>
+            <option value="liter/acre">Liter per Acre</option>
+            <option value="gm/liter">Gram per Liter</option>
+            <option value="ml/liter">Milliliter per Liter</option>
+            <option value="gm/plant">Gram per Plant</option>
+            <option value="ml/plant">Milliliter per Plant</option>
+        </select>
+        <button type="button" class="btn btn-danger" onclick="this.parentElement.remove()">🗑️</button>
+    `;
+    
+    console.log(`✅ Added product row with ${ALL_PRODUCTS.length} products`);
+    container.appendChild(row);
+}
         // Toggle between selecting existing product or adding new one
         function toggleNewProductInput(selectElement) {
             const row = selectElement.closest('.product-row');
@@ -949,7 +961,7 @@
                 statusDiv.innerHTML = '<div class="status-message" style="background: #cce5ff;">Creating Activity...</div>';
                 
                 // 3. Create Activity
-                const activityResponse = await fetch('/api/activities/', {
+                const activityResponse = await fetch('/api/activities/?page_size=1000', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
@@ -1202,7 +1214,7 @@ productId = newProduct.id;
         // ===== ACTIVITIES =====
         async function loadActivities() {
             try {
-                const response = await fetch('/api/activities/');
+                const response = await fetch('/api/activities/?page_size=1000');
                 const activities = await response.json();
                 ALL_ACTIVITIES = activities.results ;
                 
@@ -1233,7 +1245,7 @@ productId = newProduct.id;
         document.getElementById('activity-form').addEventListener('submit', async function(e) {
             e.preventDefault();
             try {
-                await fetch('/api/activities/', {
+                await fetch('/api/activities/?page_size=1000', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
@@ -1363,7 +1375,7 @@ productId = newProduct.id;
 
         async function loadActivitiesForDayRange() {
             try {
-                const response = await fetch('/api/activities/');
+                const response = await fetch('/api/activities/?page_size =1000');
                 const data = await response.json();
         const activities = data.results || data;
                 const select = document.getElementById('dayrange-activity-select');

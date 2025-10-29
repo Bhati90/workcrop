@@ -187,7 +187,11 @@ class DayRangeProductViewSet(viewsets.ModelViewSet):
 
 # ============================================
 # SOLUTION 9: Optimized Utility Functions
+from rest_framework.decorators import api_view  # ✅ Add this import
+
+
 # ============================================
+@api_view(['GET'])
 def get_varieties_by_crop(request):
     """Optimized variety lookup"""
     crop_id = request.GET.get('crop_id')
@@ -201,7 +205,7 @@ def get_varieties_by_crop(request):
     serializer = CropVarietySerializer(varieties, many=True)
     return Response(serializer.data)
 
-
+@api_view(['GET'])
 def get_activities_by_variety(request):
     """Optimized activity lookup"""
     variety_id = request.GET.get('variety_id')

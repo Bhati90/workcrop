@@ -120,8 +120,8 @@ class Product(models.Model):
     # in_stock = models.BooleanField(default=True, help_text="Is product available in stock")
     
     # Manufacturer Information (Optional)
-    # manufacturer = models.CharField(max_length=200, blank=True, null=True)
-    # manufacturer_marathi = models.CharField(max_length=200, blank=True, null=True)
+    manufacturer = models.CharField(max_length=200, blank=True, null=True)
+    manufacturer_marathi = models.CharField(max_length=200, blank=True, null=True)
     
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
@@ -187,6 +187,8 @@ class AuditLog(models.Model):
             models.Index(fields=['model_name', 'object_id']),
             models.Index(fields=['-timestamp']),
         ]
+
+
 class DayRange(models.Model):
     """Day ranges for activities tracked from pruning/plantation"""
     TRACKING_FROM_CHOICES = [

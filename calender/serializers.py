@@ -31,6 +31,7 @@ class ProductListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = [
+            'manufacturer',
             'id', 'name', 'name_marathi', 'product_type',
             'mrp', 'price', 'size', 'size_unit', 'display_size',
             'image',  # Just the key, no URL generation
@@ -55,6 +56,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = [
+            'manufacturer',
             'id', 'name', 'name_marathi', 'product_type',
             'mrp', 'price', 'size', 'size_unit', 'display_size',
             'image', 'presigned_image_url',
