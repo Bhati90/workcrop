@@ -22,6 +22,148 @@ from rest_framework.parsers import MultiPartParser
 from rest_framework import status
 from .utils.s3_uploads import upload_image_to_s3  # Import the upload function
 
+class ProductRelationshipViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet to get product relationships with crops, varieties, activities, and day ranges
+    """
+    queryset = Product.objects.all()
+    serializer_class = ProductDetailSerializer
+    
+    def list(self, request, *args, **kwargs):
+        """
+        Get all products with their relationship counts
+        """
+        products = Product.objects.annotate(
+            usage_count=Count('day_range_products')
+        ).order_by('-usage_count')
+        
+        data = []
+        for product in products:
+            data.append({
+                'id': product.id,
+                'name': product.name,
+                'name_marathi': product.name_marathi,
+                'product_type': product.product_type,
+                'usage_count': product.usage_count,
+            })
+        
+        return Response(data)
+    
+    def retrieve(self, request, pk=None):
+        """
+        Get detailed relationships for a specific product
+        """
+        product = self.get_object()
+        
+        # Get all day range products with related data
+        day_range_products = DayRangeProduct.objects.filter(
+            product=product
+        ).select_related(
+            'day_range__crop_variety__crop',
+            'day_range__activity'
+        ).order_by('day_range__crop_variety__crop__name', 'day_range__start_day')
+        
+        relationships = []
+        for drp in day_range_products:
+            dr = drp.day_range
+            relationships.append({
+                'day_range_product_id': drp.id,
+                'dosage': float(drp.dosage),
+                'dosage_unit': drp.dosage_unit,
+                'dosage_unit_display': drp.get_dosage_unit_display(),
+                'day_range': {
+                    'id': dr.id,
+                    'start_day': dr.start_day,
+                    'end_day': dr.end_day,
+                    'info': dr.info,
+                    'info_marathi': dr.info_marathi,
+                },
+                'activity': {
+                    'id': dr.activity.id,
+                    'name': dr.activity.name,
+                    'name_marathi': dr.activity.name_marathi,
+                } if dr.activity else None,
+                'variety': {
+                    'id': dr.crop_variety.id,
+                    'name': dr.crop_variety.name,
+                    'name_marathi': dr.crop_variety.name_marathi,
+                } if dr.crop_variety else None,
+                'crop': {
+                    'id': dr.crop_variety.crop.id,
+                    'name': dr.crop_variety.crop.name,
+                    'name_marathi': dr.crop_variety.crop.name_marathi,
+                } if dr.crop_variety and dr.crop_variety.crop else None,
+            })
+        
+        # Group by crop
+        crops_dict = {}
+        for rel in relationships:
+            if rel['crop']:
+                crop_id = rel['crop']['id']
+                if crop_id not in crops_dict:
+                    crops_dict[crop_id] = {
+                        'crop': rel['crop'],
+                        'varieties': {}
+                    }
+                
+                variety_id = rel['variety']['id'] if rel['variety'] else None
+                if variety_id and variety_id not in crops_dict[crop_id]['varieties']:
+                    crops_dict[crop_id]['varieties'][variety_id] = {
+                        'variety': rel['variety'],
+                        'activities': {}
+                    }
+                
+                if variety_id and rel['activity']:
+                    activity_id = rel['activity']['id']
+                    if activity_id not in crops_dict[crop_id]['varieties'][variety_id]['activities']:
+                        crops_dict[crop_id]['varieties'][variety_id]['activities'][activity_id] = {
+                            'activity': rel['activity'],
+                            'day_ranges': []
+                        }
+                    
+                    crops_dict[crop_id]['varieties'][variety_id]['activities'][activity_id]['day_ranges'].append({
+                        'day_range_product_id': rel['day_range_product_id'],
+                        'day_range': rel['day_range'],
+                        'dosage': rel['dosage'],
+                        'dosage_unit': rel['dosage_unit'],
+                        'dosage_unit_display': rel['dosage_unit_display'],
+                    })
+        
+        # Convert to list
+        crops_list = []
+        for crop_data in crops_dict.values():
+            varieties_list = []
+            for variety_data in crop_data['varieties'].values():
+                activities_list = []
+                for activity_data in variety_data['activities'].values():
+                    activities_list.append(activity_data)
+                varieties_list.append({
+                    'variety': variety_data['variety'],
+                    'activities': activities_list
+                })
+            crops_list.append({
+                'crop': crop_data['crop'],
+                'varieties': varieties_list
+            })
+        
+        return Response({
+            'product': {
+                'id': product.id,
+                'name': product.name,
+                'name_marathi': product.name_marathi,
+                'product_type': product.product_type,
+                'manufacturer': product.manufacturer,
+                'manufacturer_marathi': product.manufacturer_marathi,
+                'mrp': float(product.mrp) if product.mrp else None,
+                'price': float(product.price) if product.price else None,
+                'size': float(product.size) if product.size else None,
+                'size_unit': product.size_unit,
+            },
+            'total_uses': len(relationships),
+            'grouped_by_crop': crops_list,
+            'all_relationships': relationships
+        })
+
 class ImageUploadAPIView(APIView):
     parser_classes = [MultiPartParser]
 

@@ -1160,7 +1160,9 @@ productId = newProduct.id;
                 }
                 
                 let html = '<table class="data-table"><thead><tr><th>Crop</th><th>Variety Name</th><th>Name (Marathi)</th><th>Actions</th></tr></thead><tbody>';
-                varieties.forEach(variety => {
+                
+                console.log(varieties)
+                    varieties.forEach(variety => {
                     html += `
                         <tr>
                             <td>${variety.crop_name}</td>
@@ -1519,11 +1521,11 @@ productId = newProduct.id;
                     return;
                 }
                 
-                let html = '<table class="data-table"><thead><tr><th>Crop Variety</th><th>Activity</th><th>Days</th><th>Info</th><th>Actions</th></tr></thead><tbody>';
+                let html = '<table class="data-table"><thead><tr><th>Activity</th><th>Days</th><th>Info</th><th>Actions</th></tr></thead><tbody>';
                 dayRanges.forEach(dr => {
                     html += `
                         <tr>
-                            <td>${dr.crop_variety?.name || 'N/A'}</td>
+                            
                             <td>${dr.activity?.name || 'N/A'}</td>
                             <td>${dr.start_day} - ${dr.end_day}</td>
                             <td>${dr.info.substring(0, 50)}...</td>
