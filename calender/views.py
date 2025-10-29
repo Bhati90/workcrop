@@ -204,7 +204,6 @@ def get_varieties_by_crop(request):
     
     serializer = CropVarietySerializer(varieties, many=True)
     return Response(serializer.data)
-
 @api_view(['GET'])
 def get_activities_by_variety(request):
     """Optimized activity lookup"""
@@ -222,12 +221,22 @@ def get_activities_by_variety(request):
     serializer = ActivitySerializer(activities, many=True)
     return Response(serializer.data)
 
-
+@api_view(['GET'])
 def get_products_by_filters(request):
     """Optimized product filtering"""
-    queryset = Product.objects.all()
+    variety_id = request.GET.get('variety_id')
+    activity_id = request.GET.get('activity_id')
     
-    # Apply filters
+    if not variety_id or not activity_id:
+        return Response({'error': 'variety_id and activity_id are required'}, status=400)
+    
+    # Get products for the specific variety and activity
+    queryset = Product.objects.filter(
+        day_range_products__day_range__crop_variety_id=variety_id,
+        day_range_products__day_range__activity_id=activity_id
+    ).distinct()
+    
+    # Apply additional filters
     product_type = request.GET.get('product_type')
     if product_type:
         queryset = queryset.filter(product_type=product_type)
@@ -239,11 +248,17 @@ def get_products_by_filters(request):
             Q(name_marathi__icontains=search)
         )
     
-    # Limit fields
-    queryset = queryset.only('id', 'name', 'name_marathi', 'product_type')
+    # Load ALL fields that ProductListSerializer needs
+    queryset = queryset.only(
+        'id', 'name', 'name_marathi', 'product_type',
+        'manufacturer', 'manufacturer_marathi',  # ← ADD THESE
+        'mrp', 'price', 'size', 'size_unit', 
+        'image', 'created_at', 'updated_at'
+    )
     
     serializer = ProductListSerializer(queryset, many=True)
     return Response(serializer.data)
+
 from django.shortcuts import render
 
 

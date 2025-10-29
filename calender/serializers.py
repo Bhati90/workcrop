@@ -84,8 +84,6 @@ class ProductDetailSerializer(serializers.ModelSerializer):
         except Exception as e:
             print(f"Error generating presigned URL: {e}")
             return None
-
-
 # ============================================
 # Remove the bulk URL generation code - it's too slow!
 # ============================================

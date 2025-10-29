@@ -146,6 +146,7 @@ class Product(models.Model):
             models.Index(fields=['product_type']),
             models.Index(fields=['-created_at']),
             models.Index(fields=['name', 'product_type']),
+            models.Index(fields=['manufacturer']),
         ]
         ordering = ['-created_at']
 
