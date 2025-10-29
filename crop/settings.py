@@ -307,29 +307,29 @@ MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/media/'
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
 # # # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.postgresql',  # use this for normal Postgres
-#         'NAME': 'postgres',
-#         'USER': 'postgres',
-#         'PASSWORD': 'KishanBhati!1234!',
-#         'HOST': 'sahyadri-inputs.c12ggig2u4ig.ap-south-1.rds.amazonaws.com',
-#         'PORT': '5432',
-#         'OPTIONS': {
-#             'client_encoding': 'UTF8',
-#         },
-#     }
-# }
-
-
-
 DATABASES = {
-    'default': dj_database_url.config(
-        default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a.oregon-postgres.render.com/registerdb_od8n',
-        conn_max_age=600,
-        conn_health_checks=True,
-    )
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',  # use this for normal Postgres
+        'NAME': 'postgres',
+        'USER': 'postgres',
+        'PASSWORD': 'KishanBhati!1234!',
+        'HOST': 'sahyadri-inputs.c12ggig2u4ig.ap-south-1.rds.amazonaws.com',
+        'PORT': '5432',
+        'OPTIONS': {
+            'client_encoding': 'UTF8',
+        },
+    }
 }
+
+
+
+# DATABASES = {
+#     'default': dj_database_url.config(
+#         default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a.oregon-postgres.render.com/registerdb_od8n',
+#         conn_max_age=600,
+#         conn_health_checks=True,
+#     )
+# }
 
 CORS_ALLOWED_ORIGINS = config(
     'CORS_ALLOWED_ORIGINS',
