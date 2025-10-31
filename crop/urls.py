@@ -22,7 +22,7 @@ from django.conf.urls.static import static
 
 urlpatterns = [
   
-    path('what/', include(('reply.urls'),namespace='whatsapp_chat')),
+    path('what/', include('reply.urls')),
     path('admin/', admin.site.urls),
 ]
 
