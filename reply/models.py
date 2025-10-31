@@ -15,10 +15,11 @@ class WhatsAppUser(models.Model):
 
     class Meta:
         ordering = ['-last_message_at']
+        db_table = 'whatsapp_whatsappuser'
 
     def __str__(self):
         return f"{self.name} ({self.phone_number})"
-
+    
 
 class Conversation(models.Model):
     whatsapp_user = models.OneToOneField(WhatsAppUser, on_delete=models.CASCADE, related_name='conversation')
@@ -29,10 +30,11 @@ class Conversation(models.Model):
 
     class Meta:
         ordering = ['-updated_at']
+        db_table = 'whatsapp_conversation'
 
     def __str__(self):
         return f"Conversation with {self.whatsapp_user.name}"
-
+    
 
 class Message(models.Model):
     MESSAGE_TYPES = [
@@ -80,6 +82,7 @@ class Message(models.Model):
 
     class Meta:
         ordering = ['timestamp']
+        db_table = 'whatsapp_message'
 
     def __str__(self):
         return f"{self.direction} - {self.message_type} - {self.timestamp}"
@@ -92,6 +95,8 @@ class MediaFile(models.Model):
     file_size = models.BigIntegerField(null=True, blank=True)
     downloaded_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        db_table = 'whatsapp_mediafile'
     def __str__(self):
         return f"Media for message {self.message.id}"
 
@@ -128,6 +133,8 @@ class WhatsAppTemplate(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.language})"
+    class Meta:
+        db_table = 'whatsapp_whatsapptemplate'
 
 
 class WebhookLog(models.Model):
@@ -138,6 +145,7 @@ class WebhookLog(models.Model):
 
     class Meta:
         ordering = ['-timestamp']
+        db_table = 'whatsapp_webhooklog'
 
     def __str__(self):
         return f"Webhook Log - {self.timestamp}"
