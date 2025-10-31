@@ -331,6 +331,8 @@ DATABASES = {
         conn_health_checks=True,
     )
 }
+# At the end of settings.py
+APPEND_SLASH = False  # Prevent automatic slash redirects
 
 CORS_ALLOWED_ORIGINS = config(
     'CORS_ALLOWED_ORIGINS',
