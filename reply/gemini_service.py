@@ -74,7 +74,7 @@ class GeminiService:
         self.api_key = api_key or settings.GEMINI_API_KEY
         genai.configure(api_key=self.api_key)
         # Using gemini-1.5-flash-latest as it's the current fast and capable model
-        self.model_name = "gemini-1.5-flash-latest" 
+        self.model_name = "gemini-2.0-flash-exp" 
     
     def generate_reply(self, history, user_message, user_lang, user_name):
         """
