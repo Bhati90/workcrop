@@ -45,12 +45,12 @@ class GeminiService:
         self.api_key = api_key or settings.GEMINI_API_KEY
         genai.configure(api_key=self.api_key)
         
-        self.llm_model_name = "gemini-pro"
+        self.llm_model_name = "gemini-2.0-flash-exp"
         self.embedding_model_name = "text-embedding-004"
         
         self.llm = genai.GenerativeModel(self.llm_model_name)
         
-        # --- Load the Vector Database into Memory ---
+        # --- Load the gemini Database into Memory ---
         self.db_chunks = []
         self.db_vectors = None
         self.load_vector_database()
