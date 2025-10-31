@@ -13,7 +13,7 @@ from .service import WhatsAppService
 
 logger = logging.getLogger(__name__)
 
-@login_required
+
 @require_http_methods(["POST"])
 def add_contact_api(request):
     """Add a new contact/user"""

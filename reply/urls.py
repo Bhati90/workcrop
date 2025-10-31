@@ -4,7 +4,7 @@ from . import views
 app_name = 'whatsapp_chat'
 
 urlpatterns = [
-    path('webhook/whatsapp/', views.whatsapp_webhook, name='webhook'),
+    path('webhook/', views.whatsapp_webhook, name='webhook'),
     path('chat', views.chat_list_view, name='chat_list'),
     path('chat/<int:user_id>/', views.chat_detail_view, name='chat_detail'),
     path('api/send-message/', views.send_message_api, name='send_message'),
