@@ -249,7 +249,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'calender',
+    'reply',
     'storages',
     'rest_framework',
     'corsheaders',
@@ -310,10 +310,10 @@ MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/media/'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',  # use this for normal Postgres
-        'NAME': 'postgres',
+        'NAME': 'registration_db',
         'USER': 'postgres',
-        'PASSWORD': 'KishanBhati!1234!',
-        'HOST': 'sahyadri-inputs.c12ggig2u4ig.ap-south-1.rds.amazonaws.com',
+        'PASSWORD': 'new_password',
+        'HOST': 'localhost',
         'PORT': '5432',
         'OPTIONS': {
             'client_encoding': 'UTF8',
@@ -336,6 +336,31 @@ CORS_ALLOWED_ORIGINS = config(
     default='https://workcrop-1.onrender.com,http://localhost:3000,http://127.0.0.1:3000,http://127.0.0.1:8000',
     cast=Csv()
 )
+
+WHATSAPP_ALLOWED_MEDIA_TYPES = {
+    'image': ['image/jpeg', 'image/png'],
+    'video': ['video/mp4', 'video/3gpp'],
+    'audio': ['audio/aac', 'audio/mp4', 'audio/mpeg', 'audio/amr', 'audio/ogg'],
+    'document': [
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    ],
+}
+WHATSAPP_CONFIG = {
+    'ACCESS_TOKEN': config('WHATSAPP_ACCESS_TOKEN', default=''),
+    'PHONE_NUMBER_ID': config('WHATSAPP_PHONE_NUMBER_ID', default=''),
+    'BUSINESS_ACCOUNT_ID': config('WHATSAPP_BUSINESS_ACCOUNT_ID', default=''),
+    'API_VERSION': config('WHATSAPP_API_VERSION', default='v19.0'),
+}
+WHATSAPP_MAX_FILE_SIZE = {
+    'image': 5 * 1024 * 1024,      # 5MB
+    'video': 16 * 1024 * 1024,     # 16MB
+    'audio': 16 * 1024 * 1024,     # 16MB
+    'document': 100 * 1024 * 1024,  # 100MB
+}
 
 CORS_ALLOW_CREDENTIALS = True
 # Password validation

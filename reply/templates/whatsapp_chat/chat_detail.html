@@ -1,0 +1,1068 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat with {{ whatsapp_user.name }}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #111b21;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            max-width: 1400px;
+            margin: 0 auto;
+            background-color: #0b141a;
+        }
+
+        /* Header */
+        .chat-header {
+            background-color: #202c33;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #2a3942;
+            min-height: 60px;
+        }
+
+        .chat-header-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex: 1;
+        }
+
+        .back-button {
+            color: #aebac1;
+            font-size: 24px;
+            cursor: pointer;
+            text-decoration: none;
+            padding: 5px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            transition: background-color 0.2s;
+        }
+
+        .back-button:hover {
+            background-color: #2a3942;
+        }
+
+        .avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #00a884 0%, #008069 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 18px;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .user-info {
+            flex: 1;
+        }
+
+        .user-info h3 {
+            color: #e9edef;
+            font-size: 16px;
+            font-weight: 500;
+            margin-bottom: 2px;
+        }
+
+        .user-info p {
+            color: #8696a0;
+            font-size: 13px;
+        }
+
+        .chat-header-actions {
+            display: flex;
+            gap: 15px;
+        }
+
+        .icon-btn {
+            background: none;
+            border: none;
+            color: #aebac1;
+            cursor: pointer;
+            font-size: 22px;
+            padding: 8px;
+            border-radius: 50%;
+            transition: background-color 0.2s;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .icon-btn:hover {
+            background-color: #2a3942;
+        }
+
+        /* Messages area */
+        .messages-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background-color: #0b141a;
+            background-image: 
+                repeating-linear-gradient(
+                    45deg,
+                    transparent,
+                    transparent 10px,
+                    rgba(255,255,255,.02) 10px,
+                    rgba(255,255,255,.02) 20px
+                );
+        }
+
+        .message {
+            display: flex;
+            margin-bottom: 12px;
+            animation: messageSlide 0.3s ease;
+        }
+
+        @keyframes messageSlide {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.outbound {
+            justify-content: flex-end;
+        }
+
+        .message.inbound {
+            justify-content: flex-start;
+        }
+
+        .message-bubble {
+            max-width: 65%;
+            padding: 6px 7px 8px 9px;
+            border-radius: 8px;
+            position: relative;
+            word-wrap: break-word;
+            box-shadow: 0 1px 0.5px rgba(0, 0, 0, 0.13);
+        }
+
+        .message.outbound .message-bubble {
+            background-color: #005c4b;
+            color: #e9edef;
+            border-radius: 8px 8px 0 8px;
+        }
+
+        .message.inbound .message-bubble {
+            background-color: #202c33;
+            color: #e9edef;
+            border-radius: 8px 8px 8px 0;
+        }
+
+        .message-content {
+            padding: 0 2px;
+            font-size: 14.2px;
+            line-height: 19px;
+            margin-bottom: 2px;
+        }
+
+        .message-media {
+            margin-bottom: 5px;
+            border-radius: 8px;
+            overflow: hidden;
+            max-width: 100%;
+        }
+
+        .message-media img,
+        .message-media video {
+            max-width: 100%;
+            display: block;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .message-media audio {
+            width: 100%;
+            max-width: 350px;
+        }
+
+        .document-preview {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 12px;
+            background-color: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            margin-bottom: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .document-preview:hover {
+            background-color: rgba(0, 0, 0, 0.3);
+        }
+
+        .document-icon {
+            font-size: 32px;
+        }
+
+        .document-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .document-name {
+            font-size: 14px;
+            font-weight: 500;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .document-size {
+            font-size: 12px;
+            color: #8696a0;
+            margin-top: 2px;
+        }
+
+        .message-caption {
+            margin-top: 5px;
+            font-size: 14px;
+            padding: 0 2px;
+        }
+
+        .message-meta {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 4px;
+            margin-top: 4px;
+            padding: 0 2px;
+        }
+
+        .message-time {
+            font-size: 11px;
+            color: #8696a0;
+        }
+
+        .message.outbound .message-time {
+            color: #99d6c3;
+        }
+
+        .message-status {
+            font-size: 16px;
+            line-height: 1;
+        }
+
+        .status-sent { color: #8696a0; }
+        .status-delivered { color: #8696a0; }
+        .status-read { color: #53bdeb; }
+        .status-failed { color: #ff4444; }
+
+        /* Input area */
+        .input-area {
+            background-color: #202c33;
+            padding: 10px 20px 15px;
+            border-top: 1px solid #2a3942;
+        }
+
+        .input-controls {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+
+        .control-button {
+            padding: 8px 16px;
+            background-color: #2a3942;
+            border: none;
+            border-radius: 20px;
+            color: #e9edef;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+
+        .control-button:hover {
+            background-color: #374045;
+        }
+
+        .control-button.active {
+            background-color: #00a884;
+            color: #111b21;
+        }
+
+        .input-wrapper {
+            display: flex;
+            gap: 8px;
+            align-items: flex-end;
+        }
+
+        .emoji-button,
+        .attachment-button {
+            background-color: transparent;
+            border: none;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: #8696a0;
+            font-size: 24px;
+            border-radius: 50%;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+
+        .emoji-button:hover,
+        .attachment-button:hover {
+            background-color: #2a3942;
+        }
+
+        .message-input {
+            flex: 1;
+            background-color: #2a3942;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 15px;
+            color: #e9edef;
+            font-size: 15px;
+            resize: none;
+            max-height: 100px;
+            min-height: 42px;
+            font-family: inherit;
+            line-height: 20px;
+        }
+
+        .message-input::placeholder {
+            color: #8696a0;
+        }
+
+        .message-input:focus {
+            outline: none;
+        }
+
+        .send-button {
+            background-color: #00a884;
+            border: none;
+            border-radius: 50%;
+            width: 42px;
+            height: 42px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: #111b21;
+            font-size: 20px;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+
+        .send-button:hover {
+            background-color: #06cf9c;
+            transform: scale(1.05);
+        }
+
+        .send-button:disabled {
+            background-color: #2a3942;
+            color: #8696a0;
+            cursor: not-allowed;
+            transform: scale(1);
+        }
+
+        /* Template selector */
+        .template-selector {
+            display: none;
+            margin-bottom: 10px;
+            padding: 15px;
+            background-color: #2a3942;
+            border-radius: 8px;
+        }
+
+        .template-selector.active {
+            display: block;
+        }
+
+        .template-selector label {
+            display: block;
+            color: #e9edef;
+            margin-bottom: 8px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .template-selector select,
+        .template-selector input {
+            width: 100%;
+            padding: 10px 12px;
+            background-color: #202c33;
+            border: 1px solid #374045;
+            border-radius: 8px;
+            color: #e9edef;
+            font-size: 14px;
+            font-family: inherit;
+        }
+
+        .template-selector select:focus,
+        .template-selector input:focus {
+            outline: none;
+            border-color: #00a884;
+        }
+
+        .template-params {
+            margin-top: 10px;
+        }
+
+        .template-param {
+            margin-bottom: 10px;
+        }
+
+        .template-param input::placeholder {
+            color: #667781;
+        }
+
+        /* File preview */
+        .file-preview {
+            display: none;
+            margin-bottom: 10px;
+            padding: 12px;
+            background-color: #2a3942;
+            border-radius: 8px;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .file-preview.active {
+            display: flex;
+        }
+
+        .file-preview-icon {
+            font-size: 32px;
+        }
+
+        .file-preview-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .file-preview-name {
+            color: #e9edef;
+            font-size: 14px;
+            font-weight: 500;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .file-preview-size {
+            font-size: 12px;
+            color: #8696a0;
+            margin-top: 2px;
+        }
+
+        .file-preview-remove {
+            background: none;
+            border: none;
+            color: #ff4444;
+            cursor: pointer;
+            font-size: 24px;
+            padding: 5px;
+            border-radius: 50%;
+            transition: background-color 0.2s;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .file-preview-remove:hover {
+            background-color: rgba(255, 68, 68, 0.1);
+        }
+
+        /* Scrollbar */
+        .messages-container::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .messages-container::-webkit-scrollbar-track {
+            background: #0b141a;
+        }
+
+        .messages-container::-webkit-scrollbar-thumb {
+            background: #374045;
+            border-radius: 3px;
+        }
+
+        .messages-container::-webkit-scrollbar-thumb:hover {
+            background: #4a5158;
+        }
+
+        /* Image modal */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            max-width: 90%;
+            max-height: 90%;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 20px;
+            right: 40px;
+            color: white;
+            font-size: 40px;
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 10px;
+        }
+
+        /* Loading indicator */
+        .sending-indicator {
+            display: none;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 15px;
+            background-color: #2a3942;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            color: #8696a0;
+            font-size: 13px;
+        }
+
+        .sending-indicator.active {
+            display: flex;
+        }
+
+        .spinner {
+            border: 2px solid #2a3942;
+            border-top: 2px solid #00a884;
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Date divider */
+        .date-divider {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 20px 0;
+        }
+
+        .date-divider span {
+            background-color: #202c33;
+            color: #8696a0;
+            padding: 5px 12px;
+            border-radius: 8px;
+            font-size: 12.5px;
+            font-weight: 500;
+        }
+
+        @media (max-width: 768px) {
+            .message-bubble {
+                max-width: 85%;
+            }
+
+            .chat-header {
+                padding: 10px 15px;
+            }
+
+            .input-area {
+                padding: 8px 15px 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <!-- Header -->
+        <div class="chat-header">
+            <div class="chat-header-left">
+                <a href="{% url 'whatsapp_chat:chat_list' %}" class="back-button">←</a>
+                <div class="avatar">{{ whatsapp_user.name|slice:":1"|upper }}</div>
+                <div class="user-info">
+                    <h3>{{ whatsapp_user.name }}</h3>
+                    <p>{{ whatsapp_user.phone_number }}</p>
+                </div>
+            </div>
+            <div class="chat-header-actions">
+                <button class="icon-btn" onclick="location.reload()" title="Refresh">🔄</button>
+            </div>
+        </div>
+
+        <!-- Messages -->
+        <div class="messages-container" id="messagesContainer">
+            {% for message in messages %}
+            <div class="message {{ message.direction }}">
+                <div class="message-bubble">
+                    {% if message.message_type == 'image' %}
+                    <div class="message-media">
+                        {% if message.media_url %}
+                        <img src="{{ message.media_url }}" alt="Image" onclick="openModal(this.src)" loading="lazy">
+                        {% else %}
+                        <div class="document-preview">
+                            <span class="document-icon">🖼️</span>
+                            <div class="document-info">
+                                <div class="document-name">Image</div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% if message.caption %}
+                    <div class="message-caption">{{ message.caption }}</div>
+                    {% endif %}
+                    
+                    {% elif message.message_type == 'video' %}
+                    <div class="message-media">
+                        {% if message.media_url %}
+                        <video controls preload="metadata">
+                            <source src="{{ message.media_url }}" type="{{ message.mime_type }}">
+                        </video>
+                        {% else %}
+                        <div class="document-preview">
+                            <span class="document-icon">🎥</span>
+                            <div class="document-info">
+                                <div class="document-name">Video</div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% if message.caption %}
+                    <div class="message-caption">{{ message.caption }}</div>
+                    {% endif %}
+                    
+                    {% elif message.message_type == 'audio' %}
+                    <div class="message-media">
+                        {% if message.media_url %}
+                        <audio controls preload="metadata">
+                            <source src="{{ message.media_url }}" type="{{ message.mime_type }}">
+                        </audio>
+                        {% else %}
+                        <div class="document-preview">
+                            <span class="document-icon">🎵</span>
+                            <div class="document-info">
+                                <div class="document-name">Audio</div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    {% elif message.message_type == 'document' %}
+                    <div class="document-preview" {% if message.media_url %}onclick="window.open('{{ message.media_url }}', '_blank')"{% endif %}>
+                        <span class="document-icon">📄</span>
+                        <div class="document-info">
+                            <div class="document-name">Document</div>
+                            {% if message.media_url %}
+                            <div class="document-size">Click to download</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% if message.caption %}
+                    <div class="message-caption">{{ message.caption }}</div>
+                    {% endif %}
+                    
+                    {% elif message.message_type == 'template' %}
+                    <div class="message-content">
+                        <strong>Template: {{ message.template_name }}</strong>
+                    </div>
+                    
+                    {% else %}
+                    <div class="message-content">{{ message.text_content }}</div>
+                    {% endif %}
+                    
+                    <div class="message-meta">
+                        <span class="message-time">{{ message.timestamp|date:"H:i" }}</span>
+                        {% if message.direction == 'outbound' %}
+                        <span class="message-status status-{{ message.status }}">
+                            {% if message.status == 'sent' %}✓
+                            {% elif message.status == 'delivered' %}✓✓
+                            {% elif message.status == 'read' %}✓✓
+                            {% elif message.status == 'failed' %}✗
+                            {% endif %}
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Input Area -->
+        <div class="input-area">
+            <div class="input-controls">
+                <button class="control-button active" onclick="toggleMode('text')" id="textModeBtn">💬 Text</button>
+                <button class="control-button" onclick="toggleMode('template')" id="templateModeBtn">📋 Template</button>
+                <button class="control-button" onclick="toggleMode('media')" id="mediaModeBtn">📎 Media</button>
+            </div>
+
+            <div class="sending-indicator" id="sendingIndicator">
+                <div class="spinner"></div>
+                <span>Sending...</span>
+            </div>
+
+            <div class="template-selector" id="templateSelector">
+                <label for="templateSelect">Select Template:</label>
+                <select id="templateSelect" onchange="loadTemplateParams()">
+                    <option value="">-- Choose a template --</option>
+                    {% for template in templates %}
+                    <option value="{{ template.id }}" 
+                            data-name="{{ template.name }}"
+                            data-language="{{ template.language }}"
+                            data-body="{{ template.body_text }}"
+                            data-header-params="{{ template.header_params_count }}"
+                            data-body-params="{{ template.body_params_count }}">
+                        {{ template.name }} ({{ template.language }})
+                    </option>
+                    {% endfor %}
+                </select>
+                <div class="template-params" id="templateParams"></div>
+            </div>
+
+            <div class="file-preview" id="filePreview">
+                <span class="file-preview-icon" id="fileIcon">📎</span>
+                <div class="file-preview-info">
+                    <div class="file-preview-name" id="fileName">No file selected</div>
+                    <div class="file-preview-size" id="fileSize"></div>
+                </div>
+                <button class="file-preview-remove" onclick="clearFile()">×</button>
+            </div>
+
+            <div class="input-wrapper">
+                <input type="file" id="fileInput" style="display: none;" onchange="handleFileSelect(event)">
+                <button class="emoji-button" title="Emoji">😊</button>
+                <button class="attachment-button" onclick="document.getElementById('fileInput').click()" title="Attach">📎</button>
+                <textarea class="message-input" id="messageInput" placeholder="Type a message" rows="1"></textarea>
+                <button class="send-button" id="sendButton" onclick="sendMessage()" title="Send">➤</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Image Modal -->
+    <div class="modal" id="imageModal" onclick="closeModal()">
+        <button class="modal-close">×</button>
+        <img class="modal-content" id="modalImage">
+    </div>
+
+    <script>
+        const userId = {{ whatsapp_user.id }};
+        let currentMode = 'text';
+        let selectedFile = null;
+        let uploadedMediaId = null;
+
+        function scrollToBottom() {
+            const container = document.getElementById('messagesContainer');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        scrollToBottom();
+
+        // Auto-resize textarea
+        const textarea = document.getElementById('messageInput');
+        textarea.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 100) + 'px';
+        });
+
+        function toggleMode(mode) {
+            currentMode = mode;
+            
+            document.querySelectorAll('.control-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.getElementById(mode + 'ModeBtn').classList.add('active');
+            
+            document.getElementById('templateSelector').classList.toggle('active', mode === 'template');
+            document.getElementById('messageInput').disabled = mode === 'template';
+            
+            if (mode === 'text') {
+                clearFile();
+            }
+        }
+
+        function loadTemplateParams() {
+            const select = document.getElementById('templateSelect');
+            const option = select.options[select.selectedIndex];
+            const paramsDiv = document.getElementById('templateParams');
+            
+            if (!option.value) {
+                paramsDiv.innerHTML = '';
+                return;
+            }
+            
+            const headerParams = parseInt(option.dataset.headerParams) || 0;
+            const bodyParams = parseInt(option.dataset.bodyParams) || 0;
+            
+            let html = '';
+            
+            for (let i = 1; i <= headerParams; i++) {
+                html += `
+                    <div class="template-param">
+                        <label style="color: #e9edef; font-size: 13px; display: block; margin-bottom: 5px;">
+                            Header Parameter ${i}:
+                        </label>
+                        <input type="text" class="header-param" placeholder="Enter value" data-index="${i}">
+                    </div>
+                `;
+            }
+            
+            for (let i = 1; i <= bodyParams; i++) {
+                html += `
+                    <div class="template-param">
+                        <label style="color: #e9edef; font-size: 13px; display: block; margin-bottom: 5px;">
+                            Body Parameter ${i}:
+                        </label>
+                        <input type="text" class="body-param" placeholder="Enter value" data-index="${i}">
+                    </div>
+                `;
+            }
+            
+            paramsDiv.innerHTML = html;
+        }
+
+        function handleFileSelect(event) {
+            selectedFile = event.target.files[0];
+            if (selectedFile) {
+                const preview = document.getElementById('filePreview');
+                const fileName = document.getElementById('fileName');
+                const fileSize = document.getElementById('fileSize');
+                const fileIcon = document.getElementById('fileIcon');
+                
+                fileName.textContent = selectedFile.name;
+                fileSize.textContent = formatFileSize(selectedFile.size);
+                
+                if (selectedFile.type.startsWith('image/')) {
+                    fileIcon.textContent = '🖼️';
+                } else if (selectedFile.type.startsWith('video/')) {
+                    fileIcon.textContent = '🎥';
+                } else if (selectedFile.type.startsWith('audio/')) {
+                    fileIcon.textContent = '🎵';
+                } else {
+                    fileIcon.textContent = '📄';
+                }
+                
+                preview.classList.add('active');
+                uploadFile();
+            }
+        }
+
+        function clearFile() {
+            selectedFile = null;
+            uploadedMediaId = null;
+            document.getElementById('fileInput').value = '';
+            document.getElementById('filePreview').classList.remove('active');
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        async function uploadFile() {
+            if (!selectedFile) return;
+            
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+            
+            try {
+                const response = await fetch('{% url "whatsapp_chat:upload_media" %}', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken')
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    uploadedMediaId = data.media_id;
+                    console.log('Uploaded:', uploadedMediaId);
+                } else {
+                    alert('Failed to upload: ' + data.message);
+                    clearFile();
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                alert('Error uploading file');
+                clearFile();
+            }
+        }
+
+        async function sendMessage() {
+            const sendingIndicator = document.getElementById('sendingIndicator');
+            let payload = { user_id: userId };
+            
+            if (currentMode === 'text') {
+                const text = document.getElementById('messageInput').value.trim();
+                if (!text) return;
+                
+                payload.message_type = 'text';
+                payload.text = text;
+                
+            } else if (currentMode === 'template') {
+                const select = document.getElementById('templateSelect');
+                const option = select.options[select.selectedIndex];
+                
+                if (!option.value) {
+                    alert('Please select a template');
+                    return;
+                }
+                
+                const components = [];
+                const headerParams = document.querySelectorAll('.header-param');
+                if (headerParams.length > 0) {
+                    components.push({
+                        type: 'header',
+                        parameters: Array.from(headerParams).map(input => ({
+                            type: 'text',
+                            text: input.value
+                        }))
+                    });
+                }
+                
+                const bodyParams = document.querySelectorAll('.body-param');
+                if (bodyParams.length > 0) {
+                    components.push({
+                        type: 'body',
+                        parameters: Array.from(bodyParams).map(input => ({
+                            type: 'text',
+                            text: input.value
+                        }))
+                    });
+                }
+                
+                payload.message_type = 'template';
+                payload.template_name = option.dataset.name;
+                payload.language_code = option.dataset.language;
+                payload.components = components;
+                
+            } else if (currentMode === 'media') {
+                if (!uploadedMediaId) {
+                    alert('Please select a file first');
+                    return;
+                }
+                
+                const caption = document.getElementById('messageInput').value.trim();
+                let mediaType = 'document';
+                if (selectedFile.type.startsWith('image/')) mediaType = 'image';
+                else if (selectedFile.type.startsWith('video/')) mediaType = 'video';
+                else if (selectedFile.type.startsWith('audio/')) mediaType = 'audio';
+                
+                payload.message_type = mediaType;
+                payload.media_id = uploadedMediaId;
+                payload.caption = caption;
+            }
+            
+            sendingIndicator.classList.add('active');
+            
+            try {
+                const response = await fetch('{% url "whatsapp_chat:send_message" %}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify(payload)
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    document.getElementById('messageInput').value = '';
+                    clearFile();
+                    sendingIndicator.classList.remove('active');
+                    setTimeout(() => location.reload(), 500);
+                } else {
+                    alert('Failed: ' + (data.message || 'Unknown error'));
+                    sendingIndicator.classList.remove('active');
+                }
+            } catch (error) {
+                console.error('Send error:', error);
+                alert('Error sending message');
+                sendingIndicator.classList.remove('active');
+            }
+        }
+
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        document.getElementById('messageInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        function openModal(src) {
+            document.getElementById('modalImage').src = src;
+            document.getElementById('imageModal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('imageModal').classList.remove('active');
+        }
+    </script>
+</body>
+</html>

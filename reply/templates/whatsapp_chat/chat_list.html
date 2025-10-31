@@ -1,0 +1,777 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Business - Chats</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #111b21;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+            max-width: 1600px;
+            margin: 0 auto;
+            background-color: #111b21;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 420px;
+            background-color: #111b21;
+            border-right: 1px solid #2a3942;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            background-color: #202c33;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #2a3942;
+        }
+
+        .sidebar-header h2 {
+            color: #e9edef;
+            font-size: 20px;
+            font-weight: 500;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .icon-button {
+            background: none;
+            border: none;
+            color: #aebac1;
+            cursor: pointer;
+            font-size: 24px;
+            padding: 5px;
+            border-radius: 50%;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .icon-button:hover {
+            background-color: #2a3942;
+        }
+
+        .search-bar {
+            padding: 10px 15px;
+            background-color: #111b21;
+        }
+
+        .search-bar input {
+            width: 100%;
+            padding: 10px 45px 10px 15px;
+            background-color: #202c33;
+            border: none;
+            border-radius: 8px;
+            color: #e9edef;
+            font-size: 14px;
+        }
+
+        .search-bar input::placeholder {
+            color: #8696a0;
+        }
+
+        .search-wrapper {
+            position: relative;
+        }
+
+        .search-icon {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #8696a0;
+            font-size: 18px;
+        }
+
+        .conversations-list {
+            flex: 1;
+            overflow-y: auto;
+            background-color: #111b21;
+        }
+
+        .conversation-item {
+            display: flex;
+            padding: 15px 20px;
+            cursor: pointer;
+            border-bottom: 1px solid #202c33;
+            transition: background-color 0.2s;
+            text-decoration: none;
+            color: inherit;
+            position: relative;
+        }
+
+        .conversation-item:hover {
+            background-color: #202c33;
+        }
+
+        .conversation-item.active {
+            background-color: #2a3942;
+        }
+
+        .avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #00a884 0%, #008069 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 20px;
+            font-weight: 600;
+            flex-shrink: 0;
+            margin-right: 15px;
+            text-transform: uppercase;
+        }
+
+        .conversation-info {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .conversation-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+
+        .conversation-name {
+            font-weight: 500;
+            color: #e9edef;
+            font-size: 16px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .conversation-time {
+            font-size: 12px;
+            color: #8696a0;
+            flex-shrink: 0;
+            margin-left: 10px;
+        }
+
+        .conversation-preview {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .preview-text {
+            color: #8696a0;
+            font-size: 14px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex: 1;
+        }
+
+        .unread-badge {
+            background-color: #25d366;
+            color: #111b21;
+            border-radius: 50%;
+            min-width: 22px;
+            height: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+            padding: 0 6px;
+        }
+
+        /* Empty state */
+        .empty-state {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background-color: #222e35;
+            color: #8696a0;
+            padding: 40px;
+        }
+
+        .empty-state-icon {
+            font-size: 120px;
+            margin-bottom: 30px;
+            opacity: 0.3;
+        }
+
+        .empty-state h3 {
+            color: #e9edef;
+            font-size: 32px;
+            margin-bottom: 15px;
+            font-weight: 300;
+        }
+
+        .empty-state p {
+            font-size: 14px;
+            text-align: center;
+            max-width: 500px;
+            line-height: 1.6;
+            color: #8696a0;
+        }
+
+        /* Add Contact Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background-color: #202c33;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 500px;
+            overflow: hidden;
+            animation: slideUp 0.3s ease;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .modal-header {
+            padding: 20px 25px;
+            background-color: #2a3942;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h3 {
+            color: #e9edef;
+            font-size: 20px;
+            font-weight: 500;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: #8696a0;
+            font-size: 28px;
+            cursor: pointer;
+            padding: 0;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: all 0.2s;
+        }
+
+        .modal-close:hover {
+            background-color: #374045;
+        }
+
+        .modal-body {
+            padding: 25px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            color: #e9edef;
+            margin-bottom: 8px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 15px;
+            background-color: #2a3942;
+            border: 1px solid #374045;
+            border-radius: 8px;
+            color: #e9edef;
+            font-size: 15px;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #00a884;
+        }
+
+        .form-group input::placeholder {
+            color: #667781;
+        }
+
+        .form-hint {
+            font-size: 12px;
+            color: #8696a0;
+            margin-top: 5px;
+        }
+
+        .modal-footer {
+            padding: 15px 25px;
+            background-color: #202c33;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            border-top: 1px solid #2a3942;
+        }
+
+        .btn {
+            padding: 10px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-cancel {
+            background-color: #2a3942;
+            color: #e9edef;
+        }
+
+        .btn-cancel:hover {
+            background-color: #374045;
+        }
+
+        .btn-primary {
+            background-color: #00a884;
+            color: #111b21;
+        }
+
+        .btn-primary:hover {
+            background-color: #06cf9c;
+        }
+
+        .btn-primary:disabled {
+            background-color: #374045;
+            color: #667781;
+            cursor: not-allowed;
+        }
+
+        /* Floating Action Button */
+        .fab {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            background-color: #00a884;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0, 168, 132, 0.4);
+            transition: all 0.3s;
+            border: none;
+            font-size: 28px;
+            color: #111b21;
+            z-index: 100;
+        }
+
+        .fab:hover {
+            background-color: #06cf9c;
+            transform: scale(1.1);
+            box-shadow: 0 6px 16px rgba(0, 168, 132, 0.5);
+        }
+
+        /* Scrollbar */
+        .conversations-list::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .conversations-list::-webkit-scrollbar-track {
+            background: #111b21;
+        }
+
+        .conversations-list::-webkit-scrollbar-thumb {
+            background: #374045;
+            border-radius: 3px;
+        }
+
+        .conversations-list::-webkit-scrollbar-thumb:hover {
+            background: #4a5158;
+        }
+
+        /* No results message */
+        .no-results {
+            padding: 40px 20px;
+            text-align: center;
+            color: #8696a0;
+        }
+
+        .no-results-icon {
+            font-size: 60px;
+            margin-bottom: 15px;
+            opacity: 0.5;
+        }
+
+        /* Loading spinner */
+        .spinner {
+            border: 3px solid #2a3942;
+            border-top: 3px solid #00a884;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Success message */
+        .success-toast {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #00a884;
+            color: #111b21;
+            padding: 15px 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            display: none;
+            z-index: 2000;
+            animation: slideUp 0.3s ease;
+        }
+
+        .success-toast.active {
+            display: block;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 100%;
+            }
+
+            .empty-state {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h2>Chats</h2>
+                <div class="header-actions">
+                    <button class="icon-button" onclick="openAddContactModal()" title="New Chat">
+                        ➕
+                    </button>
+                    <button class="icon-button" onclick="location.reload()" title="Refresh">
+                        🔄
+                    </button>
+                </div>
+            </div>
+
+            <div class="search-bar">
+                <div class="search-wrapper">
+                    <input type="text" id="searchInput" placeholder="Search or start new chat">
+                    <span class="search-icon">🔍</span>
+                </div>
+            </div>
+
+            <div class="conversations-list" id="conversationsList">
+                {% for conversation in conversations %}
+                <a href="{% url 'whatsapp_chat:chat_detail' conversation.whatsapp_user.id %}" 
+                   class="conversation-item"
+                   data-name="{{ conversation.whatsapp_user.name|lower }}"
+                   data-phone="{{ conversation.whatsapp_user.phone_number }}">
+                    <div class="avatar">
+                        {{ conversation.whatsapp_user.name|slice:":1"|upper }}
+                    </div>
+                    <div class="conversation-info">
+                        <div class="conversation-header">
+                            <span class="conversation-name">{{ conversation.whatsapp_user.name }}</span>
+                            <span class="conversation-time">
+                                {% if conversation.whatsapp_user.last_message_at %}
+                                    {{ conversation.whatsapp_user.last_message_at|date:"H:i" }}
+                                {% endif %}
+                            </span>
+                        </div>
+                        <div class="conversation-preview">
+                            <span class="preview-text">
+                                {{ conversation.last_message_preview|default:"No messages yet" }}
+                            </span>
+                            {% if conversation.unread_count > 0 %}
+                            <span class="unread-badge">{{ conversation.unread_count }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </a>
+                {% empty %}
+                <div class="no-results">
+                    <div class="no-results-icon">💬</div>
+                    <p>No conversations yet</p>
+                    <p style="font-size: 12px; margin-top: 10px;">Click the + button to add a contact</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Empty State / Welcome Screen -->
+        <div class="empty-state">
+            <div class="empty-state-icon">💬</div>
+            <h3>WhatsApp Business Chat</h3>
+            <p>Send and receive messages from your customers through WhatsApp Business API. Select a conversation from the list or click the + button to start a new chat.</p>
+        </div>
+    </div>
+
+    <!-- Add Contact Modal -->
+    <div class="modal" id="addContactModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add New Contact</h3>
+                <button class="modal-close" onclick="closeAddContactModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="addContactForm" onsubmit="addContact(event)">
+                    <div class="form-group">
+                        <label for="contactName">Contact Name *</label>
+                        <input 
+                            type="text" 
+                            id="contactName" 
+                            placeholder="e.g., John Doe"
+                            required
+                            autocomplete="off">
+                        <div class="form-hint">Enter the customer's name</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="contactPhone">Phone Number *</label>
+                        <input 
+                            type="tel" 
+                            id="contactPhone" 
+                            placeholder="e.g., +1234567890"
+                            required
+                            autocomplete="off"
+                            pattern="[\+]?[0-9]{10,15}">
+                        <div class="form-hint">Include country code (e.g., +1 for US, +91 for India)</div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-cancel" onclick="closeAddContactModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="document.getElementById('addContactForm').requestSubmit()" id="addContactBtn">
+                    Add Contact
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Action Button -->
+    <button class="fab" onclick="openAddContactModal()" title="New Chat">
+        ➕
+    </button>
+
+    <!-- Success Toast -->
+    <div class="success-toast" id="successToast">
+        Contact added successfully!
+    </div>
+
+    <script>
+        // Search functionality
+        document.getElementById('searchInput').addEventListener('input', function(e) {
+            const searchTerm = e.target.value.toLowerCase();
+            const conversations = document.querySelectorAll('.conversation-item');
+            let visibleCount = 0;
+            
+            conversations.forEach(conv => {
+                const name = conv.dataset.name || '';
+                const phone = conv.dataset.phone || '';
+                const preview = conv.querySelector('.preview-text')?.textContent.toLowerCase() || '';
+                
+                if (name.includes(searchTerm) || phone.includes(searchTerm) || preview.includes(searchTerm)) {
+                    conv.style.display = 'flex';
+                    visibleCount++;
+                } else {
+                    conv.style.display = 'none';
+                }
+            });
+
+            // Show/hide no results message
+            const noResultsDiv = document.querySelector('.no-results');
+            if (noResultsDiv) {
+                noResultsDiv.style.display = visibleCount === 0 && searchTerm ? 'block' : 'none';
+            }
+        });
+
+        // Modal functions
+        function openAddContactModal() {
+            document.getElementById('addContactModal').classList.add('active');
+            document.getElementById('contactName').focus();
+        }
+
+        function closeAddContactModal() {
+            document.getElementById('addContactModal').classList.remove('active');
+            document.getElementById('addContactForm').reset();
+        }
+
+        // Close modal on background click
+        document.getElementById('addContactModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeAddContactModal();
+            }
+        });
+
+        // Close modal on Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeAddContactModal();
+            }
+        });
+
+        // Add contact function
+        async function addContact(event) {
+            event.preventDefault();
+            
+            const name = document.getElementById('contactName').value.trim();
+            const phone = document.getElementById('contactPhone').value.trim();
+            const btn = document.getElementById('addContactBtn');
+            
+            if (!name || !phone) {
+                alert('Please fill in all fields');
+                return;
+            }
+
+            // Disable button and show loading
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span>';
+
+            try {
+                const response = await fetch('{% url "whatsapp_chat:add_contact" %}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify({
+                        name: name,
+                        phone_number: phone
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    // Show success message
+                    showSuccessToast('Contact added successfully!');
+                    
+                    // Close modal
+                    closeAddContactModal();
+                    
+                    // Redirect to chat after 1 second
+                    setTimeout(() => {
+                        window.location.href = '{% url "whatsapp_chat:chat_detail" 0 %}'.replace('0', data.user_id);
+                    }, 1000);
+                } else {
+                    alert('Error: ' + (data.message || 'Failed to add contact'));
+                    btn.disabled = false;
+                    btn.textContent = 'Add Contact';
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to add contact. Please try again.');
+                btn.disabled = false;
+                btn.textContent = 'Add Contact';
+            }
+        }
+
+        // Show success toast
+        function showSuccessToast(message) {
+            const toast = document.getElementById('successToast');
+            toast.textContent = message;
+            toast.classList.add('active');
+            
+            setTimeout(() => {
+                toast.classList.remove('active');
+            }, 3000);
+        }
+
+        // Get CSRF token
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        // Auto-refresh every 30 seconds
+        let autoRefreshInterval = setInterval(function() {
+            // Only reload if modal is not open
+            if (!document.getElementById('addContactModal').classList.contains('active')) {
+                location.reload();
+            }
+        }, 30000);
+
+        // Clear interval when modal is open
+        document.getElementById('addContactModal').addEventListener('click', function() {
+            clearInterval(autoRefreshInterval);
+        });
+    </script>
+</body>
+</html>
