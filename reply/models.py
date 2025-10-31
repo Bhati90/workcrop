@@ -12,7 +12,7 @@ class WhatsAppUser(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     last_message_at = models.DateTimeField(null=True, blank=True)
     is_blocked = models.BooleanField(default=False)
-
+    blocked_until = models.DateTimeField(null=True, blank=True, default=None)
     class Meta:
         ordering = ['-last_message_at']
         db_table = 'whatsapp_whatsappuser'

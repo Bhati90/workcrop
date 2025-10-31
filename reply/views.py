@@ -114,92 +114,178 @@ from django.utils import timezone
 SPAM_KEYWORDS = ['xxx', 'bank', 'password', 'joke', 'random', 'movie', 'cricket']  # Expand as needed
 
 ESCALATE_KEYWORDS = ['help', 'urgent', 'complaint', 'problem', 'error']
-
 def process_incoming_messages(value, full_webhook_data):
+    """
+    Handles processing logic for all incoming messages.
+    Orchestrates saving, checking blocks, and calling Gemini.
+    """
     messages = value.get('messages', [])
     contacts = value.get('contacts', [])
-    for msg_data in messages:
-        try:
-            from_number = msg_data['from']
-            message_type = msg_data.get('type')
-            whatsapp_message_id = msg_data['id']
-            timestamp = timezone.datetime.fromtimestamp(int(msg_data['timestamp']))
-            # ... previous logic ...
+    
+    if not messages:
+        return
+        
+    msg_data = messages[0]
+    
+    try:
+        from_number = msg_data['from']
+        message_type = msg_data.get('type')
+        whatsapp_message_id = msg_data['id']
+        timestamp = timezone.datetime.fromtimestamp(int(msg_data['timestamp']))
 
-            whatsapp_user, created = WhatsAppUser.objects.get_or_create(
-                phone_number=from_number,
-                defaults={'name': from_number}
-            )
-            conversation, _ = Conversation.objects.get_or_create(
-                whatsapp_user=whatsapp_user
-            )
-            user_lang = 'hi' if 'ह' in msg_data.get('text', {}).get('body', '') else 'en'
+        # --- 1. Get or Create User & Conversation ---
+        profile_name = contacts[0].get('profile', {}).get('name', from_number)
+        whatsapp_user, _ = WhatsAppUser.objects.get_or_create(
+            phone_number=from_number,
+            defaults={'name': profile_name}
+        )
+        conversation, _ = Conversation.objects.get_or_create(
+            whatsapp_user=whatsapp_user
+        )
 
-            # --- Gather last 10 msgs for context (inbound + outbound, exclude docs/pdf) ---
-            history = []
-            qs = conversation.messages.filter(timestamp__lt=timestamp).order_by('-timestamp')[:10]
-            for m in reversed(qs):
-                if m.message_type not in ('document', 'pdf'):
-                    history.append({
-                        'role': 'user' if m.direction=='inbound' else 'model',
-                        'content': m.text_content or m.caption or '[media]'
-                    })
+        # --- 2. Check for 24-Hour Escalation Block ---
+        if whatsapp_user.is_blocked and whatsapp_user.blocked_until and whatsapp_user.blocked_until > timezone.now():
+            logger.info(f"User {from_number} is in 24-hour escalation block. Ignoring message.")
+            # Save the message but do not reply
+            _save_incoming_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp)
+            return
+        elif whatsapp_user.is_blocked:
+            # Block expired, unblock them
+            whatsapp_user.is_blocked = False
+            whatsapp_user.blocked_until = None
+            whatsapp_user.save()
 
-            # Check for spam
-            txt = msg_data.get('text', {}).get('body', '') if message_type == 'text' else ''
-            lowered = txt.lower()
-            is_spam = any(s in lowered for s in SPAM_KEYWORDS) or not txt or len(txt) < 3
-            is_escalate = any(e in lowered for e in ESCALATE_KEYWORDS)
+        # --- 3. Save the Incoming Message to DB *FIRST* ---
+        msg_obj = _save_incoming_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp)
+        
+        # If message was a duplicate or failed to save, stop
+        if not msg_obj:
+            return
+
+        # --- 4. Send "Read" Receipt (Good UX, shows "double blue tick") ---
+        WhatsAppService().mark_message_as_read(whatsapp_message_id)
+
+        # --- 5. We ONLY respond to 'text' messages with AI ---
+        if message_type != 'text':
+            logger.info(f"Ignoring non-text message type '{message_type}' for AI reply.")
+            # Here you could add logic for image/audio transcription if needed later
+            return
+
+        # --- 6. Prepare data for Gemini ---
+        txt = msg_data.get('text', {}).get('body', '').strip()
+        if not txt:
+            logger.info("Ignoring empty text message.")
+            return
+
+        # Simple language detection (as per your example)
+        # This checks for any character in the Devanagari (Hindi) block
+        user_lang = 'hi' if any(u'\u0900' <= char <= u'\u097f' for char in txt) else 'en'
+        user_name = whatsapp_user.name
+
+        # --- 7. Gather History (Last 10, non-doc) ---
+        history = []
+        # Get last 10 messages *before* the one we just saved
+        qs = conversation.messages.filter(timestamp__lt=timestamp).order_by('-timestamp')[:10]
+        
+        for m in reversed(qs): # Oldest to newest
+            if m.message_type not in ('document'):
+                role = 'user' if m.direction == 'inbound' else 'model'
+                content = m.text_content or m.caption or f'[{m.message_type}]'
+                history.append({"role": role, "parts": [content]})
+        
+        # --- 8. Call Gemini ---
+        gemini = GeminiService()
+        reply = gemini.generate_reply(history, txt, user_lang, user_name)
+
+        # --- 9. Process Gemini's Decision ---
+        if reply == "[IGNORE]":
+            logger.info(f"Gemini classified as [IGNORE]. No reply sent to {from_number}.")
+            return
+        
+        if reply == "[ESCALATE]":
+            logger.info(f"Gemini classified as [ESCALATE]. Sending holding message to {from_number}.")
+            # Send escalation message in the user's language
+            escalation_msg = "Our team will reach you soon." if user_lang == 'en' else "हमारी टीम जल्द ही आपसे संपर्क करेगी।"
             
-            # --- If spam: ignore ---
-            if is_spam:
-                return  # No response
+            WhatsAppService().send_text_message(
+                from_number, 
+                escalation_msg, 
+                conversation
+            )
+            # Apply 24-hour block
+            whatsapp_user.is_blocked = True
+            whatsapp_user.blocked_until = timezone.now() + timezone.timedelta(hours=24)
+            whatsapp_user.save()
+            return
 
-            # If escalate or complex: respond and silence for 24 hr
-            if is_escalate or 'confuse' in lowered or '?' not in txt:  # Add more logic per needs
-                WhatsAppService().send_text_message(from_number, "Our team will reach you soon.", conversation)
-                whatsapp_user.is_blocked = True
-                whatsapp_user.last_message_at = timezone.now() + timezone.timedelta(hours=24)
-                whatsapp_user.save()
-                return
-
-            # --- Use Gemini ---
-            context_info = {
-                "company_overview": "Agriculture service marketplace connecting farmers/labor/suppliers",
-                "mission": "Empower farmers with guidance, labor, quality products",
-                "core_offerings": "Labor requests, crop advice, product booking, education",
-                "restrictions": "Never reply to non-agri, personal, joke, or external questions. Only agricultural, product, labor topics."
-            }
-            user_name = whatsapp_user.name
-            gemini = GeminiService()
-            reply = gemini.generate_reply(history, txt, user_lang, user_name, context_info)
-
-            # Simulate "typing" UX (send typing dots, then real reply)
-            WhatsAppService().send_text_message(from_number, "Typing...", conversation)
-            import time; time.sleep(2)  # 2 second delay for UX
-
+        # --- 10. Send the Gemini Reply ---
+        if reply:
             WhatsAppService().send_text_message(from_number, reply, conversation)
+        else:
+            # Fallback just in case Gemini returns an empty string
+            logger.error("Gemini returned an empty reply. Escalating as a fallback.")
+            escalation_msg = "Our team will reach you soon." if user_lang == 'en' else "हमारी टीम जल्द ही आपसे संपर्क करेगी।"
+            WhatsAppService().send_text_message(from_number, escalation_msg, conversation)
+            whatsapp_user.is_blocked = True
+            whatsapp_user.blocked_until = timezone.now() + timezone.timedelta(hours=24)
+            whatsapp_user.save()
 
-        except Exception as e:
-            logger.error(f"Error processing message in Gemini block: {str(e)}", exc_info=True)
+    except Exception as e:
+        logger.error(f"CRITICAL Error in process_incoming_messages: {str(e)}", exc_info=True)
+
+
+def _save_incoming_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp):
+    """
+    Internal helper to route incoming message to the correct handler for saving.
+    """
+    message_type = msg_data.get('type')
+    
+    # Check if message already exists (webhook retry)
+    if Message.objects.filter(whatsapp_message_id=whatsapp_message_id).exists():
+        logger.warning(f"Duplicate message received: {whatsapp_message_id}. Ignoring.")
+        return None
+
+    handler_map = {
+        'text': handle_text_message,
+        'image': handle_image_message,
+        'video': handle_video_message,
+        'audio': handle_audio_message,
+        'document': handle_document_message,
+        'location': handle_location_message,
+        'button': handle_button_message,
+        'interactive': handle_interactive_message,
+    }
+    
+    handler = handler_map.get(message_type)
+    
+    if handler:
+        return handler(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp)
+    else:
+        logger.warning(f"Unhandled message type: {message_type}")
+        # Save as a generic 'text' message to log it
+        return handle_unknown_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp)
+    
 
 def handle_text_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp):
-    """Handle text messages"""
+    """Handle text messages - FIXED"""
     text_content = msg_data.get('text', {}).get('body', '')
-    logger.info(f"Text message: '{text_content}' from {whatsapp_user.phone_number}")
     
-    create_message(
+    # FIX: Only create the message ONCE
+    msg_obj = create_message(
         conversation, whatsapp_message_id, 'text', 'inbound',
         text_content, None, None, None, 'delivered', timestamp
     )
     
+    # Update conversation/user for preview
     conversation.last_message_preview = text_content[:100]
     conversation.unread_count += 1
     conversation.save()
     
     whatsapp_user.last_message_at = timestamp
     whatsapp_user.save()
-
+    
+    logger.info(f"Text message: '{text_content}' from {whatsapp_user.phone_number}")
+    return msg_obj # Return the created object
 
 def handle_image_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp):
     """Handle image messages"""
@@ -717,3 +803,24 @@ def upload_media_api(request):
                 logger.info(f"Cleaned up temp file: {temp_path}")
             except Exception as e:
                 logger.warning(f"Failed to delete temp file: {e}")
+
+
+def handle_unknown_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp):
+    """Handle unknown message types"""
+    text_content = f"[Unsupported message type: {msg_data.get('type')}]"
+    
+    msg_obj = create_message(
+        conversation, whatsapp_message_id, 'text', 'inbound',
+        text_content, None, None, None, 'delivered', timestamp
+    )
+    
+    conversation.last_message_preview = text_content
+    conversation.unread_count += 1
+    conversation.save()
+    
+    whatsapp_user.last_message_at = timestamp
+    whatsapp_user.save()
+    
+    logger.warning(f"Saved unsupported message type from {whatsapp_user.phone_number}")
+    return msg_obj
+
