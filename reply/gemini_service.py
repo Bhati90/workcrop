@@ -1,5 +1,3 @@
-# In whatsapp_chat/gemini_service.py
-
 import google.generativeai as genai
 from django.conf import settings
 import logging
@@ -10,70 +8,132 @@ import re
 
 logger = logging.getLogger(__name__)
 
-# --- This is the NEW "General Awareness" Prompt ---
-# v5: More human-like, handles acknowledgments, and stricter disclaimer rules.
+# --- FINAL System Prompt (v7: Natural, Business-Aware, Smart) ---
 SYSTEM_PROMPT = """
-You are a professional, farmer-friendly WhatsApp assistant for an agriculture company. 
-Your tone should be helpful, polite, and conversational. 
-You can use emojis (like 🙏, 🍇, 👨‍🌾, ✅, 📅) where appropriate to make the conversation feel more human.
+You are a helpful WhatsApp assistant for an agriculture company. Talk naturally like a helpful friend.
 
-## 🌾 Company Information
-- **Offerings:** We connect farmers with labor (मजूर), provide crop advice (especially for grapes 🍇), and allow product booking.
-- **Rules:** Be polite, professional, and use simple, farmer-friendly language.
-- **Language:** You **MUST** reply in the **exact same language** as the user ({user_lang}).
-- **Name:** The user's name in our system is {user_name}.
+## 🌾 Company Services
+1. **Farm Labor Connection** - Connect farmers with verified workers (मजूर/कामगार)
+2. **Crop Guidance** - Advice on fertilizers, pesticides, sprays for all crops
+3. **Product Booking** - Order agri-products directly
+4. **Education** - Tips on farming, pest control, crop stages
 
-## 🚫 Restrictions
-- **STAY ON TOPIC:** Only discuss agriculture, farm labor, and agri-products.
-- **DO NOT** answer non-agri questions (politics, jokes, etc.).
-- **DO NOT** make up information.
+## 🗣️ Communication Style
+- **Natural & Friendly** - Not robotic, like talking to a farmer friend
+- **SHORT replies** - Maximum 2-3 sentences
+- **Use emojis naturally**: 🙏 👨‍🌾 🍇 ✅ 📅 🌾
+- **Reply in {user_lang}** (Hindi/Marathi/English based on user's language)
+- **Use name when needed**: If user introduces themselves differently, use that name. Otherwise use {user_name}
 
-## ⚠️ Query Handling Logic
-- **[IGNORE]:** Respond *only* with this word if the query is spam, abuse, or gibberish.
-- **[ESCALATE]:** Respond *only* with this phrase if the user is very angry, the query is too complex (e.g., severe unknown disease), or it's a non-agri question (e.g., "what's the weather?").
-- **Acknowledgments:** If the user sends a simple acknowledgment (like 'ok', 'thanks'), give a very short, polite reply (e.g., "You're welcome! 🙏", "Great! 👍", "ठीक आहे.").
-- **Follow-ups:** If the user asks for an 'update' on a pending request, politely tell them you are still checking and will get back to them.
+## 🧠 CRITICAL: Memory & Context Awareness
+**ALWAYS read conversation history before replying!**
 
-## ✅ Your Task
-You will be given "Context from Knowledge Base" and the "User's Question".
-1.  Analyze the "Context" to answer the "User's Question".
-2.  Follow all communication rules.
-3.  **CRITICAL DISCLAIMER RULE:**
-    * **ADD THIS DISCLAIMER:** `(कृपया फवारणी करण्यापूर्वी तुमच्या प्लॉटची परिस्थिती आणि हवामान तपासून घ्या.)` *if and only if* you are giving **specific farm advice** (like a spray/fertilizer name or dose).
-    * **NEVER** add the disclaimer for general chat, labor requests, or simple questions.
-4.  If the "Context" is not helpful or empty, politely say you cannot find that specific detail and ask for clarification.
-5.  If the question is about labor or a general topic (like saying hello), you don't need specific context. Just answer politely.
+**Smart Rules:**
+- If user already said "20 workers", don't ask "how many workers?"
+- If user said "Satara", don't ask "where is your farm?"
+- If user said "pruning", don't ask "what work?"
+- If user changes topic (labor → crop advice), acknowledge: "ठीक आहे, अब फसल के बारे में बात करते हैं"
+
+## 📋 Labor Booking Flow (Smart & Natural)
+**Collect ONLY missing information:**
+1. ✅ Type of work (pruning/कटाई/spraying/फवारणी/harvesting)
+2. ✅ How many workers
+3. ✅ Date/When needed
+4. ✅ Location (village/taluka)
+
+**Example Natural Flow:**
+```
+User: "मुझे मजूर चाहिए"
+You: "जी बताइए, कितने मजूर और कौन सा काम? 👨‍🌾"
+
+User: "20 मजूर, कटाई के लिए"
+You: "ठीक है! कब और कहाँ चाहिए? 📅"
+
+User: "15 दिसंबर, सातारा"
+You: "बिल्कुल! मैं सातारा में 15 दिसंबर को 20 कटाई मजूर की व्यवस्था चेक करता हूँ ✅"
+```
+
+**If all info is collected:**
+Say: "बहुत अच्छा! मैं अभी चेक करके बताता हूँ 👍" or similar
+
+## 🌾 Crop Advice Flow
+- Check knowledge base for relevant crop/pest/spray info
+- Give specific product recommendations with dosage
+- If knowledge base has info, use it. If not, say: "इस बारे में मुझे पक्की जानकारी नहीं है, क्या आप थोड़ा और बता सकते हैं?"
+
+## ⚠️ Disclaimer Rule (VERY STRICT)
+**ONLY add this disclaimer IF you mention specific spray/fertilizer/chemical names:**
+`(कृपया फवारणी करण्यापूर्वी तुमच्या प्लॉटची परिस्थिती आणि हवामान तपासून घ्या.)`
+
+**DO NOT add for:**
+- ❌ Greetings (hello, namaste)
+- ❌ Labor booking discussions
+- ❌ General questions
+- ❌ Acknowledgments (ok, thanks)
+- ❌ Follow-up questions
+
+**ONLY add when:**
+- ✅ "Use Ranman 80ml" (spray name given)
+- ✅ "Apply Profiler 2.5g" (product name given)
+
+## 🚫 Spam & Off-Topic Detection
+**Immediately return [IGNORE] for:**
+- Test messages ("test", "testing")
+- Gibberish ("asdfgh", "xyz123")
+- Very short meaningless texts (<3 characters)
+
+**Immediately return [ESCALATE] for:**
+- Abusive language
+- Political questions
+- Entertainment queries (movies, cricket)
+- Weather outside farming context
+- Banking/password requests
+- Anything NOT related to agriculture/farming
+
+**For simple off-topic but polite queries:**
+Reply: "मैं सिर्फ खेती और मजूर की मदद कर सकता हूँ 🌾 कोई और सवाल?"
+
+## 🎯 Response Quality Rules
+1. **Be brief** - Don't repeat yourself
+2. **Use context** - Reference previous messages naturally
+3. **One question at a time** - Don't overwhelm with multiple questions
+4. **Acknowledge topic changes** - "अच्छा, अब मजूर के बारे में बात करते हैं"
+5. **Be honest** - If you don't know, say so
+
+## 📝 Your Task
+1. Read conversation history carefully
+2. Check if user already provided some info
+3. Use knowledge base context if relevant
+4. Reply naturally in {user_lang}
+5. Keep it SHORT and helpful
 """
 
-# --- NEW Keyword Sets (v5) ---
-
-# 1. GREETINGS (Get a reply)
+# --- Keywords (Optimized) ---
 GREETING_WORDS = {
-    'hello', 'hi', 'hey', 'namaste', 'नमस्ते', 'salam'
+    'hello', 'hi', 'hey', 'namaste', 'नमस्ते', 'namaskar', 'नमस्कार',
+    'good morning', 'good evening', 'सुप्रभात', 'शुभ संध्या'
 }
 
-# 2. ACKNOWLEDGMENTS (Get a *short* reply, not ignored)
 ACK_WORDS = {
-    'ok', 'k', 'ok.', 'okay', 'okk', 'okkay',
-    'thanks', 'thank you', 'ty', 'thx', 'dhanyawad', 'dhanyavad', 'धन्यवाद',
-    'ji', 'ha', 'haa', 'yes', 'ho', 'accha', 'acha', 'बरं', 'ठीक आहे'
+    'ok', 'okay', 'okk', 'k', 'thanks', 'thank you', 'धन्यवाद', 'धन्यवाद',
+    'ठीक', 'ठीक आहे', 'accha', 'अच्छा', 'बरं', 'yes', 'ha', 'हा', 'ji', 'जी'
 }
 
-# 3. FOLLOW-UPS (Get a "still checking" reply)
 FOLLOW_UP_WORDS = {
-    'update', 'any update', 'what happened', 'any news',
-    'अपडेट', 'काही बातमी', 'काय झालं'
+    'update', 'any update', 'status', 'kya hua', 'what happened',
+    'अपडेट', 'काय झालं', 'काय झाले', 'कोई खबर', 'koi khabar'
 }
 
-# 4. LABOR (Go to booking flow)
 LABOR_KEYWORDS = {
-    'labor', 'labour', 'majur', 'mazdoor', 'kamgar', 'worker',
-    'मजूर', 'कामगार', 'मज़दूर', 'चटणी', 'chatni'
+    'labor', 'labour', 'majur', 'mazdoor', 'kamgar', 'worker', 'workers',
+    'मजूर', 'मजदूर', 'कामगार', 'काम', 'chatni', 'चटणी',
+    'pruning', 'कटाई', 'harvesting', 'spraying', 'फवारणी'
 }
 
-# 5. IGNORE (No reply, only for spam/test)
-IGNORE_WORDS = {
-    'test', 'testing' # We will ignore 'test' messages
+# Expanded spam detection
+SPAM_KEYWORDS = {
+    'test', 'testing', 'bank', 'password', 'loan', 'paytm', 'account',
+    'cricket', 'movie', 'joke', 'song', 'video', 'game'
 }
 
 
@@ -87,8 +147,7 @@ class GeminiService:
         
         self.llm = genai.GenerativeModel(
             self.llm_model_name,
-            # Set the new System Prompt as a base instruction
-            system_instruction=SYSTEM_PROMPT 
+            system_instruction=SYSTEM_PROMPT
         )
         
         self.db_chunks = []
@@ -96,7 +155,7 @@ class GeminiService:
         self.load_vector_database()
 
     def load_vector_database(self):
-        """Loads the vector_database.json file into memory."""
+        """Loads vector database into memory"""
         db_path = os.path.join(settings.BASE_DIR, 'vector_database.json')
         try:
             with open(db_path, 'r', encoding='utf-8') as f:
@@ -106,20 +165,18 @@ class GeminiService:
             norms = np.linalg.norm(self.db_vectors, axis=1, keepdims=True)
             self.db_vectors = self.db_vectors / norms
             
-            logger.info(f"Successfully loaded {len(self.db_chunks)} vectors into memory.")
-        
+            logger.info(f"✅ Loaded {len(self.db_chunks)} vectors")
         except FileNotFoundError:
-            logger.error(f"CRITICAL: vector_database.json not found at {db_path}.")
-            logger.error("Please run `create_vector_database.py` first.")
+            logger.error(f"❌ vector_database.json not found at {db_path}")
             self.db_chunks = []
             self.db_vectors = None
         except Exception as e:
-            logger.error(f"Error loading vector database: {e}")
+            logger.error(f"❌ Error loading vectors: {e}")
             self.db_chunks = []
             self.db_vectors = None
 
     def _embed(self, text, task_type="RETRIEVAL_QUERY"):
-        """Helper function to embed text."""
+        """Helper to embed text"""
         try:
             result = genai.embed_content(
                 model=self.embedding_model_name,
@@ -128,13 +185,13 @@ class GeminiService:
             )
             return result['embedding']
         except Exception as e:
-            logger.error(f"Error embedding text '{text}': {e}")
+            logger.error(f"Embedding error: {e}")
             return None
 
-    def search_knowledge_base(self, query, top_k=3):
-        """Finds the top_k most relevant text chunks from the vector database."""
+    def search_knowledge_base(self, query, top_k=5):
+        """Semantic search in vector database"""
         if self.db_vectors is None or len(self.db_vectors) == 0:
-            return "" 
+            return ""
 
         query_vector = self._embed(query, task_type="RETRIEVAL_QUERY")
         if query_vector is None:
@@ -143,140 +200,276 @@ class GeminiService:
         query_vector = np.array(query_vector)
         query_vector = query_vector / np.linalg.norm(query_vector)
 
+        # Cosine similarity
         scores = np.dot(self.db_vectors, query_vector)
         top_k_indices = np.argsort(scores)[-top_k:][::-1]
 
         context = ""
         for i in top_k_indices:
             chunk = self.db_chunks[i]
-            context += f"Source: {chunk['source']}\nType: {chunk['type']}\nContent: {chunk['content']}\n---\n"
+            context += f"📄 {chunk['source']} ({chunk['type']}): {chunk['content']}\n---\n"
         
-        logger.info(f"RAG: Found {top_k} relevant chunks for query: '{query}'")
+        logger.info(f"🔍 RAG: Found {top_k} chunks for query: '{query[:50]}...'")
         return context
 
-    # --- Helper Functions for Filtering ---
+    # --- Helper Functions ---
     def _is_match(self, text, word_set):
-        """Checks if the text matches any word in the set."""
-        lowered_text = text.strip().lower()
-        if lowered_text in word_set:
+        """Check if text matches any word in set"""
+        lowered = text.strip().lower()
+        
+        # Direct match
+        if lowered in word_set:
             return True
-        # Check for partial match in follow-up words
-        if word_set == FOLLOW_UP_WORDS:
-            for word in word_set:
-                if word in lowered_text:
-                    return True
+        
+        # Partial match for multi-word phrases
+        for word in word_set:
+            if ' ' in word and word in lowered:
+                return True
+        
+        return False
+
+    def _is_spam(self, text):
+        """Detect spam messages"""
+        lowered = text.strip().lower()
+        
+        # Check spam keywords
+        if self._is_match(lowered, SPAM_KEYWORDS):
+            return True
+        
+        # Too short (but allow "ok", "hi")
+        if len(lowered) < 2 and lowered not in ACK_WORDS:
+            return True
+        
+        # Random gibberish (no vowels or too many repeating chars)
+        if len(lowered) > 5:
+            vowels = sum(1 for c in lowered if c in 'aeiouआएइईउऊओऔ')
+            if vowels == 0:
+                return True
+        
         return False
 
     def _is_labor_request(self, text):
-        """Check if the message is a labor request."""
+        """Check if message is labor-related"""
         for keyword in LABOR_KEYWORDS:
             if re.search(r'\b' + re.escape(keyword) + r'\b', text, re.IGNORECASE):
                 return True
         return False
     
-    def _get_simple_reply(self, history, prompt_instruction):
-        """Calls the LLM for a simple, non-RAG reply."""
+    def _extract_labor_info(self, history):
+        """Extract already-provided labor details from history"""
+        info = {
+            'task': None,
+            'count': None,
+            'date': None,
+            'location': None
+        }
+        
+        # Look through history for these details
+        full_conversation = " ".join([msg['parts'][0] for msg in history if msg['role'] == 'user'])
+        
+        # Task detection
+        tasks = ['pruning', 'कटाई', 'spraying', 'फवारणी', 'harvesting', 'चटणी', 'chatni']
+        for task in tasks:
+            if task.lower() in full_conversation.lower():
+                info['task'] = task
+                break
+        
+        # Number detection
+        numbers = re.findall(r'\b(\d+)\s*(worker|labour|labor|majur|मजूर)', full_conversation, re.IGNORECASE)
+        if numbers:
+            info['count'] = numbers[-1][0]  # Last mentioned number
+        
+        # Location detection
+        locations = ['satara', 'सातारा', 'pune', 'पुणे', 'nashik', 'नाशिक']
+        for loc in locations:
+            if loc.lower() in full_conversation.lower():
+                info['location'] = loc
+                break
+        
+        # Date detection (simple patterns)
+        dates = re.findall(r'\b(\d{1,2})\s*(dec|december|दिसंबर|jan|january)', full_conversation, re.IGNORECASE)
+        if dates:
+            info['date'] = f"{dates[-1][0]} {dates[-1][1]}"
+        
+        return info
+    
+    def _get_simple_reply(self, history, prompt_instruction, user_lang):
+        """Get simple reply without RAG"""
         try:
-            # We use a fresh chat to avoid history contamination for simple replies
-            chat = self.llm.start_chat(history=[]) 
+            # Format system prompt with user language
+            formatted_prompt = SYSTEM_PROMPT.format(
+                user_lang=user_lang,
+                user_name="दोस्त"  # Generic friend
+            )
+            
+            # Create temporary model with formatted system instruction
+            temp_model = genai.GenerativeModel(
+                self.llm_model_name,
+                system_instruction=formatted_prompt
+            )
+            
+            chat = temp_model.start_chat(history=[])
             response = chat.send_message(prompt_instruction)
             return response.text.strip()
         except Exception as e:
-            logger.error(f"Error in Gemini simple reply: {str(e)}", exc_info=True)
-            return "[ESCALATE]" # Escalate if the simple reply fails
+            logger.error(f"Simple reply error: {str(e)}")
+            return "[ESCALATE]"
 
     def generate_reply(self, history, user_message, user_lang, user_name):
         """
-        Generates a reply using the 5-step RAG process.
+        Main reply generation with smart context awareness
         """
-        
         lowered_message = user_message.strip().lower()
 
-        # --- PRE-FILTERS (v5) ---
-
-        # 1. IGNORE (Spam/Test) -> [IGNORE]
-        if self._is_match(lowered_message, IGNORE_WORDS) or len(lowered_message) < 2:
-            logger.info(f"Message '{user_message}' is ignorable. Returning [IGNORE].")
+        # --- SPAM FILTER ---
+        if self._is_spam(lowered_message):
+            logger.info(f"🗑️ SPAM detected: '{user_message}'")
             return "[IGNORE]"
 
-        # 2. GREETINGS -> (Simple Reply)
+        # --- 1. GREETINGS (Simple Reply) ---
         if self._is_match(lowered_message, GREETING_WORDS):
-            logger.info(f"Message '{user_message}' is a greeting. Bypassing RAG.")
+            logger.info(f"👋 Greeting detected")
             prompt = (
-                f"My name is {user_name} and my language is {user_lang}. The user just said: \"{user_message}\". "
-                f"Please give a short, polite, professional greeting in {user_lang} and ask how you can help with their farm. Use an emoji. (e.g., नमस्ते! 🙏 मी कशी मदत करू शकतो?)"
+                f"User said: '{user_message}' in {user_lang}. "
+                f"Give a warm 1-sentence greeting and ask how you can help with their farm. Use emoji."
             )
-            return self._get_simple_reply(history, prompt)
+            return self._get_simple_reply(history, prompt, user_lang)
 
-        # 3. ACKNOWLEDGMENTS ("ok", "thanks") -> (Simple Reply)
+        # --- 2. ACKNOWLEDGMENTS (Very Short Reply) ---
         if self._is_match(lowered_message, ACK_WORDS):
-            logger.info(f"Message '{user_message}' is an acknowledgment. Bypassing RAG.")
-            prompt = (
-                f"My name is {user_name} and my language is {user_lang}. The user just sent an acknowledgment: \"{user_message}\". "
-                f"Please give a very short, polite, one-or-two-word confirmation in {user_lang}. (e.g., 'You're welcome! 🙏', 'Great! 👍', 'ठीक आहे.', 'धन्यवाद!')"
-            )
-            return self._get_simple_reply(history, prompt)
+            logger.info(f"✅ Acknowledgment detected")
+            
+            # Very short responses
+            if user_lang == 'hi':
+                responses = ["स्वागत है! 🙏", "ठीक है! 👍", "बिल्कुल ✅"]
+            elif user_lang == 'mr':
+                responses = ["स्वागत आहे! 🙏", "ठीक आहे! 👍", "नक्की ✅"]
+            else:
+                responses = ["Welcome! 🙏", "Sure! 👍", "Great! ✅"]
+            
+            import random
+            return random.choice(responses)
         
-        # 4. FOLLOW-UPS ("any update?") -> (Simple Reply)
+        # --- 3. FOLLOW-UPS (Check Status) ---
         if self._is_match(lowered_message, FOLLOW_UP_WORDS):
-            logger.info(f"Message '{user_message}' is a follow-up. Bypassing RAG.")
-            prompt = (
-                f"My name is {user_name} and my language is {user_lang}. The user just asked for an update: \"{user_message}\". "
-                f"Look at the last message in the history: {history[-1] if history else 'No history'}. "
-                f"Politely tell them in {user_lang} that you are still checking on their last request (e.g., 'I am still checking on this for you') and will update them soon. Be very polite."
-            )
-            # We *can* use the main chat here to be context-aware, but a simple reply is safer
-            return self._get_simple_reply(history, prompt) # Using simple reply to avoid RAG error
+            logger.info(f"🔄 Follow-up detected")
+            
+            last_topic = "आपकी request" if user_lang == 'hi' else "your request"
+            if history:
+                # Get last bot message to understand context
+                last_bot_msg = next((msg['parts'][0] for msg in reversed(history) if msg['role'] == 'model'), "")
+                if 'labor' in last_bot_msg.lower() or 'मजूर' in last_bot_msg:
+                    last_topic = "labor booking" if user_lang == 'en' else "मजूर की बुकिंग"
+            
+            if user_lang == 'hi':
+                return f"मैं {last_topic} पर काम कर रहा हूँ, जल्द बताता हूँ 👍"
+            elif user_lang == 'mr':
+                return f"मी {last_topic} वर काम करत आहे, लवकरच सांगतो 👍"
+            else:
+                return f"I'm checking on {last_topic}, will update soon 👍"
 
-        # 5. LABOR -> (Booking Flow)
+        # --- 4. LABOR REQUESTS (Smart Flow) ---
         if self._is_labor_request(lowered_message):
-            logger.info(f"Message '{user_message}' is a labor request. Bypassing RAG search.")
-            prompt_history = [
-                *history,
-                {"role": "user", "parts": [
-                    f"My name is {user_name} and my language is {user_lang}. "
-                    f"The user's latest message is: \"{user_message}\"\n\n"
-                    "This is a labor request. Please be helpful and ask for the "
-                    "key details we need: \n1. What task (e.g., pruning, spraying)? \n2. How many laborers? \n3. What date? 📅 \n4. What location/address? \n"
-                    "If they already provided some info, confirm it and ask for what's missing. Be conversational and use emojis. (e.g., 👨‍🌾, ✅)"
-                ]}
-            ]
+            logger.info(f"👨‍🌾 Labor request detected")
+            
+            # Extract what we already know from history
+            labor_info = self._extract_labor_info(history + [{"role": "user", "parts": [user_message]}])
+            
+            # Build context-aware prompt
+            history_summary = ""
+            if history:
+                last_5 = history[-5:] if len(history) >= 5 else history
+                history_summary = "\n".join([
+                    f"{msg['role']}: {msg['parts'][0][:100]}" for msg in last_5
+                ])
+            
+            prompt = f"""Conversation history:
+{history_summary}
+
+User's latest message: "{user_message}"
+
+**What we already know:**
+- Task: {labor_info['task'] or 'Not mentioned'}
+- Number of workers: {labor_info['count'] or 'Not mentioned'}
+- Date: {labor_info['date'] or 'Not mentioned'}
+- Location: {labor_info['location'] or 'Not mentioned'}
+
+**Your task:**
+- If ALL 4 details are known: Confirm and say you're arranging it
+- If ANY detail is missing: Ask ONLY for missing info (1-2 questions max)
+- Be natural and conversational
+- Reply in {user_lang}
+- Use emojis: 👨‍🌾 📅 ✅
+- Keep it SHORT (2 sentences max)
+
+Reply:"""
+            
             try:
-                chat = self.llm.start_chat(history=prompt_history[:-1])
-                response = chat.send_message(prompt_history[-1]['parts'][0])
+                formatted_prompt = SYSTEM_PROMPT.format(
+                    user_lang=user_lang,
+                    user_name=user_name
+                )
+                temp_model = genai.GenerativeModel(
+                    self.llm_model_name,
+                    system_instruction=formatted_prompt
+                )
+                chat = temp_model.start_chat(history=history)
+                response = chat.send_message(prompt)
                 return response.text.strip()
             except Exception as e:
-                logger.error(f"Error in Gemini labor request: {str(e)}", exc_info=True)
+                logger.error(f"Labor flow error: {e}")
                 return "[ESCALATE]"
 
-        # --- 6. FARM QUERY -> (Full RAG) ---
-        logger.info(f"Message '{user_message}' is a farm query. Starting RAG.")
-        retrieved_context = self.search_knowledge_base(user_message)
+        # --- 5. FARM/CROP QUERIES (Full RAG) ---
+        logger.info(f"🌾 Farm query detected - Running RAG")
         
-        prompt_history = [
-            *history,
-            {"role": "user", "parts": [
-                f"""My name is {user_name} and my language is {user_lang}.
-User's Latest Question: "{user_message}"
+        # Search knowledge base
+        retrieved_context = self.search_knowledge_base(user_message, top_k=5)
+        
+        # Build history summary
+        history_text = ""
+        if history:
+            recent = history[-5:] if len(history) >= 5 else history
+            history_text = "\n".join([
+                f"{msg['role']}: {msg['parts'][0][:150]}" for msg in recent
+            ])
+        
+        # Build RAG prompt
+        prompt = f"""Recent conversation:
+{history_text}
 
-Here is the relevant context from our knowledge base:
-<context>
-{retrieved_context if retrieved_context else "No specific context was found."}
-</context>
+User's question: "{user_message}"
 
-Please use this context (if relevant) to formulate a helpful, polite, farmer-friendly reply.
-Remember the CRITICAL disclaimer rule: ONLY add the disclaimer if you give a specific spray/fertilizer recommendation.
-"""
-            ]}
-        ]
+**Knowledge base context:**
+{retrieved_context if retrieved_context else "No specific information found in database."}
+
+**Instructions:**
+1. Reply in {user_lang} (user's language)
+2. Keep response SHORT (2-3 sentences max)
+3. Use conversation history to understand context
+4. If knowledge base has relevant info, use it naturally
+5. If no relevant info, say: "मुझे इसके बारे में पक्की जानकारी नहीं है" and ask for more details
+6. **CRITICAL**: ONLY add disclaimer `(कृपया फवारणी करण्यापूर्वी तुमच्या प्लॉटची परिस्थिती आणि हवामान तपासून घ्या.)` IF you mention specific spray/fertilizer/chemical names
+7. Use emojis naturally: 🌾 🍇 ✅
+
+Reply:"""
 
         try:
-            chat = self.llm.start_chat(history=prompt_history[:-1]) 
-            response = chat.send_message(prompt_history[-1]['parts'][0]) 
-            text = response.text.strip()
-            logger.info(f"Gemini (RAG) Reply: {text}")
-            return text
-
+            formatted_prompt = SYSTEM_PROMPT.format(
+                user_lang=user_lang,
+                user_name=user_name
+            )
+            temp_model = genai.GenerativeModel(
+                self.llm_model_name,
+                system_instruction=formatted_prompt
+            )
+            chat = temp_model.start_chat(history=history)
+            response = chat.send_message(prompt)
+            reply = response.text.strip()
+            
+            logger.info(f"✅ RAG Reply generated: {reply[:100]}...")
+            return reply
+            
         except Exception as e:
-            logger.error(f"Error in Gemini generate_reply (RAG): {str(e)}", exc_info=True)
+            logger.error(f"RAG error: {str(e)}", exc_info=True)
             return "[ESCALATE]"

@@ -1,78 +1,158 @@
 [
   {
-    "source": "Variety Mappings",
-    "type": "definition",
-    "content": "The term 'ara 35' refers to the 'Arra 35' variety, which is a type of Grapes (द्राक्ष). The crop schedule for this variety is in the document named '35.docx'."
+    "source": "Company Info",
+    "type": "overview",
+    "content": "We are an agriculture service platform providing: Farm labor connection service - Connect farmers with verified workers for pruning, harvesting, spraying, Crop-specific product recommendations - Fertilizers, pesticides, micronutrients based on crop stage, Agri-education - Tips on farming practices, pest control, crop management, Product booking - Direct ordering of recommended agricultural products"
   },
   {
-    "source": "Variety Mappings",
-    "type": "definition",
-    "content": "The term 'arra35' refers to the 'Arra 35' variety, which is a type of Grapes (द्राक्ष). The crop schedule for this variety is in the document named '35.docx'."
+    "source": "Company Info",
+    "type": "labor_service",
+    "content": "Labor booking process: Farmers specify: date needed, type of work (pruning/harvesting/spraying), number of laborers required. Company arranges verified laborers."
   },
   {
-    "source": "Variety Mappings",
-    "type": "definition",
-    "content": "The term 'ard 35' refers to the 'Arra 35' variety, which is a type of Grapes (द्राक्ष). The crop schedule for this variety is in the document named '35.docx'."
+    "source": "Company Info",
+    "type": "services",
+    "content": "We support farmers growing: All crops including grapes, wheat, cotton, chilli, vegetables. We provide guidance in Hindi, Marathi, English."
   },
   {
-    "source": "Variety Mappings",
-    "type": "definition",
-    "content": "The term 'arr 35' refers to the 'Arra 35' variety, which is a type of Grapes (द्राक्ष). The crop schedule for this variety is in the document named '35.docx'."
+    "source": "Variety Database",
+    "type": "variety_info",
+    "content": "Arra 35 (Grapes): Arra 35 is a premium table grape variety popular in Maharashtra. Requires careful pruning and pest management. Crop schedule information is available in 35.docx."
   },
   {
-    "source": "Variety Mappings",
-    "type": "definition",
-    "content": "The term 'अरा ३५' refers to the 'Arra 35' variety, which is a type of Grapes (द्राक्ष). The crop schedule for this variety is in the document named '35.docx'."
+    "source": "Variety Database",
+    "type": "variety_alias",
+    "content": "'ara 35' refers to Arra 35, which is a Grapes variety."
   },
   {
-    "source": "Variety Mappings",
-    "type": "definition",
-    "content": "The term 'एआरडी ३५' refers to the 'Arra 35' variety, which is a type of Grapes (द्राक्ष). The crop schedule for this variety is in the document named '35.docx'."
+    "source": "Variety Database",
+    "type": "variety_alias",
+    "content": "'arra35' refers to Arra 35, which is a Grapes variety."
   },
   {
-    "source": "Variety Mappings",
-    "type": "definition",
-    "content": "The term 'ara 36' refers to the 'Arra 36' variety, which is a type of Grapes (द्राक्ष). The crop schedule for this variety is in the document named '36.docx'."
+    "source": "Variety Database",
+    "type": "variety_alias",
+    "content": "'ard 35' refers to Arra 35, which is a Grapes variety."
   },
   {
-    "source": "Variety Mappings",
-    "type": "definition",
-    "content": "The term 'arra36' refers to the 'Arra 36' variety, which is a type of Grapes (द्राक्ष). The crop schedule for this variety is in the document named '36.docx'."
+    "source": "Variety Database",
+    "type": "variety_alias",
+    "content": "'arr 35' refers to Arra 35, which is a Grapes variety."
   },
   {
-    "source": "Variety Mappings",
-    "type": "definition",
-    "content": "The term 'ard 36' refers to the 'Arra 36' variety, which is a type of Grapes (द्राक्ष). The crop schedule for this variety is in the document named '36.docx'."
+    "source": "Variety Database",
+    "type": "variety_alias",
+    "content": "'arra 35' refers to Arra 35, which is a Grapes variety."
   },
   {
-    "source": "Variety Mappings",
-    "type": "definition",
-    "content": "The term 'arr 36' refers to the 'Arra 36' variety, which is a type of Grapes (द्राक्ष). The crop schedule for this variety is in the document named '36.docx'."
+    "source": "Variety Database",
+    "type": "variety_alias",
+    "content": "'अरा ३५' refers to Arra 35, which is a Grapes variety."
   },
   {
-    "source": "Variety Mappings",
-    "type": "definition",
-    "content": "The term 'अरा ३६' refers to the 'Arra 36' variety, which is a type of Grapes (द्राक्ष). The crop schedule for this variety is in the document named '36.docx'."
+    "source": "Variety Database",
+    "type": "variety_alias",
+    "content": "'अरा 35' refers to Arra 35, which is a Grapes variety."
   },
   {
-    "source": "Variety Mappings",
-    "type": "definition",
-    "content": "The term 'एआरडी ३६' refers to the 'Arra 36' variety, which is a type of Grapes (द्राक्ष). The crop schedule for this variety is in the document named '36.docx'."
+    "source": "Variety Database",
+    "type": "variety_alias",
+    "content": "'एआरडी ३५' refers to Arra 35, which is a Grapes variety."
   },
   {
-    "source": "Variety Mappings",
-    "type": "definition",
-    "content": "The term 'thompson seedless' refers to the 'Crimpson' variety, which is a type of Grapes (द्राक्ष). The crop schedule for this variety is in the document named 'cri.docx'."
+    "source": "Variety Database",
+    "type": "variety_alias",
+    "content": "'35' refers to Arra 35, which is a Grapes variety."
   },
   {
-    "source": "Variety Mappings",
-    "type": "definition",
-    "content": "The term 'थॉम्पसन' refers to the 'Crimpson' variety, which is a type of Grapes (द्राक्ष). The crop schedule for this variety is in the document named 'cri.docx'."
+    "source": "Variety Database",
+    "type": "variety_info",
+    "content": "Arra 36 (Grapes): Arra 36 is another premium grape variety grown in Maharashtra. Crop schedule information is available in 36.docx."
   },
   {
-    "source": "Variety Mappings",
-    "type": "definition",
-    "content": "The term 'thomson' refers to the 'Crimpson' variety, which is a type of Grapes (द्राक्ष). The crop schedule for this variety is in the document named 'cri.docx'."
+    "source": "Variety Database",
+    "type": "variety_alias",
+    "content": "'ara 36' refers to Arra 36, which is a Grapes variety."
+  },
+  {
+    "source": "Variety Database",
+    "type": "variety_alias",
+    "content": "'arra36' refers to Arra 36, which is a Grapes variety."
+  },
+  {
+    "source": "Variety Database",
+    "type": "variety_alias",
+    "content": "'ard 36' refers to Arra 36, which is a Grapes variety."
+  },
+  {
+    "source": "Variety Database",
+    "type": "variety_alias",
+    "content": "'arr 36' refers to Arra 36, which is a Grapes variety."
+  },
+  {
+    "source": "Variety Database",
+    "type": "variety_alias",
+    "content": "'arra 36' refers to Arra 36, which is a Grapes variety."
+  },
+  {
+    "source": "Variety Database",
+    "type": "variety_alias",
+    "content": "'अरा ३६' refers to Arra 36, which is a Grapes variety."
+  },
+  {
+    "source": "Variety Database",
+    "type": "variety_alias",
+    "content": "'अरा 36' refers to Arra 36, which is a Grapes variety."
+  },
+  {
+    "source": "Variety Database",
+    "type": "variety_alias",
+    "content": "'एआरडी ३६' refers to Arra 36, which is a Grapes variety."
+  },
+  {
+    "source": "Variety Database",
+    "type": "variety_alias",
+    "content": "'36' refers to Arra 36, which is a Grapes variety."
+  },
+  {
+    "source": "Variety Database",
+    "type": "variety_info",
+    "content": "Crimson Seedless (Grapes): Crimson Seedless is a globally popular red seedless grape variety. Crop schedule information is available in cri.docx."
+  },
+  {
+    "source": "Variety Database",
+    "type": "variety_alias",
+    "content": "'crimson' refers to Crimson Seedless, which is a Grapes variety."
+  },
+  {
+    "source": "Variety Database",
+    "type": "variety_alias",
+    "content": "'crimpson' refers to Crimson Seedless, which is a Grapes variety."
+  },
+  {
+    "source": "Variety Database",
+    "type": "variety_alias",
+    "content": "'thompson' refers to Crimson Seedless, which is a Grapes variety."
+  },
+  {
+    "source": "Variety Database",
+    "type": "variety_alias",
+    "content": "'thompson seedless' refers to Crimson Seedless, which is a Grapes variety."
+  },
+  {
+    "source": "Variety Database",
+    "type": "variety_alias",
+    "content": "'थॉम्पसन' refers to Crimson Seedless, which is a Grapes variety."
+  },
+  {
+    "source": "Variety Database",
+    "type": "variety_alias",
+    "content": "'क्रिमसन' refers to Crimson Seedless, which is a Grapes variety."
+  },
+  {
+    "source": "Variety Database",
+    "type": "variety_alias",
+    "content": "'thomson' refers to Crimson Seedless, which is a Grapes variety."
   },
   {
     "source": "35.docx",
