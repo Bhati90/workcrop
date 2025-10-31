@@ -209,7 +209,7 @@ def process_status_updates(value):
             logger.error(f"Error processing status: {str(e)}")
 
 
-@login_required
+
 def chat_list_view(request):
     conversations = Conversation.objects.select_related('whatsapp_user').all()
     return render(request, 'whatsapp_chat/chat_list.html', {
@@ -217,7 +217,6 @@ def chat_list_view(request):
     })
 
 
-@login_required
 def chat_detail_view(request, user_id):
     whatsapp_user = get_object_or_404(WhatsAppUser, id=user_id)
     conversation = get_object_or_404(Conversation, whatsapp_user=whatsapp_user)
@@ -235,7 +234,6 @@ def chat_detail_view(request, user_id):
     })
 
 
-@login_required
 @require_http_methods(["POST"])
 def send_message_api(request):
     try:
@@ -280,7 +278,6 @@ def send_message_api(request):
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 
-@login_required
 @require_http_methods(["POST"])
 def upload_media_api(request):
     try:
