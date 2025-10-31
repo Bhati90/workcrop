@@ -749,23 +749,27 @@
                 <span>Sending...</span>
             </div>
 
-            <div class="template-selector" id="templateSelector">
-                <label for="templateSelect">Select Template:</label>
-                <select id="templateSelect" onchange="loadTemplateParams()">
-                    <option value="">-- Choose a template --</option>
-                    {% for template in templates %}
-                    <option value="{{ template.id }}" 
-                            data-name="{{ template.name }}"
-                            data-language="{{ template.language }}"
-                            data-body="{{ template.body_text }}"
-                            data-header-params="{{ template.header_params_count }}"
-                            data-body-params="{{ template.body_params_count }}">
-                        {{ template.name }} ({{ template.language }})
-                    </option>
-                    {% endfor %}
-                </select>
-                <div class="template-params" id="templateParams"></div>
-            </div>
+            <!-- Template selector -->
+<div class="template-selector" id="templateSelector">
+    <label for="templateSelect">Select Template:</label>
+    <select id="templateSelect" onchange="loadTemplateParams()">
+        <option value="">-- Choose a template --</option>
+        {% for template in templates %}
+        <option value="{{ template.id }}" 
+                data-name="{{ template.name }}"
+                data-language="{{ template.language }}"
+                data-body="{{ template.body_text }}"
+                data-header-type="{{ template.header_type }}"
+                data-header-params="{{ template.header_params_count }}"
+                data-body-params="{{ template.body_params_count }}">
+            {{ template.name }} ({{ template.language }})
+        </option>
+        {% endfor %}
+    </select>
+    
+    <!-- Template Parameters Container -->
+    <div class="template-params" id="templateParams"></div>
+</div>
 
             <div class="file-preview" id="filePreview">
                 <span class="file-preview-icon" id="fileIcon">📎</span>
@@ -829,45 +833,227 @@
         }
 
         function loadTemplateParams() {
-            const select = document.getElementById('templateSelect');
-            const option = select.options[select.selectedIndex];
-            const paramsDiv = document.getElementById('templateParams');
-            
-            if (!option.value) {
-                paramsDiv.innerHTML = '';
-                return;
-            }
-            
-            const headerParams = parseInt(option.dataset.headerParams) || 0;
-            const bodyParams = parseInt(option.dataset.bodyParams) || 0;
-            
-            let html = '';
-            
-            for (let i = 1; i <= headerParams; i++) {
-                html += `
-                    <div class="template-param">
-                        <label style="color: #e9edef; font-size: 13px; display: block; margin-bottom: 5px;">
-                            Header Parameter ${i}:
-                        </label>
-                        <input type="text" class="header-param" placeholder="Enter value" data-index="${i}">
-                    </div>
-                `;
-            }
-            
-            for (let i = 1; i <= bodyParams; i++) {
-                html += `
-                    <div class="template-param">
-                        <label style="color: #e9edef; font-size: 13px; display: block; margin-bottom: 5px;">
-                            Body Parameter ${i}:
-                        </label>
-                        <input type="text" class="body-param" placeholder="Enter value" data-index="${i}">
-                    </div>
-                `;
-            }
-            
-            paramsDiv.innerHTML = html;
+    const select = document.getElementById('templateSelect');
+    const option = select.options[select.selectedIndex];
+    const paramsDiv = document.getElementById('templateParams');
+    
+    if (!option.value) {
+        paramsDiv.innerHTML = '';
+        return;
+    }
+    
+    const headerType = option.dataset.headerType;
+    const headerParams = parseInt(option.dataset.headerParams) || 0;
+    const bodyParams = parseInt(option.dataset.bodyParams) || 0;
+    
+    let html = '';
+    
+    // Header Parameters (including image support)
+    if (headerType === 'image' || headerType === 'IMAGE') {
+        html += `
+            <div class="template-param">
+                <label style="color: #e9edef; font-size: 13px; display: block; margin-bottom: 8px;">
+                    📸 Header Image:
+                </label>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <input type="file" 
+                           id="headerImageFile" 
+                           accept="image/*" 
+                           style="flex: 1; padding: 8px; background-color: #202c33; border: 1px solid #374045; border-radius: 8px; color: #e9edef; font-size: 13px;"
+                           onchange="handleHeaderImageUpload(event)">
+                    <span style="color: #8696a0; font-size: 12px;">or</span>
+                    <input type="url" 
+                           id="headerImageUrl" 
+                           class="header-image-url" 
+                           placeholder="Enter image URL" 
+                           style="flex: 1; padding: 10px 12px; background-color: #202c33; border: 1px solid #374045; border-radius: 8px; color: #e9edef; font-size: 13px;">
+                </div>
+                <div id="headerImagePreview" style="margin-top: 10px; display: none;">
+                    <img id="headerImagePreviewImg" style="max-width: 200px; border-radius: 8px;">
+                    <div style="font-size: 11px; color: #8696a0; margin-top: 5px;" id="headerImageStatus">Uploading...</div>
+                </div>
+                <input type="hidden" id="headerImageMediaId" class="header-image-media-id">
+            </div>
+        `;
+    } else if (headerType === 'video' || headerType === 'VIDEO') {
+        html += `
+            <div class="template-param">
+                <label style="color: #e9edef; font-size: 13px; display: block; margin-bottom: 8px;">
+                    🎥 Header Video:
+                </label>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <input type="file" 
+                           id="headerVideoFile" 
+                           accept="video/*" 
+                           style="flex: 1; padding: 8px; background-color: #202c33; border: 1px solid #374045; border-radius: 8px; color: #e9edef; font-size: 13px;"
+                           onchange="handleHeaderVideoUpload(event)">
+                    <span style="color: #8696a0; font-size: 12px;">or</span>
+                    <input type="url" 
+                           id="headerVideoUrl" 
+                           class="header-video-url" 
+                           placeholder="Enter video URL" 
+                           style="flex: 1; padding: 10px 12px; background-color: #202c33; border: 1px solid #374045; border-radius: 8px; color: #e9edef; font-size: 13px;">
+                </div>
+                <input type="hidden" id="headerVideoMediaId" class="header-video-media-id">
+            </div>
+        `;
+    } else if (headerType === 'document' || headerType === 'DOCUMENT') {
+        html += `
+            <div class="template-param">
+                <label style="color: #e9edef; font-size: 13px; display: block; margin-bottom: 8px;">
+                    📄 Header Document:
+                </label>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <input type="file" 
+                           id="headerDocumentFile" 
+                           accept=".pdf,.doc,.docx" 
+                           style="flex: 1; padding: 8px; background-color: #202c33; border: 1px solid #374045; border-radius: 8px; color: #e9edef; font-size: 13px;"
+                           onchange="handleHeaderDocumentUpload(event)">
+                    <span style="color: #8696a0; font-size: 12px;">or</span>
+                    <input type="url" 
+                           id="headerDocumentUrl" 
+                           class="header-document-url" 
+                           placeholder="Enter document URL" 
+                           style="flex: 1; padding: 10px 12px; background-color: #202c33; border: 1px solid #374045; border-radius: 8px; color: #e9edef; font-size: 13px;">
+                </div>
+                <input type="hidden" id="headerDocumentMediaId" class="header-document-media-id">
+            </div>
+        `;
+    } else if (headerParams > 0) {
+        // Text header with parameters
+        for (let i = 1; i <= headerParams; i++) {
+            html += `
+                <div class="template-param">
+                    <label style="color: #e9edef; font-size: 13px; display: block; margin-bottom: 5px;">
+                        Header Parameter ${i}:
+                    </label>
+                    <input type="text" class="header-param" placeholder="Enter value" data-index="${i}">
+                </div>
+            `;
         }
+    }
+    
+    // Body Parameters
+    for (let i = 1; i <= bodyParams; i++) {
+        html += `
+            <div class="template-param">
+                <label style="color: #e9edef; font-size: 13px; display: block; margin-bottom: 5px;">
+                    Body Parameter ${i}:
+                </label>
+                <input type="text" class="body-param" placeholder="Enter value" data-index="${i}">
+            </div>
+        `;
+    }
+    
+    paramsDiv.innerHTML = html;
+}
 
+// Add these new functions for header media upload
+async function handleHeaderImageUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    // Show preview
+    const preview = document.getElementById('headerImagePreview');
+    const previewImg = document.getElementById('headerImagePreviewImg');
+    const status = document.getElementById('headerImageStatus');
+    
+    preview.style.display = 'block';
+    previewImg.src = URL.createObjectURL(file);
+    status.textContent = 'Uploading...';
+    
+    // Upload to WhatsApp
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+        const response = await fetch('{% url "whatsapp_chat:upload_media" %}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            document.getElementById('headerImageMediaId').value = data.media_id;
+            status.textContent = '✓ Uploaded successfully';
+            status.style.color = '#00a884';
+            console.log('Header image uploaded:', data.media_id);
+        } else {
+            status.textContent = '✗ Upload failed';
+            status.style.color = '#ff4444';
+            alert('Failed to upload image: ' + data.message);
+        }
+    } catch (error) {
+        console.error('Upload error:', error);
+        status.textContent = '✗ Upload error';
+        status.style.color = '#ff4444';
+        alert('Error uploading image');
+    }
+}
+
+async function handleHeaderVideoUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+        const response = await fetch('{% url "whatsapp_chat:upload_media" %}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            document.getElementById('headerVideoMediaId').value = data.media_id;
+            alert('Video uploaded successfully!');
+        } else {
+            alert('Failed to upload video: ' + data.message);
+        }
+    } catch (error) {
+        console.error('Upload error:', error);
+        alert('Error uploading video');
+    }
+}
+
+async function handleHeaderDocumentUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+        const response = await fetch('{% url "whatsapp_chat:upload_media" %}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            document.getElementById('headerDocumentMediaId').value = data.media_id;
+            alert('Document uploaded successfully!');
+        } else {
+            alert('Failed to upload document: ' + data.message);
+        }
+    } catch (error) {
+        console.error('Upload error:', error);
+        alert('Error uploading document');
+    }
+}
         function handleFileSelect(event) {
             selectedFile = event.target.files[0];
             if (selectedFile) {
@@ -939,100 +1125,172 @@
         }
 
         async function sendMessage() {
-            const sendingIndicator = document.getElementById('sendingIndicator');
-            let payload = { user_id: userId };
+    const sendingIndicator = document.getElementById('sendingIndicator');
+    let payload = { user_id: userId };
+    
+    if (currentMode === 'text') {
+        const text = document.getElementById('messageInput').value.trim();
+        if (!text) return;
+        
+        payload.message_type = 'text';
+        payload.text = text;
+        
+    } else if (currentMode === 'template') {
+        const select = document.getElementById('templateSelect');
+        const option = select.options[select.selectedIndex];
+        
+        if (!option.value) {
+            alert('Please select a template');
+            return;
+        }
+        
+        const components = [];
+        const headerType = option.dataset.headerType;
+        
+        // Handle header component
+        if (headerType === 'image' || headerType === 'IMAGE') {
+            const mediaId = document.getElementById('headerImageMediaId').value;
+            const imageUrl = document.getElementById('headerImageUrl').value.trim();
             
-            if (currentMode === 'text') {
-                const text = document.getElementById('messageInput').value.trim();
-                if (!text) return;
-                
-                payload.message_type = 'text';
-                payload.text = text;
-                
-            } else if (currentMode === 'template') {
-                const select = document.getElementById('templateSelect');
-                const option = select.options[select.selectedIndex];
-                
-                if (!option.value) {
-                    alert('Please select a template');
-                    return;
-                }
-                
-                const components = [];
-                const headerParams = document.querySelectorAll('.header-param');
-                if (headerParams.length > 0) {
-                    components.push({
-                        type: 'header',
-                        parameters: Array.from(headerParams).map(input => ({
-                            type: 'text',
-                            text: input.value
-                        }))
-                    });
-                }
-                
-                const bodyParams = document.querySelectorAll('.body-param');
-                if (bodyParams.length > 0) {
-                    components.push({
-                        type: 'body',
-                        parameters: Array.from(bodyParams).map(input => ({
-                            type: 'text',
-                            text: input.value
-                        }))
-                    });
-                }
-                
-                payload.message_type = 'template';
-                payload.template_name = option.dataset.name;
-                payload.language_code = option.dataset.language;
-                payload.components = components;
-                
-            } else if (currentMode === 'media') {
-                if (!uploadedMediaId) {
-                    alert('Please select a file first');
-                    return;
-                }
-                
-                const caption = document.getElementById('messageInput').value.trim();
-                let mediaType = 'document';
-                if (selectedFile.type.startsWith('image/')) mediaType = 'image';
-                else if (selectedFile.type.startsWith('video/')) mediaType = 'video';
-                else if (selectedFile.type.startsWith('audio/')) mediaType = 'audio';
-                
-                payload.message_type = mediaType;
-                payload.media_id = uploadedMediaId;
-                payload.caption = caption;
-            }
-            
-            sendingIndicator.classList.add('active');
-            
-            try {
-                const response = await fetch('{% url "whatsapp_chat:send_message" %}', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': getCookie('csrftoken')
-                    },
-                    body: JSON.stringify(payload)
+            if (mediaId) {
+                components.push({
+                    type: 'header',
+                    parameters: [{
+                        type: 'image',
+                        image: { id: mediaId }
+                    }]
                 });
-                
-                const data = await response.json();
-                
-                if (data.status === 'success') {
-                    document.getElementById('messageInput').value = '';
-                    clearFile();
-                    sendingIndicator.classList.remove('active');
-                    setTimeout(() => location.reload(), 500);
-                } else {
-                    alert('Failed: ' + (data.message || 'Unknown error'));
-                    sendingIndicator.classList.remove('active');
-                }
-            } catch (error) {
-                console.error('Send error:', error);
-                alert('Error sending message');
-                sendingIndicator.classList.remove('active');
+            } else if (imageUrl) {
+                components.push({
+                    type: 'header',
+                    parameters: [{
+                        type: 'image',
+                        image: { link: imageUrl }
+                    }]
+                });
+            } else {
+                alert('Please upload an image or provide an image URL for the template header');
+                return;
+            }
+        } else if (headerType === 'video' || headerType === 'VIDEO') {
+            const mediaId = document.getElementById('headerVideoMediaId').value;
+            const videoUrl = document.getElementById('headerVideoUrl').value.trim();
+            
+            if (mediaId) {
+                components.push({
+                    type: 'header',
+                    parameters: [{
+                        type: 'video',
+                        video: { id: mediaId }
+                    }]
+                });
+            } else if (videoUrl) {
+                components.push({
+                    type: 'header',
+                    parameters: [{
+                        type: 'video',
+                        video: { link: videoUrl }
+                    }]
+                });
+            }
+        } else if (headerType === 'document' || headerType === 'DOCUMENT') {
+            const mediaId = document.getElementById('headerDocumentMediaId').value;
+            const docUrl = document.getElementById('headerDocumentUrl').value.trim();
+            
+            if (mediaId) {
+                components.push({
+                    type: 'header',
+                    parameters: [{
+                        type: 'document',
+                        document: { id: mediaId }
+                    }]
+                });
+            } else if (docUrl) {
+                components.push({
+                    type: 'header',
+                    parameters: [{
+                        type: 'document',
+                        document: { link: docUrl }
+                    }]
+                });
+            }
+        } else {
+            // Text header parameters
+            const headerParams = document.querySelectorAll('.header-param');
+            if (headerParams.length > 0) {
+                components.push({
+                    type: 'header',
+                    parameters: Array.from(headerParams).map(input => ({
+                        type: 'text',
+                        text: input.value
+                    }))
+                });
             }
         }
-
+        
+        // Body parameters
+        const bodyParams = document.querySelectorAll('.body-param');
+        if (bodyParams.length > 0) {
+            components.push({
+                type: 'body',
+                parameters: Array.from(bodyParams).map(input => ({
+                    type: 'text',
+                    text: input.value
+                }))
+            });
+        }
+        
+        payload.message_type = 'template';
+        payload.template_name = option.dataset.name;
+        payload.language_code = option.dataset.language;
+        payload.components = components;
+        
+    } else if (currentMode === 'media') {
+        if (!uploadedMediaId) {
+            alert('Please select a file first');
+            return;
+        }
+        
+        const caption = document.getElementById('messageInput').value.trim();
+        let mediaType = 'document';
+        if (selectedFile.type.startsWith('image/')) mediaType = 'image';
+        else if (selectedFile.type.startsWith('video/')) mediaType = 'video';
+        else if (selectedFile.type.startsWith('audio/')) mediaType = 'audio';
+        
+        payload.message_type = mediaType;
+        payload.media_id = uploadedMediaId;
+        payload.caption = caption;
+    }
+    
+    sendingIndicator.classList.add('active');
+    
+    try {
+        const response = await fetch('{% url "whatsapp_chat:send_message" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify(payload)
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            document.getElementById('messageInput').value = '';
+            clearFile();
+            sendingIndicator.classList.remove('active');
+            setTimeout(() => location.reload(), 500);
+        } else {
+            alert('Failed: ' + (data.message || 'Unknown error'));
+            sendingIndicator.classList.remove('active');
+        }
+    } catch (error) {
+        console.error('Send error:', error);
+        alert('Error sending message');
+        sendingIndicator.classList.remove('active');
+    }
+}
         function getCookie(name) {
             let cookieValue = null;
             if (document.cookie && document.cookie !== '') {

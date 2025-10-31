@@ -7,6 +7,11 @@ from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.utils import timezone
 from django.core.files.base import ContentFile
+import requests
+import os
+import tempfile
+from django.core.files.storage import default_storage
+from django.core.files.base import ContentFile
 
 from .models import WhatsAppUser, Conversation, Message, MediaFile, WebhookLog, WhatsAppTemplate
 from .service import WhatsAppService
@@ -102,83 +107,81 @@ def whatsapp_webhook(request):
     # If GET request (shouldn't happen with centralized webhook)
     return JsonResponse({"status": "success"}, status=200)
 
+# Add at the top:
+from .gemini_service import GeminiService
+from django.utils import timezone
+
+SPAM_KEYWORDS = ['xxx', 'bank', 'password', 'joke', 'random', 'movie', 'cricket']  # Expand as needed
+
+ESCALATE_KEYWORDS = ['help', 'urgent', 'complaint', 'problem', 'error']
 
 def process_incoming_messages(value, full_webhook_data):
-    """Process incoming messages from customers"""
     messages = value.get('messages', [])
     contacts = value.get('contacts', [])
-    
     for msg_data in messages:
         try:
             from_number = msg_data['from']
             message_type = msg_data.get('type')
             whatsapp_message_id = msg_data['id']
             timestamp = timezone.datetime.fromtimestamp(int(msg_data['timestamp']))
-            
-            logger.info(f"Processing {message_type} message from {from_number}")
-            
-            # Get contact name from webhook
-            contact_name = from_number
-            for contact in contacts:
-                if contact.get('wa_id') == from_number:
-                    contact_name = contact.get('profile', {}).get('name', from_number)
-                    break
-            
-            # Get or create WhatsApp user
+            # ... previous logic ...
+
             whatsapp_user, created = WhatsAppUser.objects.get_or_create(
                 phone_number=from_number,
-                defaults={'name': contact_name}
+                defaults={'name': from_number}
             )
-            
-            if not created and whatsapp_user.name != contact_name:
-                whatsapp_user.name = contact_name
-                whatsapp_user.save()
-            
-            # Get or create conversation
             conversation, _ = Conversation.objects.get_or_create(
                 whatsapp_user=whatsapp_user
             )
-            
-            # Process based on message type
-            if message_type == 'text':
-                handle_text_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp)
-            
-            elif message_type == 'image':
-                handle_image_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp)
-            
-            elif message_type == 'video':
-                handle_video_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp)
-            
-            elif message_type == 'audio':
-                handle_audio_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp)
-            
-            elif message_type == 'document':
-                handle_document_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp)
-            
-            elif message_type == 'location':
-                handle_location_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp)
-            
-            elif message_type == 'button':
-                handle_button_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp)
-            
-            elif message_type == 'interactive':
-                handle_interactive_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp)
-            
-            else:
-                logger.warning(f"Unsupported message type: {message_type}")
-                create_message(
-                    conversation, whatsapp_message_id, 'text', 'inbound',
-                    f"[Unsupported message type: {message_type}]", None, None, None,
-                    'delivered', timestamp
-                )
-            
-            # Mark message as read
-            whatsapp_service = WhatsAppService()
-            whatsapp_service.mark_message_as_read(whatsapp_message_id)
-            
-        except Exception as e:
-            logger.error(f"Error processing message: {str(e)}", exc_info=True)
+            user_lang = 'hi' if 'ह' in msg_data.get('text', {}).get('body', '') else 'en'
 
+            # --- Gather last 10 msgs for context (inbound + outbound, exclude docs/pdf) ---
+            history = []
+            qs = conversation.messages.filter(timestamp__lt=timestamp).order_by('-timestamp')[:10]
+            for m in reversed(qs):
+                if m.message_type not in ('document', 'pdf'):
+                    history.append({
+                        'role': 'user' if m.direction=='inbound' else 'model',
+                        'content': m.text_content or m.caption or '[media]'
+                    })
+
+            # Check for spam
+            txt = msg_data.get('text', {}).get('body', '') if message_type == 'text' else ''
+            lowered = txt.lower()
+            is_spam = any(s in lowered for s in SPAM_KEYWORDS) or not txt or len(txt) < 3
+            is_escalate = any(e in lowered for e in ESCALATE_KEYWORDS)
+            
+            # --- If spam: ignore ---
+            if is_spam:
+                return  # No response
+
+            # If escalate or complex: respond and silence for 24 hr
+            if is_escalate or 'confuse' in lowered or '?' not in txt:  # Add more logic per needs
+                WhatsAppService().send_text_message(from_number, "Our team will reach you soon.", conversation)
+                whatsapp_user.is_blocked = True
+                whatsapp_user.last_message_at = timezone.now() + timezone.timedelta(hours=24)
+                whatsapp_user.save()
+                return
+
+            # --- Use Gemini ---
+            context_info = {
+                "company_overview": "Agriculture service marketplace connecting farmers/labor/suppliers",
+                "mission": "Empower farmers with guidance, labor, quality products",
+                "core_offerings": "Labor requests, crop advice, product booking, education",
+                "restrictions": "Never reply to non-agri, personal, joke, or external questions. Only agricultural, product, labor topics."
+            }
+            user_name = whatsapp_user.name
+            gemini = GeminiService()
+            reply = gemini.generate_reply(history, txt, user_lang, user_name, context_info)
+
+            # Simulate "typing" UX (send typing dots, then real reply)
+            WhatsAppService().send_text_message(from_number, "Typing...", conversation)
+            import time; time.sleep(2)  # 2 second delay for UX
+
+            WhatsAppService().send_text_message(from_number, reply, conversation)
+
+        except Exception as e:
+            logger.error(f"Error processing message in Gemini block: {str(e)}", exc_info=True)
 
 def handle_text_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp):
     """Handle text messages"""
@@ -528,69 +531,189 @@ def chat_detail_view(request, user_id):
 
 @require_http_methods(["POST"])
 def send_message_api(request):
+    """API endpoint to send messages"""
     try:
         data = json.loads(request.body.decode('utf-8'))
         user_id = data.get('user_id')
         message_type = data.get('message_type')
         
+        logger.info(f"Send message request: type={message_type}, user_id={user_id}")
+        
         whatsapp_user = get_object_or_404(WhatsAppUser, id=user_id)
         conversation = get_object_or_404(Conversation, whatsapp_user=whatsapp_user)
         whatsapp_service = WhatsAppService()
         
+        message = None
+        
         if message_type == 'text':
-            text_content = data.get('text')
+            text_content = data.get('text', '').strip()
+            if not text_content:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Text content is required'
+                }, status=400)
+            
+            logger.info(f"Sending text: '{text_content}' to {whatsapp_user.phone_number}")
             message = whatsapp_service.send_text_message(
                 whatsapp_user.phone_number, text_content, conversation
             )
+            
         elif message_type == 'template':
-            template_name = data.get('template_name')
+            template_name = data.get('template_name', '').strip()
             language_code = data.get('language_code', 'en')
             components = data.get('components', [])
+            
+            if not template_name:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Template name is required'
+                }, status=400)
+            
+            logger.info(f"Sending template: {template_name} ({language_code}) to {whatsapp_user.phone_number}")
+            logger.info(f"Raw components received: {json.dumps(components, indent=2)}")
+            
+            # Don't clean components - send them as-is if they exist
+            # WhatsApp API will validate them
+            if components:
+                logger.info(f"Using components as provided: {json.dumps(components, indent=2)}")
+            else:
+                logger.info("No components provided")
+            
             message = whatsapp_service.send_template_message(
-                whatsapp_user.phone_number, template_name, 
-                language_code, components, conversation
-            )
+                whatsapp_user.phone_number,
+                template_name,
+                language_code,
+                components,  # Send as-is, don't clean
+                conversation
+            )   
         elif message_type in ['image', 'video', 'audio', 'document']:
-            media_id = data.get('media_id')
-            caption = data.get('caption', '')
+            media_id = data.get('media_id', '').strip()
+            caption = data.get('caption', '').strip()
+            
+            if not media_id:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Media ID is required'
+                }, status=400)
+            
+            logger.info(f"Sending {message_type}: {media_id} to {whatsapp_user.phone_number}")
             message = whatsapp_service.send_media_message(
-                whatsapp_user.phone_number, message_type, 
-                media_id, caption, conversation
+                whatsapp_user.phone_number,
+                message_type,
+                media_id,
+                caption,
+                conversation
             )
         
+        else:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Unsupported message type: {message_type}'
+            }, status=400)
+        
         if message:
+            logger.info(f"Message sent successfully: {message.id}")
             return JsonResponse({
                 'status': 'success',
-                'message_id': message.id
+                'message_id': message.id,
+                'timestamp': message.timestamp.isoformat()
             })
         else:
-            return JsonResponse({'status': 'error'}, status=500)
+            logger.error("Failed to send message - no message object returned")
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Failed to send message. Check logs for details.'
+            }, status=500)
+            
     except Exception as e:
-        logger.error(f"Send error: {str(e)}")
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
-
+        logger.error(f"Send error: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)
 
 @require_http_methods(["POST"])
 def upload_media_api(request):
+    """API endpoint to upload media files"""
+    temp_path = None
     try:
         if 'file' not in request.FILES:
-            return JsonResponse({'status': 'error', 'message': 'No file'}, status=400)
+            return JsonResponse({
+                'status': 'error',
+                'message': 'No file provided'
+            }, status=400)
         
         file = request.FILES['file']
         mime_type = file.content_type
         
-        temp_path = f'/tmp/{file.name}'
-        with open(temp_path, 'wb+') as destination:
-            for chunk in file.chunks():
-                destination.write(chunk)
+        logger.info(f"Uploading file: {file.name}, type: {mime_type}, size: {file.size}")
         
+        # Validate file type
+        allowed_types = {
+            'image/jpeg', 'image/png', 'image/jpg',
+            'video/mp4', 'video/3gpp',
+            'audio/aac', 'audio/mp4', 'audio/mpeg', 'audio/amr', 'audio/ogg',
+            'application/pdf',
+            'application/msword',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/vnd.ms-excel',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        }
+        
+        if mime_type not in allowed_types:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'File type {mime_type} not supported'
+            }, status=400)
+        
+        # Validate file size
+        max_size = 100 * 1024 * 1024 if mime_type.startswith('application/') else 16 * 1024 * 1024
+        if file.size > max_size:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'File too large. Max size: {max_size / (1024*1024):.0f}MB'
+            }, status=400)
+        
+        # Create a temporary file with proper extension
+        file_extension = os.path.splitext(file.name)[1]
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=file_extension)
+        temp_path = temp_file.name
+        
+        # Write uploaded file to temp file
+        for chunk in file.chunks():
+            temp_file.write(chunk)
+        temp_file.close()
+        
+        logger.info(f"Saved temp file: {temp_path}")
+        
+        # Upload to WhatsApp
         whatsapp_service = WhatsAppService()
         media_id = whatsapp_service.upload_media(temp_path, mime_type)
         
         if media_id:
-            return JsonResponse({'status': 'success', 'media_id': media_id})
+            logger.info(f"Upload successful: {media_id}")
+            return JsonResponse({
+                'status': 'success',
+                'media_id': media_id
+            })
         else:
-            return JsonResponse({'status': 'error'}, status=500)
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Failed to upload media to WhatsApp'
+            }, status=500)
+            
     except Exception as e:
-        logger.error(f"Upload error: {str(e)}")
-        return JsonResponse({'status': 'error'}, status=500)
+        logger.error(f"Upload error: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)
+    
+    finally:
+        # Clean up temp file
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.unlink(temp_path)
+                logger.info(f"Cleaned up temp file: {temp_path}")
+            except Exception as e:
+                logger.warning(f"Failed to delete temp file: {e}")

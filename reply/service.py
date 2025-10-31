@@ -2,7 +2,8 @@ import requests
 import logging
 from django.conf import settings
 from .models import Message
-
+import json
+import os
 logger = logging.getLogger(__name__)
 
 
@@ -107,8 +108,18 @@ class WhatsAppService:
             return None
 
     def send_template_message(self, to_phone, template_name, language_code, components, conversation):
+        """Send a template message"""
         url = f"{self.base_url}/messages"
-        
+
+        # --- Ensure components are properly formatted ---
+        valid_components = []
+        if components:
+            for comp in components:
+                if comp.get("type") == "header" and comp.get("parameters"):
+                    valid_components.append(comp)
+                elif comp.get("type") == "body" or comp.get("type") == "button":
+                    valid_components.append(comp)
+
         payload = {
             "messaging_product": "whatsapp",
             "recipient_type": "individual",
@@ -117,52 +128,112 @@ class WhatsAppService:
             "template": {
                 "name": template_name,
                 "language": {"code": language_code},
-                "components": components
-            }
+            },
         }
-        
+
+        # --- Add components if any ---
+        if valid_components:
+            payload["template"]["components"] = valid_components
+
         try:
+            logger.info(f"Sending template: {template_name} to {to_phone}")
+            logger.info(f"Payload: {json.dumps(payload, indent=2)}")
+
             response = requests.post(url, headers=self.headers, json=payload)
+
+            logger.info(f"Response status: {response.status_code}")
+            logger.info(f"Response body: {response.text}")
+
             response.raise_for_status()
             result = response.json()
-            
+
             message = Message.objects.create(
                 conversation=conversation,
-                whatsapp_message_id=result['messages'][0]['id'],
-                message_type='template',
-                direction='outbound',
+                whatsapp_message_id=result["messages"][0]["id"],
+                message_type="template",
+                direction="outbound",
                 template_name=template_name,
                 template_language=language_code,
-                template_params=components,
-                status='sent'
+                template_params=valid_components,
+                status="sent",
             )
-            
+
             conversation.last_message_preview = f"[Template: {template_name}]"
             conversation.save()
-            
-            logger.info(f"Template sent to {to_phone}")
+
+            logger.info(f"✅ Template sent successfully to {to_phone}")
             return message
-            
+
+        except requests.exceptions.HTTPError as e:
+            logger.error(f"HTTP Error sending template: {e}")
+            logger.error(f"Response: {e.response.text if hasattr(e, 'response') else 'No response'}")
+
+            Message.objects.create(
+                conversation=conversation,
+                message_type="template",
+                direction="outbound",
+                template_name=template_name,
+                template_language=language_code,
+                template_params=valid_components,
+                status="failed",
+                error_message=f"{e.response.status_code}: {e.response.text if hasattr(e, 'response') else str(e)}",
+            )
+            return None
+
         except Exception as e:
             logger.error(f"Error sending template: {str(e)}")
+
+            Message.objects.create(
+                conversation=conversation,
+                message_type="template",
+                direction="outbound",
+                template_name=template_name,
+                template_language=language_code,
+                template_params=valid_components,
+                status="failed",
+                error_message=str(e),
+            )
             return None
 
     def upload_media(self, file_path, mime_type):
+        """Upload media to WhatsApp servers and get media ID"""
         url = f"{self.base_url}/media"
         
-        headers = {'Authorization': f'Bearer {self.access_token}'}
-        
-        files = {
-            'file': open(file_path, 'rb'),
-            'messaging_product': (None, 'whatsapp'),
-            'type': (None, mime_type)
+        # Headers WITHOUT Content-Type (let requests handle it for multipart)
+        headers = {
+            'Authorization': f'Bearer {self.access_token}',
         }
         
         try:
-            response = requests.post(url, headers=headers, files=files)
-            response.raise_for_status()
-            result = response.json()
-            return result['id']
+            # Open file in binary mode
+            with open(file_path, 'rb') as file:
+                files = {
+                    'file': (os.path.basename(file_path), file, mime_type)
+                }
+                
+                data = {
+                    'messaging_product': 'whatsapp'
+                }
+                
+                logger.info(f"Uploading media: {file_path}, type: {mime_type}")
+                
+                response = requests.post(url, headers=headers, files=files, data=data)
+                
+                # Log the response for debugging
+                logger.info(f"Upload response status: {response.status_code}")
+                logger.info(f"Upload response body: {response.text}")
+                
+                response.raise_for_status()
+                result = response.json()
+                media_id = result.get('id')
+                
+                logger.info(f"Media uploaded successfully. ID: {media_id}")
+                return media_id
+                
+        except requests.exceptions.HTTPError as e:
+            logger.error(f"HTTP Error uploading media: {e}")
+            logger.error(f"Response: {e.response.text if hasattr(e, 'response') else 'No response'}")
+            return None
         except Exception as e:
             logger.error(f"Error uploading media: {str(e)}")
             return None
