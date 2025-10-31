@@ -325,6 +325,7 @@ MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/media/'
 
 DATABASES = {
     'default': dj_database_url.config(
+        # default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a.oregon-postgres.render.com/registerdb_od8n',
         default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a/registerdb_od8n',
         conn_max_age=600,
         conn_health_checks=True,
@@ -333,7 +334,7 @@ DATABASES = {
 
 CORS_ALLOWED_ORIGINS = config(
     'CORS_ALLOWED_ORIGINS',
-    default='https://workcrop-1.onrender.com,http://localhost:3000,http://127.0.0.1:3000,http://127.0.0.1:8000',
+    default='https://workcrop.onrender.com,http://localhost:3000,http://127.0.0.1:3000,http://127.0.0.1:8000',
     cast=Csv()
 )
 
