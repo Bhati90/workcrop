@@ -16,7 +16,7 @@ DOCX_FILES = [
 
 XLSX_FILES = [
     'all.xlsx',
-    'pro.xlsx',
+    
     'col.xlsx',
 ]
 
