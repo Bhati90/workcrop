@@ -115,24 +115,37 @@ SPAM_KEYWORDS = ['xxx', 'bank', 'password', 'joke', 'random', 'movie', 'cricket'
 
 ESCALATE_KEYWORDS = ['help', 'urgent', 'complaint', 'problem', 'error']
 # Add this at the TOP of webhooks.py (after imports)
+from django.core.cache import cache
 from .gemini_service import GeminiService
+import logging
 
-# Create a global singleton instance
-_gemini_service_instance = None
+logger = logging.getLogger(__name__)
+
+# Cache key for singleton
+GEMINI_SERVICE_CACHE_KEY = 'gemini_service_singleton'
 
 def get_gemini_service():
-    """Returns singleton GeminiService instance"""
-    global _gemini_service_instance
-    if _gemini_service_instance is None:
-        _gemini_service_instance = GeminiService()
-        logger.info("🚀 Created GeminiService singleton (will reuse for all messages)")
-    return _gemini_service_instance
+    """
+    Returns cached GeminiService instance (survives across requests/processes)
+    """
+    # Try to get from cache first
+    gemini = cache.get(GEMINI_SERVICE_CACHE_KEY)
+    
+    if gemini is None:
+        # Create new instance
+        gemini = GeminiService()
+        # Cache it forever (or until server restart)
+        cache.set(GEMINI_SERVICE_CACHE_KEY, gemini, timeout=None)
+        logger.info("🚀 Created NEW GeminiService and cached it")
+    else:
+        logger.info("♻️ Reusing CACHED GeminiService instance")
+    
+    return gemini
 
 
 def process_incoming_messages(value, full_webhook_data):
     """
     Handles processing logic for all incoming messages.
-    Orchestrates saving, checking blocks, and calling Gemini.
     """
     messages = value.get('messages', [])
     contacts = value.get('contacts', [])
@@ -161,23 +174,20 @@ def process_incoming_messages(value, full_webhook_data):
         # --- 2. Check for 24-Hour Escalation Block ---
         if whatsapp_user.is_blocked and whatsapp_user.blocked_until and whatsapp_user.blocked_until > timezone.now():
             logger.info(f"User {from_number} is in 24-hour escalation block. Ignoring message.")
-            # Save the message but do not reply
             _save_incoming_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp)
             return
         elif whatsapp_user.is_blocked:
-            # Block expired, unblock them
             whatsapp_user.is_blocked = False
             whatsapp_user.blocked_until = None
             whatsapp_user.save()
 
-        # --- 3. Save the Incoming Message to DB *FIRST* ---
+        # --- 3. Save the Incoming Message to DB ---
         msg_obj = _save_incoming_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp)
         
-        # If message was a duplicate or failed to save, stop
         if not msg_obj:
             return
 
-        # --- 4. Send "Read" Receipt (Good UX, shows "double blue tick") ---
+        # --- 4. Send "Read" Receipt ---
         WhatsAppService().mark_message_as_read(whatsapp_message_id)
 
         # --- 5. We ONLY respond to 'text' messages with AI ---
@@ -191,11 +201,10 @@ def process_incoming_messages(value, full_webhook_data):
             logger.info("Ignoring empty text message.")
             return
 
-        # Simple language detection
         user_lang = 'hi' if any(u'\u0900' <= char <= u'\u097f' for char in txt) else 'en'
         user_name = whatsapp_user.name
 
-        # --- 7. Gather History (Last 10, non-doc) ---
+        # --- 7. Gather History ---
         history = []
         qs = conversation.messages.filter(timestamp__lt=timestamp).order_by('-timestamp')[:10]
         
@@ -205,11 +214,33 @@ def process_incoming_messages(value, full_webhook_data):
                 content = m.text_content or m.caption or f'[{m.message_type}]'
                 history.append({"role": role, "parts": [content]})
         
-        # --- 8. Call Gemini (USING SINGLETON) ---
-        gemini = get_gemini_service()  # ✅ Reuses same instance!
-        reply = gemini.generate_reply(history, txt, user_lang, user_name)
+        # --- 8. Get CACHED GeminiService instance ---
+        gemini = get_gemini_service()
+        
+        # --- 9. Handle quota errors gracefully ---
+        try:
+            reply = gemini.generate_reply(history, txt, user_lang, user_name)
+        except Exception as e:
+            error_msg = str(e)
+            
+            # Check if it's a quota error
+            if '429' in error_msg or 'quota' in error_msg.lower():
+                logger.error(f"🚫 QUOTA EXCEEDED: {error_msg}")
+                
+                # Send friendly message to user
+                quota_msg = (
+                    "क्षमा करें, अभी सिस्टम व्यस्त है। कृपया थोड़ी देर बाद try करें। 🙏"
+                    if user_lang == 'hi' else
+                    "Sorry, system is busy right now. Please try again in a few minutes. 🙏"
+                )
+                WhatsAppService().send_text_message(from_number, quota_msg, conversation)
+                return
+            else:
+                # Other errors, escalate
+                logger.error(f"❌ Gemini error: {error_msg}")
+                reply = "[ESCALATE]"
 
-        # --- 9. Process Gemini's Decision ---
+        # --- 10. Process Gemini's Decision ---
         if reply == "[IGNORE]":
             logger.info(f"Gemini classified as [IGNORE]. No reply sent to {from_number}.")
             return
@@ -217,7 +248,6 @@ def process_incoming_messages(value, full_webhook_data):
         if reply == "[ESCALATE]":
             logger.warning(f"⚠️ ESCALATE triggered for: '{txt}' from {from_number}")
             
-            # Check if user is repeatedly asking off-topic questions
             recent_redirects = conversation.messages.filter(
                 direction='outbound',
                 text_content__contains='सिर्फ खेती और मजूर'
@@ -228,7 +258,7 @@ def process_incoming_messages(value, full_webhook_data):
                 text_content__contains='Our team will reach you soon'
             ).count()
             
-            # First strike: Polite redirect (NO BLOCKING)
+            # First strike: Polite redirect
             if recent_redirects == 0 and recent_escalations == 0:
                 redirect_msg = (
                     "मैं सिर्फ खेती और मजूर की मदद कर सकता हूँ 🌾 क्या कोई खेती से related सवाल है?"
@@ -238,7 +268,7 @@ def process_incoming_messages(value, full_webhook_data):
                 WhatsAppService().send_text_message(from_number, redirect_msg, conversation)
                 logger.info(f"↩️ First escalation - sent redirect message")
             
-            # Second strike: Block for 24 hours
+            # Second strike: Block
             elif recent_redirects >= 1 or recent_escalations >= 1:
                 escalation_msg = (
                     "हमारी टीम जल्द ही आपसे संपर्क करेगी।" 
@@ -247,30 +277,27 @@ def process_incoming_messages(value, full_webhook_data):
                 )
                 WhatsAppService().send_text_message(from_number, escalation_msg, conversation)
                 
-                # Apply 24-hour block
                 whatsapp_user.is_blocked = True
                 whatsapp_user.blocked_until = timezone.now() + timezone.timedelta(hours=24)
                 whatsapp_user.save()
-                logger.warning(f"🚫 User {from_number} blocked for 24 hours (2nd escalation)")
+                logger.warning(f"🚫 User {from_number} blocked for 24 hours")
             
             return
 
-        # --- 10. Send the Gemini Reply ---
+        # --- 11. Send the Gemini Reply ---
         if reply:
             WhatsAppService().send_text_message(from_number, reply, conversation)
         else:
-            # Fallback just in case Gemini returns an empty string
-            logger.error("Gemini returned an empty reply. Escalating as a fallback.")
-            escalation_msg = (
+            logger.error("Gemini returned empty reply.")
+            fallback_msg = (
                 "हमारी टीम जल्द ही आपसे संपर्क करेगी।" 
                 if user_lang == 'hi' else 
                 "Our team will reach you soon."
             )
-            WhatsAppService().send_text_message(from_number, escalation_msg, conversation)
+            WhatsAppService().send_text_message(from_number, fallback_msg, conversation)
 
     except Exception as e:
-        logger.error(f"CRITICAL Error in process_incoming_messages: {str(e)}", exc_info=True)
-
+        logger.error(f"CRITICAL Error: {str(e)}", exc_info=True)
 
 def _save_incoming_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp):
     """

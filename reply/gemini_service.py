@@ -539,7 +539,6 @@ class GeminiService:
         
         return "\n".join(formatted)
 
-
     def _log_api_usage(self, call_type, input_tokens, output_tokens):
         """Track API usage for monitoring"""
         total = int(input_tokens + output_tokens)
