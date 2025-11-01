@@ -308,7 +308,7 @@ def process_incoming_messages(value, full_webhook_data):
 
 
 
-    def log_inquiry_details(user_message, bot_reply, whatsapp_user, conversation, language):
+def log_inquiry_details(user_message, bot_reply, whatsapp_user, conversation, language):
         """
         Smart logger - extracts and stores inquiry details in ANY language
         """
@@ -378,6 +378,8 @@ def process_incoming_messages(value, full_webhook_data):
                     reason='unknown_service',
                     potential_service='To be reviewed by admin'
                 )
+
+
 def _save_incoming_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp):
     """
     Internal helper to route incoming message to the correct handler for saving.
