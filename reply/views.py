@@ -220,6 +220,13 @@ def process_incoming_messages(value, full_webhook_data):
         # --- 9. Handle quota errors gracefully ---
         try:
             reply = gemini.generate_reply(history, txt, user_lang, user_name)
+            log_inquiry_details(
+            txt, 
+            reply, 
+            whatsapp_user, 
+            conversation, 
+            user_lang
+        )
         except Exception as e:
             error_msg = str(e)
             
@@ -299,6 +306,78 @@ def process_incoming_messages(value, full_webhook_data):
     except Exception as e:
         logger.error(f"CRITICAL Error: {str(e)}", exc_info=True)
 
+
+
+    def log_inquiry_details(user_message, bot_reply, whatsapp_user, conversation, language):
+        """
+        Smart logger - extracts and stores inquiry details in ANY language
+        """
+        from .models import ServiceInquiry, UnknownQuery
+        import re
+        
+        msg_lower = user_message.lower()
+        
+        # Detect service type (multilingual keywords)
+        service_keywords = {
+            'labor': ['labor', 'labour', 'majur', 'मजूर', 'मजदूर', 'kamgar', 'कामगार', 'worker', 'काम', 'मजुर'],
+            'spray': ['spray', 'फवारणी', 'फवारणि', 'spraying', 'छिडकाव', 'फवारा'],
+            'fertilizer': ['fertilizer', 'खाद', 'खत', 'खते', 'फर्टिलाइजर'],
+            'disease': ['disease', 'रोग', 'बीमारी', 'आजार', 'problem', 'समस्या'],
+            'equipment': ['equipment', 'machine', 'यंत्र', 'मशीन', 'साधन'],
+            'transport': ['transport', 'वाहतूक', 'गाडी', 'vehicle'],
+            'storage': ['storage', 'साठवण', 'भंडारण', 'store'],
+            'price': ['price', 'rate', 'किंमत', 'दर', 'रेट', 'cost', 'खर्च'],
+        }
+        
+        detected_services = []
+        for service, keywords in service_keywords.items():
+            if any(kw in msg_lower for kw in keywords):
+                detected_services.append(service)
+        
+        # If service detected, log it
+        if detected_services or '[escalate]' in bot_reply.lower():
+            
+            # Extract numbers (could be worker count, acres, etc.)
+            numbers = re.findall(r'\d+', user_message)
+            quantity = numbers[0] if numbers else None
+            
+            # Detect urgency
+            urgent_keywords = ['urgent', 'तुरंत', 'आज', 'today', 'अभी', 'now', 'जल्दी', 'emergency']
+            is_urgent = any(kw in msg_lower for kw in urgent_keywords)
+            
+            # Detect location mentions (common places)
+            locations = ['satara', 'सातारा', 'pune', 'पुणे', 'mumbai', 'मुंबई', 'nashik', 'नाशिक']
+            detected_location = next((loc for loc in locations if loc in msg_lower), None)
+            
+            # Check if price was requested
+            asked_price = any(kw in msg_lower for kw in ['price', 'rate', 'किंमत', 'दर', 'रेट'])
+            
+            # Create inquiry record
+            ServiceInquiry.objects.create(
+                whatsapp_user=whatsapp_user,
+                conversation=conversation,
+                service_type=', '.join(detected_services) if detected_services else 'general',
+                service_description=user_message,
+                service_language=language,
+                quantity_needed=f"{quantity}" if quantity else None,
+                location_mentioned=detected_location,
+                urgency='high' if is_urgent else 'medium',
+                original_query=user_message,
+                ai_response=bot_reply,
+                requested_price_info=asked_price,
+                needs_human_review=('[escalate]' in bot_reply.lower() or not detected_services),
+                status='new' if '[escalate]' not in bot_reply.lower() else 'reviewing'
+            )
+            
+            # If we couldn't detect service type, log as unknown
+            if not detected_services and len(user_message) > 10:
+                UnknownQuery.objects.create(
+                    whatsapp_user=whatsapp_user,
+                    query_text=user_message,
+                    query_language=language,
+                    reason='unknown_service',
+                    potential_service='To be reviewed by admin'
+                )
 def _save_incoming_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp):
     """
     Internal helper to route incoming message to the correct handler for saving.

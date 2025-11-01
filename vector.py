@@ -1,78 +1,115 @@
 import google.generativeai as genai
 import json
-import os
 import time
+import sys
 
 # --- CONFIGURATION ---
 INPUT_FILE = "knowledge_base.json"
 OUTPUT_FILE = "vector_database.json"
-EMBEDDING_MODEL = "text-embedding-004" # The new, powerful embedding model
-# We can process 100 chunks in a single API call (batching)
-BATCH_SIZE = 100
-# ---------------------
+EMBEDDING_MODEL = "text-embedding-004"
+BATCH_SIZE = 100  # Gemini allows 100 per batch
+API_KEY = "AIzaSyCh0DeWCZr8m3kF4LDB2A_xoAlqbmKjvgs"  # Replace with your key
 
 def main():
-    # 1. Configure the API key
-    api_key = 'AIzaSyCh0DeWCZr8m3kF4LDB2A_xoAlqbmKjvgs'
-    if not api_key:
-        raise ValueError("GEMINI_API_KEY environment variable not set.")
-    genai.configure(api_key=api_key)
-
-    # 2. Load the text chunks from knowledge_base.json
+    print("=" * 60)
+    print("🔮 CREATING VECTOR DATABASE")
+    print("=" * 60)
+    
+    # 1. Configure API
+    if not API_KEY or API_KEY == "YOUR_API_KEY_HERE":
+        print("❌ Error: Please set your Gemini API key in the script")
+        return
+    
+    genai.configure(api_key=API_KEY)
+    print(f"✅ API configured with model: {EMBEDDING_MODEL}")
+    
+    # 2. Load chunks
     try:
         with open(INPUT_FILE, 'r', encoding='utf-8') as f:
             chunks = json.load(f)
     except FileNotFoundError:
-        print(f"Error: {INPUT_FILE} not found.")
-        print("Please run the `create_knowledge_base.py` script first.")
+        print(f"❌ Error: {INPUT_FILE} not found")
+        print("Please run create_enhanced_knowledge_base.py first")
         return
-
-    print(f"Loaded {len(chunks)} text chunks from {INPUT_FILE}.")
     
-    # 3. Embed the chunks in batches
+    print(f"📦 Loaded {len(chunks)} chunks from {INPUT_FILE}")
+    
+    # 3. Embed in batches
     embedded_chunks = []
-    total_chunks = len(chunks)
-
-    print(f"Starting embedding process using '{EMBEDDING_MODEL}'...")
-
-    for i in range(0, total_chunks, BATCH_SIZE):
-        batch = chunks[i : i + BATCH_SIZE]
+    total_batches = (len(chunks) + BATCH_SIZE - 1) // BATCH_SIZE
+    failed_batches = []
+    
+    print(f"\n🚀 Starting embedding process...")
+    print(f"   Processing in {total_batches} batches of {BATCH_SIZE}")
+    
+    for batch_num in range(0, len(chunks), BATCH_SIZE):
+        batch = chunks[batch_num:batch_num + BATCH_SIZE]
+        batch_index = batch_num // BATCH_SIZE + 1
         
-        # Get the text content for each chunk in the batch
-        texts_to_embed = [chunk['content'] for chunk in batch]
+        print(f"\n📊 Batch {batch_index}/{total_batches} ({len(batch)} chunks)...", end=" ")
         
         try:
-            # Call the embedding model
+            # Extract text content
+            texts = [chunk['content'] for chunk in batch]
+            
+            # Call embedding API
             result = genai.embed_content(
                 model=EMBEDDING_MODEL,
-                content=texts_to_embed,
-                task_type="RETRIEVAL_DOCUMENT" # Important: optimize for RAG
+                content=texts,
+                task_type="RETRIEVAL_DOCUMENT"
             )
             
-            # Combine the original chunk with its new vector
-            for original_chunk, vector in zip(batch, result['embedding']):
+            # Combine chunks with vectors
+            for chunk, vector in zip(batch, result['embedding']):
                 embedded_chunks.append({
-                    "source": original_chunk['source'],
-                    "type": original_chunk['type'],
-                    "content": original_chunk['content'],
-                    "vector": vector # Add the new vector
+                    "source": chunk['source'],
+                    "type": chunk['type'],
+                    "content": chunk['content'],
+                    "vector": vector
                 })
-
-            print(f"  Processed batch {i // BATCH_SIZE + 1} / {total_chunks // BATCH_SIZE + 1}...")
-
-            # Be nice to the API, especially in free tiers
-            time.sleep(1) 
-
+            
+            print("✅")
+            
+            # Rate limiting - be nice to API
+            if batch_index < total_batches:
+                time.sleep(1)
+        
         except Exception as e:
-            print(f"Error processing batch {i}: {e}")
-            print("  Skipping this batch.")
-
-    # 4. Save the new list of embedded chunks
-    with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
-        json.dump(embedded_chunks, f, indent=2, ensure_ascii=False)
-
-    print(f"\n✅ Success! Created {OUTPUT_FILE} with {len(embedded_chunks)} vectors.")
-    print("Your vector database is ready.")
+            print(f"❌ Error: {str(e)}")
+            failed_batches.append(batch_index)
+            
+            # If quota exceeded, wait longer
+            if "quota" in str(e).lower() or "429" in str(e):
+                print("⏳ Quota limit hit, waiting 60 seconds...")
+                time.sleep(60)
+    
+    # 4. Save results
+    if embedded_chunks:
+        with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
+            json.dump(embedded_chunks, f, indent=2, ensure_ascii=False)
+        
+        print("\n" + "=" * 60)
+        print(f"✅ SUCCESS!")
+        print(f"📦 Created {OUTPUT_FILE}")
+        print(f"   Total vectors: {len(embedded_chunks)}")
+        print(f"   Vector dimensions: {len(embedded_chunks[0]['vector'])} (768D)")
+        
+        if failed_batches:
+            print(f"\n⚠️ {len(failed_batches)} batches failed: {failed_batches}")
+            print("   You can re-run to retry failed batches")
+        
+        print("=" * 60)
+        
+        # Show sample
+        print("\n📝 Sample embedded chunk:")
+        sample = embedded_chunks[0]
+        print(f"Source: {sample['source']}")
+        print(f"Type: {sample['type']}")
+        print(f"Content: {sample['content'][:100]}...")
+        print(f"Vector: [{sample['vector'][0]:.6f}, {sample['vector'][1]:.6f}, ...]")
+    else:
+        print("\n❌ No chunks were successfully embedded")
+        print("   Check your API key and quota limits")
 
 if __name__ == "__main__":
     main()
