@@ -198,24 +198,40 @@ def process_incoming_messages(value, full_webhook_data):
         reply = gemini.generate_reply(history, txt, user_lang, user_name)
 
         # --- 9. Process Gemini's Decision ---
+        # --- 9. Process Gemini's Decision ---
         if reply == "[IGNORE]":
             logger.info(f"Gemini classified as [IGNORE]. No reply sent to {from_number}.")
             return
-        
+
         if reply == "[ESCALATE]":
-            logger.info(f"Gemini classified as [ESCALATE]. Sending holding message to {from_number}.")
-            # Send escalation message in the user's language
-            escalation_msg = "Our team will reach you soon." if user_lang == 'en' else "हमारी टीम जल्द ही आपसे संपर्क करेगी।"
+            logger.warning(f"⚠️ ESCALATE triggered for: '{txt}' from {from_number}")
             
-            WhatsAppService().send_text_message(
-                from_number, 
-                escalation_msg, 
-                conversation
-            )
-            # Apply 24-hour block
-            whatsapp_user.is_blocked = True
-            whatsapp_user.blocked_until = timezone.now() + timezone.timedelta(hours=24)
-            whatsapp_user.save()
+            # ✅ Check if user is repeatedly asking off-topic questions
+            recent_escalations = conversation.messages.filter(
+                direction='outbound',
+                text_content__contains='Our team will reach you soon'
+            ).count()
+            
+            # Only block if this is 2nd+ escalation (prevents false positives)
+            if recent_escalations >= 10:
+                escalation_msg = "Our team will reach you soon." if user_lang == 'en' else "हमारी टीम जल्द ही आपसे संपर्क करेगी।"
+                WhatsAppService().send_text_message(from_number, escalation_msg, conversation)
+                
+                # Apply 24-hour block
+                whatsapp_user.is_blocked = True
+                whatsapp_user.blocked_until = timezone.now() + timezone.timedelta(hours=24)
+                whatsapp_user.save()
+                logger.warning(f"🚫 User {from_number} blocked for 24 hours (2nd escalation)")
+            else:
+                # First escalation - just politely redirect
+                redirect_msg = (
+                    "मैं सिर्फ खेती और मजूर की मदद कर सकता हूँ 🌾 क्या कोई खेती से related सवाल है?"
+                    if user_lang == 'hi' else
+                    "I can only help with farming and labor 🌾 Any farming-related questions?"
+                )
+                WhatsAppService().send_text_message(from_number, redirect_msg, conversation)
+                logger.info(f"↩️ First escalation - sent redirect message")
+            
             return
 
         # --- 10. Send the Gemini Reply ---
