@@ -307,78 +307,93 @@ def process_incoming_messages(value, full_webhook_data):
         logger.error(f"CRITICAL Error: {str(e)}", exc_info=True)
 
 
-
 def log_inquiry_details(user_message, bot_reply, whatsapp_user, conversation, language):
-        """
-        Smart logger - extracts and stores inquiry details in ANY language
-        """
-        from .models import ServiceInquiry, UnknownQuery
-        import re
+    """
+    Smart logger - extracts and stores inquiry details in ANY language
+    """
+    from .models import ServiceInquiry, UnknownQuery
+    import re
+    
+    # Skip very short messages
+    if len(user_message.strip()) < 3:
+        return
+    
+    msg_lower = user_message.lower()
+    
+    # ✅ FIX: Map language codes to full names
+    language_map = {
+        'en': 'english',
+        'hi': 'hindi',
+        'mr': 'marathi',
+        'mixed': 'mixed',
+        'english': 'english',
+        'hindi': 'hindi',
+        'marathi': 'marathi',
+    }
+    service_lang = language_map.get(language, 'mixed')
+    
+    # Detect service type (multilingual keywords)
+    service_keywords = {
+        'labor': ['labor', 'labour', 'majur', 'मजूर', 'मजदूर', 'kamgar', 'कामगार', 'worker', 'काम'],
+        'spray': ['spray', 'फवारणी', 'spraying', 'छिडकाव'],
+        'fertilizer': ['fertilizer', 'खाद', 'खत'],
+        'disease': ['disease', 'रोग', 'बीमारी', 'problem'],
+        'equipment': ['equipment', 'machine', 'यंत्र', 'मशीन'],
+        'transport': ['transport', 'वाहतूक', 'vehicle'],
+        'storage': ['storage', 'साठवण', 'भंडारण'],
+        'price': ['price', 'rate', 'किंमत', 'दर', 'cost'],
+    }
+    
+    detected_services = []
+    for service, keywords in service_keywords.items():
+        if any(kw in msg_lower for kw in keywords):
+            detected_services.append(service)
+    
+    # Only log if we detected something or it's an escalation
+    if not detected_services and '[escalate]' not in str(bot_reply).lower():
+        return
+    
+    try:
+        # Extract numbers
+        numbers = re.findall(r'\d+', user_message)
+        quantity = numbers[0] if numbers else None
         
-        msg_lower = user_message.lower()
+        # Detect urgency
+        urgent_keywords = ['urgent', 'तुरंत', 'आज', 'today', 'अभी', 'now', 'जल्दी', 'emergency']
+        is_urgent = any(kw in msg_lower for kw in urgent_keywords)
         
-        # Detect service type (multilingual keywords)
-        service_keywords = {
-            'labor': ['labor', 'labour', 'majur', 'मजूर', 'मजदूर', 'kamgar', 'कामगार', 'worker', 'काम', 'मजुर'],
-            'spray': ['spray', 'फवारणी', 'फवारणि', 'spraying', 'छिडकाव', 'फवारा'],
-            'fertilizer': ['fertilizer', 'खाद', 'खत', 'खते', 'फर्टिलाइजर'],
-            'disease': ['disease', 'रोग', 'बीमारी', 'आजार', 'problem', 'समस्या'],
-            'equipment': ['equipment', 'machine', 'यंत्र', 'मशीन', 'साधन'],
-            'transport': ['transport', 'वाहतूक', 'गाडी', 'vehicle'],
-            'storage': ['storage', 'साठवण', 'भंडारण', 'store'],
-            'price': ['price', 'rate', 'किंमत', 'दर', 'रेट', 'cost', 'खर्च'],
-        }
+        # Detect location
+        locations = ['satara', 'सातारा', 'pune', 'पुणे', 'mumbai', 'मुंबई', 'nashik', 'नाशिक']
+        detected_location = next((loc for loc in locations if loc in msg_lower), None)
         
-        detected_services = []
-        for service, keywords in service_keywords.items():
-            if any(kw in msg_lower for kw in keywords):
-                detected_services.append(service)
+        # Check if price was requested
+        asked_price = any(kw in msg_lower for kw in ['price', 'rate', 'किंमत', 'दर', 'रेट', 'cost'])
         
-        # If service detected, log it
-        if detected_services or '[escalate]' in bot_reply.lower():
-            
-            # Extract numbers (could be worker count, acres, etc.)
-            numbers = re.findall(r'\d+', user_message)
-            quantity = numbers[0] if numbers else None
-            
-            # Detect urgency
-            urgent_keywords = ['urgent', 'तुरंत', 'आज', 'today', 'अभी', 'now', 'जल्दी', 'emergency']
-            is_urgent = any(kw in msg_lower for kw in urgent_keywords)
-            
-            # Detect location mentions (common places)
-            locations = ['satara', 'सातारा', 'pune', 'पुणे', 'mumbai', 'मुंबई', 'nashik', 'नाशिक']
-            detected_location = next((loc for loc in locations if loc in msg_lower), None)
-            
-            # Check if price was requested
-            asked_price = any(kw in msg_lower for kw in ['price', 'rate', 'किंमत', 'दर', 'रेट'])
-            
-            # Create inquiry record
-            ServiceInquiry.objects.create(
-                whatsapp_user=whatsapp_user,
-                conversation=conversation,
-                service_type=', '.join(detected_services) if detected_services else 'general',
-                service_description=user_message,
-                service_language=language,
-                quantity_needed=f"{quantity}" if quantity else None,
-                location_mentioned=detected_location,
-                urgency='high' if is_urgent else 'medium',
-                original_query=user_message,
-                ai_response=bot_reply,
-                requested_price_info=asked_price,
-                needs_human_review=('[escalate]' in bot_reply.lower() or not detected_services),
-                status='new' if '[escalate]' not in bot_reply.lower() else 'reviewing'
-            )
-            
-            # If we couldn't detect service type, log as unknown
-            if not detected_services and len(user_message) > 10:
-                UnknownQuery.objects.create(
-                    whatsapp_user=whatsapp_user,
-                    query_text=user_message,
-                    query_language=language,
-                    reason='unknown_service',
-                    potential_service='To be reviewed by admin'
-                )
-
+        # Truncate long responses
+        ai_response_truncated = str(bot_reply)[:500] if bot_reply else ''
+        
+        # Create inquiry record
+        ServiceInquiry.objects.create(
+            whatsapp_user=whatsapp_user,
+            conversation=conversation,
+            service_type=', '.join(detected_services) if detected_services else 'general',
+            service_description=user_message[:500],  # Truncate long messages
+            service_language=service_lang,
+            quantity_needed=str(quantity) if quantity else None,
+            location_mentioned=detected_location,
+            urgency='high' if is_urgent else 'medium',
+            original_query=user_message[:1000],  # Limit size
+            ai_response=ai_response_truncated,
+            requested_price_info=asked_price,
+            needs_human_review=('[escalate]' in str(bot_reply).lower() or not detected_services),
+            status='new' if '[escalate]' not in str(bot_reply).lower() else 'reviewing'
+        )
+        
+        logger.info(f"✅ Logged inquiry: {', '.join(detected_services) if detected_services else 'general'}")
+        
+    except Exception as e:
+        logger.error(f"❌ Error logging ServiceInquiry: {str(e)}")
+        # Don't crash the webhook if logging fails
 
 def _save_incoming_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp):
     """
