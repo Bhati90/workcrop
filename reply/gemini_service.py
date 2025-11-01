@@ -462,7 +462,7 @@ class GeminiService:
             logger.info("⏭️ Skipping RAG: Not a crop query")
         
         # Build conversation history
-        history_formatted = self._format_history(history[-3:])
+        history_formatted = self._format_history(history[-15:])
         
         # Build knowledge base section
         kb_section = ""
