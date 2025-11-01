@@ -233,32 +233,41 @@ class GeminiService:
 
 
     def _is_spam(self, text):
-        """Improved spam detection"""
+        """Improved spam detection - avoids false positives"""
         lowered = text.strip().lower()
         
-        # Check spam keywords (exact or partial match)
-        for spam_word in SPAM_KEYWORDS:
+        # Updated spam keywords (more specific)
+        SPECIFIC_SPAM = {
+            'test123', 'testing123', 'asdfgh', 'qwerty', 'xyz123',
+            'joke', 'funny', 'meme', 'song lyrics', 'video game',
+            'cricket score', 'ipl', 'match prediction',
+            'movie ticket', 'film', 'entertainment',
+            'paytm offer', 'bank loan', 'credit card offer',
+            'win prize', 'lottery', 'free gift'
+        }
+        
+        # Check spam keywords
+        for spam_word in SPECIFIC_SPAM:
             if spam_word in lowered:
                 return True
         
         # Too short (but allow common words)
-        if len(lowered) < 2 and lowered not in ['hi', 'ok', 'no']:
+        if len(lowered) < 2 and lowered not in ['hi', 'ok', 'no', 'ha', 'ji']:
             return True
         
-        # Gibberish detection (no vowels in 6+ char words)
+        # Gibberish detection (no vowels in long words)
         if len(lowered) > 6:
             vowels = sum(1 for c in lowered if c in 'aeiouआएइईउऊओऔ')
             if vowels == 0:
                 return True
         
-        # ✅ Check if message is just random characters
-        if len(lowered) > 3 and not any(c.isalpha() for c in lowered):
-            return True
+        # Random characters (no alphabets)
+        if len(lowered) > 3:
+            alpha_chars = sum(1 for c in lowered if c.isalpha())
+            if alpha_chars == 0:
+                return True
         
         return False
-        
-        
-
     def _is_labor_request(self, text):
         """Check if message is labor-related"""
         for keyword in LABOR_KEYWORDS:
@@ -303,43 +312,49 @@ class GeminiService:
             info['date'] = f"{dates[-1][0]} {dates[-1][1]}"
         
         return info
-    def _log_api_usage(self, call_type, input_tokens, output_tokens):
-        """Track API usage"""
-        logger.info(f"📊 API Call: {call_type} | Input: {input_tokens}t | Output: {output_tokens}t | Total: {input_tokens + output_tokens}t")
-    def _get_simple_reply(self, history, user_message, user_lang, user_name):
-        """Get simple reply without RAG - uses pre-initialized model"""
-        try:
-            # Format the system prompt with user details
-            formatted_prompt = SYSTEM_PROMPT.format(
-                user_lang=user_lang,
-                user_name=user_name
-            )
-            
-            # Start chat with formatted system instruction IN THE FIRST MESSAGE
-            chat = self.llm.start_chat(history=[])
-            
-            # Send system context + user message together
-            full_prompt = f"""System Context: {formatted_prompt}
+    
 
-    User said: '{user_message}'
-    Reply naturally in {user_lang}. Keep it SHORT (1-2 sentences). Use emoji."""
+    def _get_simple_reply(self, history, user_message, user_lang, user_name):
+        """Get simple reply without RAG - OPTIMIZED"""
+        try:
+            # Build minimal prompt
+            prompt = f"""User said: '{user_message}' in {user_lang}.
+
+    Instructions:
+    - Give a warm, friendly 1-sentence greeting
+    - Ask how you can help with their farm
+    - Reply in {user_lang}
+    - Use 1 emoji (🙏 or 🌾)
+    - Keep it natural and SHORT
+
+    Reply:"""
             
-            response = chat.send_message(full_prompt)
-            return response.text.strip()
+            # Use pre-initialized model
+            chat = self.llm.start_chat(history=[])
+            response = chat.send_message(prompt)
+            reply = response.text.strip()
+            
+            # Log API usage
+            self._log_api_usage("Greeting", len(prompt.split()) * 1.3, len(reply.split()) * 1.3)
+            
+            return reply
         except Exception as e:
             logger.error(f"Simple reply error: {str(e)}")
             return "[ESCALATE]"
+        
 
     def generate_reply(self, history, user_message, user_lang, user_name):
-        """Main reply generation - OPTIMIZED"""
+        """
+        Main reply generation - OPTIMIZED VERSION
+        """
         lowered_message = user_message.strip().lower()
 
-        # --- SPAM FILTER (Keep as is) ---
+        # --- SPAM FILTER ---
         if self._is_spam(lowered_message):
             logger.info(f"🗑️ SPAM detected: '{user_message}'")
             return "[IGNORE]"
 
-        # --- 1. GREETINGS ---
+        # --- 1. GREETINGS (Simple Reply) ---
         if self._is_match(lowered_message, GREETING_WORDS):
             logger.info(f"👋 Greeting detected")
             return self._get_simple_reply(history, user_message, user_lang, user_name)
@@ -347,12 +362,15 @@ class GeminiService:
         # --- 2. ACKNOWLEDGMENTS (NO API CALL) ---
         if self._is_match(lowered_message, ACK_WORDS):
             logger.info(f"✅ Acknowledgment detected")
+            
+            # Very short responses - NO API CALL
             if user_lang == 'hi':
                 responses = ["स्वागत है! 🙏", "ठीक है! 👍", "बिल्कुल ✅"]
             elif user_lang == 'mr':
                 responses = ["स्वागत आहे! 🙏", "ठीक आहे! 👍", "नक्की ✅"]
             else:
                 responses = ["Welcome! 🙏", "Sure! 👍", "Great! ✅"]
+            
             import random
             return random.choice(responses)
         
@@ -360,127 +378,169 @@ class GeminiService:
         if self._is_match(lowered_message, FOLLOW_UP_WORDS):
             logger.info(f"🔄 Follow-up detected")
             
-            # Check if this is ACTUALLY about labor or just a question
+            # Check if this is about labor
             labor_info = self._extract_labor_info(history)
             
             # If we have labor context, give specific update
             if any(labor_info.values()):
                 if user_lang == 'hi':
-                    return f"मैं आपके labor request पर काम कर रहा हूँ। जल्द ही update मिलेगा 👍"
+                    return "मैं आपके मजूर की request पर काम कर रहा हूँ। जल्द ही update मिलेगा 👍"
                 elif user_lang == 'mr':
-                    return f"मी तुमच्या labor request वर काम करत आहे। लवकरच update मिळेल 👍"
+                    return "मी तुमच्या मजूर request वर काम करत आहे। लवकरच update मिळेल 👍"
                 else:
-                    return f"I'm working on your labor request. Will update soon 👍"
+                    return "I'm working on your labor request. Will update soon 👍"
             
-            # Otherwise, treat as normal query and use Gemini
-            # (fall through to RAG section below)
+            # Otherwise, treat as normal query (fall through to RAG)
 
-        # --- 4. LABOR REQUESTS ---
+        # --- 4. LABOR REQUESTS (OPTIMIZED) ---
         if self._is_labor_request(lowered_message):
             logger.info(f"👨‍🌾 Labor request detected")
             
+            # Extract what we already know
             labor_info = self._extract_labor_info(history + [{"role": "user", "parts": [user_message]}])
             
-            # Build MINIMAL prompt (no system instruction)
+            # Build conversation history
+            history_formatted = self._format_history(history[-5:])
+            
+            # Build labor details text
+            labor_details = f"""- Task: {labor_info['task'] or 'Not mentioned'}
+    - Workers: {labor_info['count'] or 'Not mentioned'}
+    - Date: {labor_info['date'] or 'Not mentioned'}
+    - Location: {labor_info['location'] or 'Not mentioned'}"""
+            
+            # Build MINIMAL prompt (no system instruction duplication)
             prompt = f"""Conversation:
-    {self._format_history(history[-5:])}
+    {history_formatted}
 
     User: "{user_message}"
 
-    Known info:
-    - Task: {labor_info['task'] or 'Not mentioned'}
-    - Workers: {labor_info['count'] or 'Not mentioned'}
-    - Date: {labor_info['date'] or 'Not mentioned'}
-    - Location: {labor_info['location'] or 'Not mentioned'}
+    Known details:
+    {labor_details}
 
     Instructions:
     - Reply in {user_lang}
-    - If all 4 known: Confirm booking
-    - If missing: Ask ONLY for missing info (1 question)
+    - If all 4 details known: Confirm you're arranging it
+    - If any missing: Ask ONLY for missing info (1 question max)
     - Keep SHORT (2 sentences max)
     - Use emojis: 👨‍🌾 📅 ✅
+    - Do NOT add spray disclaimer for labor queries
 
     Reply:"""
             
             try:
+                # Use pre-initialized model
                 chat = self.llm.start_chat(history=[])
                 response = chat.send_message(prompt)
-                return response.text.strip()
+                reply = response.text.strip()
+                
+                # Log API usage
+                self._log_api_usage("Labor Query", len(prompt.split()) * 1.3, len(reply.split()) * 1.3)
+                
+                return reply
             except Exception as e:
                 logger.error(f"Labor flow error: {e}")
                 return "[ESCALATE]"
 
-        # --- 5. FARM/CROP QUERIES (RAG) ---
+        # --- 5. FARM/CROP QUERIES (OPTIMIZED RAG) ---
         logger.info(f"🌾 Farm query - Running RAG")
-
-        # ✅ Check if query is actually about crops/sprays
-        crop_related_keywords = [
-            'spray', 'फवारणी', 'crop', 'फसल', 'fertilizer', 'खाद', 
-            'pest', 'कीट', 'disease', 'रोग', 'product', 'उत्पाद'
+        
+        # Check if query is ACTUALLY about crops/sprays
+        crop_keywords = [
+            'spray', 'फवारणी', 'crop', 'फसल', 'फसलं', 'fertilizer', 'खाद', 
+            'pest', 'कीट', 'disease', 'रोग', 'बीमारी', 'product', 'उत्पाद',
+            'grape', 'अंगूर', 'द्राक्ष', 'powder', 'पावडर', 'chemical', 'रसायन'
         ]
-
-        is_crop_query = any(keyword in lowered_message for keyword in crop_related_keywords)
-
+        
+        is_crop_query = any(keyword in lowered_message for keyword in crop_keywords)
+        
         # Only do RAG search if crop-related
         if is_crop_query:
             retrieved_context = self.search_knowledge_base(user_message, top_k=3)
+            logger.info("🔍 RAG Search: Found context for crop query")
         else:
-            retrieved_context = ""  # No RAG for labor/general queries
-
-        # Build prompt
+            retrieved_context = ""
+            logger.info("⏭️ Skipping RAG: Not a crop query")
+        
+        # Build conversation history
+        history_formatted = self._format_history(history[-3:])
+        
+        # Build knowledge base section
+        kb_section = ""
+        if retrieved_context:
+            kb_section = f"\nKnowledge base:\n{retrieved_context}"
+        
+        # Build MINIMAL prompt
+        disclaimer_text = "(कृपया फवारणी करण्यापूर्वी तुमच्या प्लॉटची परिस्थिती आणि हवामान तपासून घ्या.)"
+        
         prompt = f"""Recent conversation:
-        {self._format_history(history[-3:])}
+    {history_formatted}
 
-        User: "{user_message}"
+    User: "{user_message}"
+    {kb_section}
 
-        {"Knowledge base:\n" + retrieved_context if retrieved_context else ""}
+    Instructions:
+    - Reply in {user_lang}
+    - Keep SHORT (2 sentences max)
+    - DISCLAIMER RULE: Add the disclaimer ONLY IF:
+    1. You mention a SPECIFIC product name (like Ranman, Profiler, Emamectin, Score, etc.)
+    2. AND the query is about spraying/fertilizer
+    - DO NOT add disclaimer for:
+    - Labor/worker discussions
+    - General greetings
+    - Questions without product names
+    - Follow-up questions
+    - If no relevant info: Say "मुझे इसके बारे में पक्की जानकारी नहीं है"
+    - Use emojis: 🌾 🍇 ✅
 
-        Instructions:
-        - Reply in {user_lang}
-        - Keep SHORT (2 sentences max)
-        - **DISCLAIMER RULE**: Add `(कृपया फवारणी करण्यापूर्वी...)` **ONLY IF**:
-        1. You mention a SPECIFIC product name (Ranman, Profiler, Emamectin, etc.)
-        2. Query is about spraying/fertilizer
-        - **DO NOT add disclaimer** if:
-        - Talking about labor/workers
-        - General greetings/acknowledgments
-        - No specific product mentioned
-        - Use emojis: 🌾 🍇 ✅
-
-        Reply:"""
+    Reply:"""
 
         try:
+            # Use pre-initialized model
             chat = self.llm.start_chat(history=[])
             response = chat.send_message(prompt)
-            self._log_api_usage(
-                    "RAG Query",
-                    len(prompt.split()) * 1.3,  # Rough token estimate
-                    len(response.text.split()) * 1.3
-                )
             reply = response.text.strip()
             
-            # ✅ SAFETY CHECK: Remove disclaimer if not crop-related
-            disclaimer = "(कृपया फवारणी करण्यापूर्वी तुमच्या प्लॉटची परिस्थिती आणि हवामान तपासून घ्या.)"
-            if not is_crop_query and disclaimer in reply:
-                reply = reply.replace(disclaimer, "").strip()
+            # SAFETY CHECK: Remove disclaimer if not crop-related
+            if not is_crop_query and disclaimer_text in reply:
+                reply = reply.replace(disclaimer_text, "").strip()
                 logger.info("🧹 Removed incorrect disclaimer from non-crop query")
             
+            # Also check if disclaimer is added without product name
+            product_names = [
+                'ranman', 'profiler', 'emamectin', 'score', 'ridomil', 
+                'mancozeb', 'carbendazim', 'imidacloprid', 'copper', 'sulphur'
+            ]
+            has_product = any(prod in reply.lower() for prod in product_names)
+            
+            if disclaimer_text in reply and not has_product:
+                reply = reply.replace(disclaimer_text, "").strip()
+                logger.info("🧹 Removed disclaimer - no product name mentioned")
+            
+            # Log API usage
+            self._log_api_usage("RAG Query", len(prompt.split()) * 1.3, len(reply.split()) * 1.3)
+            
+            logger.info(f"✅ RAG Reply: {reply[:100]}...")
             return reply
+            
         except Exception as e:
-            logger.error(f"RAG error: {e}")
+            logger.error(f"RAG error: {str(e)}", exc_info=True)
             return "[ESCALATE]"
-
-
-    # ✅ Helper method to format history efficiently
+        
     def _format_history(self, messages):
-        """Format history concisely"""
+        """Format conversation history concisely"""
         if not messages:
             return "No previous conversation"
         
         formatted = []
         for msg in messages:
             role = "User" if msg['role'] == 'user' else "Bot"
-            content = msg['parts'][0][:100]  # Limit to 100 chars
+            content = msg['parts'][0][:100]
             formatted.append(f"{role}: {content}")
         
         return "\n".join(formatted)
+
+
+    def _log_api_usage(self, call_type, input_tokens, output_tokens):
+        """Track API usage for monitoring"""
+        total = int(input_tokens + output_tokens)
+        logger.info(f"📊 API Call: {call_type} | In: {int(input_tokens)}t | Out: {int(output_tokens)}t | Total: {total}t")
