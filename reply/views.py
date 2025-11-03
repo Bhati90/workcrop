@@ -112,7 +112,7 @@ def whatsapp_webhook(request):
 from .gemini_service import GeminiService
 from django.utils import timezone
 
-SPAM_KEYWORDS = ['xxx', 'bank', 'password', 'joke', 'random', 'movie', 'cricket']  # Expand as needed
+SPAM_KEYWORDS = ['xxx', 'joke', 'random', 'movie', 'cricket']  # Expand as needed
 
 ESCALATE_KEYWORDS = ['help', 'urgent', 'complaint', 'problem', 'error']
 # Add this at the TOP of webhooks.py (after imports)

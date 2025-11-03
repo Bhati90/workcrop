@@ -194,7 +194,7 @@ SPAM_KEYWORDS = {
     'test123', 'testing', 'asdfgh', 'xyz123',  # Actual spam
     'joke', 'song', 'video game', 'movie ticket',  # Entertainment
     'cricket score', 'ipl', 'match',  # Sports
-    'paytm offer', 'bank loan', 'credit card'  # Finance spam
+    'paytm offer',   # Finance spam
 }
 
 
