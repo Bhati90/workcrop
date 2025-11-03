@@ -17,7 +17,8 @@ from .models import WhatsAppUser, Conversation, Message, MediaFile, WebhookLog, 
 from .service import WhatsAppService
 
 logger = logging.getLogger(__name__)
-
+from .multi_gemini_service import get_multi_gemini_service
+from .gemini_service import SYSTEM_PROMPT
 
 @require_http_methods(["POST"])
 def add_contact_api(request):
@@ -215,11 +216,29 @@ def process_incoming_messages(value, full_webhook_data):
                 history.append({"role": role, "parts": [content]})
         
         # --- 8. Get CACHED GeminiService instance ---
-        gemini = get_gemini_service()
+        ai_service = get_multi_gemini_service()
         
+        # Format system prompt
+        formatted_prompt = SYSTEM_PROMPT.format(
+            user_lang=user_lang,
+            user_name=user_name
+        )
+        query_type = "general"
+        txt_lower = txt.lower()
+        if any(kw in txt_lower for kw in ['hello', 'hi', 'namaste', 'नमस्ते']):
+            query_type = "greeting"
+        elif any(kw in txt_lower for kw in ['ok', 'thanks', 'धन्यवाद', 'ठीक']):
+            query_type = "acknowledgment"
+        elif any(kw in txt_lower for kw in ['labor', 'majur', 'मजूर', 'worker']):
+            query_type = "labor"
+        elif any(kw in txt_lower for kw in ['spray', 'फवारणी', 'crop', 'फसल']):
+            query_type = "rag"
         # --- 9. Handle quota errors gracefully ---
         try:
-            reply = gemini.generate_reply(history, txt, user_lang, user_name)
+            reply = ai_service.generate_reply(system_prompt=formatted_prompt,
+                user_message=txt,
+                history=history,
+                query_type=query_type)
             log_inquiry_details(
             txt, 
             reply, 

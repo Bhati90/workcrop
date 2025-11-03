@@ -305,7 +305,15 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'crop.wsgi.application'
-GEMINI_API_KEY = config('GEMINI_API_KEY')
+# settings.py
+
+# ===== GEMINI API KEYS (Add 5 keys) =====
+# Get free keys from: https://aistudio.google.com/apikey
+
+GEMINI_API_KEY_1 = os.environ.get('GEMINI_API_KEY_1', 'AIzaSyCh0DeWCZr8m3kF4LDB2A_xoAlqbmKjvgs')
+GEMINI_API_KEY_2 = os.environ.get('GEMINI_API_KEY_2', 'AIzaSyDGCAaYBIoySFkgom_KHm6wtk2m12wVLBw')
+# Backward compatibility
+GEMINI_API_KEY = GEMINI_API_KEY_1
 
 AWS_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID')
 AWS_SECRET_ACCESS_KEY = config('AWS_SECRET_ACCESS_KEY')
