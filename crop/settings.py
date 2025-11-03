@@ -268,6 +268,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'reply',
+    'flow',
     'storages',
     'rest_framework',
     'corsheaders',

@@ -22,6 +22,8 @@ from django.conf.urls.static import static
 
 urlpatterns = [
   
+    path('register/whatsapp/', include('flow.urls')),
+   
     path('what/', include('reply.urls')),
     path('admin/', admin.site.urls),
 ]
