@@ -192,9 +192,26 @@ def process_incoming_messages(value, full_webhook_data):
         WhatsAppService().mark_message_as_read(whatsapp_message_id)
 
         # --- 5. We ONLY respond to 'text' messages with AI ---
-        if message_type != 'text':
-            logger.info(f"Ignoring non-text message type '{message_type}' for AI reply.")
+         # --- 5. Handle REACTIONS (Emoji responses) ---
+        if message_type == 'reaction':
+            handle_reaction_response(msg_data, conversation, whatsapp_user, from_number)
             return
+
+        # --- 6. Handle STICKERS (Fun responses) ---
+        if message_type == 'sticker':
+            handle_sticker_response(conversation, whatsapp_user, from_number)
+            return
+
+        # --- 7. Handle IMAGE/VIDEO/DOCUMENT (Polite decline) ---
+        if message_type in ['image', 'video', 'document']:
+            handle_media_not_supported(message_type, from_number, conversation, whatsapp_user)
+            return
+
+        # --- 8. Handle AUDIO (Transcription + AI Response) ---
+        if message_type == 'audio':
+            handle_audio_transcription(msg_data, conversation, whatsapp_user, from_number, timestamp)
+            return
+        
 
         # --- 6. Prepare data for Gemini ---
         txt = msg_data.get('text', {}).get('body', '').strip()
@@ -521,28 +538,256 @@ def handle_video_message(msg_data, conversation, whatsapp_user, whatsapp_message
     whatsapp_user.last_message_at = timestamp
     whatsapp_user.save()
 
+# Add at the top
+from .audio import AudioTranscriptionService
 
-def handle_audio_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp):
-    """Handle audio messages"""
-    audio_data = msg_data.get('audio', {})
-    media_id = audio_data.get('id')
-    mime_type = audio_data.get('mime_type')
+def handle_audio_transcription(msg_data, conversation, whatsapp_user, from_number, timestamp):
+    """
+    Download audio → Transcribe → Process like text message
+    """
+    try:
+        audio_data = msg_data.get('audio', {})
+        audio_id = audio_data.get('id')
+        
+        # Download audio from WhatsApp
+        logger.info(f"🎤 Downloading audio {audio_id}...")
+        audio_bytes, mime_type = WhatsAppService().download_media(audio_id)
+        
+        if not audio_bytes:
+            logger.error("Failed to download audio")
+            error_msg = (
+                "माफ़ करें, ऑडियो सुनने में समस्या हुई। कृपया फिर से भेजें। 🙏"
+                if 'hi' in str(whatsapp_user.name) else
+                "Sorry, couldn't process audio. Please try again. 🙏"
+            )
+            WhatsAppService().send_text_message(from_number, error_msg, conversation)
+            return
+        
+        # Transcribe audio
+        logger.info(f"🎧 Transcribing audio...")
+        transcription_service = AudioTranscriptionService()
+        transcription = transcription_service.transcribe_audio(audio_bytes, mime_type)
+        
+        if not transcription:
+            logger.error("Transcription failed")
+            error_msg = (
+                "माफ़ करें, ऑडियो समझने में समस्या हुई। कृपया text में लिखें। 🙏"
+                if 'hi' in str(whatsapp_user.name) else
+                "Sorry, couldn't understand audio. Please send text. 🙏"
+            )
+            WhatsAppService().send_text_message(from_number, error_msg, conversation)
+            return
+        
+        logger.info(f"✅ Transcribed: {transcription[:100]}...")
+        
+        # Update message with transcription
+        msg_obj = Message.objects.filter(
+            conversation=conversation,
+            media_id=audio_id
+        ).first()
+        
+        if msg_obj:
+            msg_obj.text_content = f"[AUDIO] {transcription}"
+            msg_obj.save()
+        
+        # Detect language
+        user_lang = transcription_service.detect_language(transcription)
+        user_name = whatsapp_user.name
+        
+        # Gather history (exclude media)
+        history = []
+        qs = conversation.messages.filter(timestamp__lt=timestamp).order_by('-timestamp')[:10]
+        
+        for m in reversed(qs):
+            if m.message_type in ('text', 'audio'):
+                role = 'user' if m.direction == 'inbound' else 'model'
+                content = m.text_content or f'[{m.message_type}]'
+                # Remove [AUDIO] prefix for history
+                content = content.replace('[AUDIO] ', '')
+                history.append({"role": role, "parts": [content]})
+        
+        # Process like normal text message
+        ai_service = get_multi_gemini_service()
+        formatted_prompt = SYSTEM_PROMPT.format(
+            user_lang=user_lang,
+            user_name=user_name
+        )
+        
+        query_type = "general"
+        txt_lower = transcription.lower()
+        if any(kw in txt_lower for kw in ['hello', 'hi', 'namaste', 'नमस्ते']):
+            query_type = "greeting"
+        elif any(kw in txt_lower for kw in ['ok', 'thanks', 'धन्यवाद']):
+            query_type = "acknowledgment"
+        elif any(kw in txt_lower for kw in ['labor', 'majur', 'मजूर']):
+            query_type = "labor"
+        elif any(kw in txt_lower for kw in ['spray', 'फवारणी']):
+            query_type = "rag"
+        
+        # Generate AI response
+        try:
+            reply = ai_service.generate_reply(
+                system_prompt=formatted_prompt,
+                user_message=transcription,
+                history=history,
+                query_type=query_type
+            )
+            log_inquiry_details(transcription, reply, whatsapp_user, conversation, user_lang)
+        except Exception as e:
+            logger.error(f"AI error on audio: {str(e)}")
+            reply = "[ESCALATE]"
+        
+        # Handle response (same logic as text)
+        if reply == "[IGNORE]":
+            return
+        
+        if reply == "[ESCALATE]":
+            escalation_msg = (
+                "हमारी टीम जल्द ही आपसे संपर्क करेगी।" 
+                if user_lang == 'hi' else 
+                "Our team will reach you soon."
+            )
+            WhatsAppService().send_text_message(from_number, escalation_msg, conversation)
+            return
+        
+        if reply:
+            WhatsAppService().send_text_message(from_number, reply, conversation)
+        
+    except Exception as e:
+        logger.error(f"Audio handling error: {str(e)}", exc_info=True)
+        error_msg = "Sorry, audio processing failed. Please send text."
+        WhatsAppService().send_text_message(from_number, error_msg, conversation)
+
+
+def handle_media_not_supported(media_type, from_number, conversation, whatsapp_user):
+    """
+    Politely inform user we only support text/audio
+    """
+    # Detect user's preferred language from history
+    last_msg = conversation.messages.filter(
+        direction='inbound',
+        message_type='text'
+    ).order_by('-timestamp').first()
     
-    logger.info(f"Audio message from {whatsapp_user.phone_number}, media_id: {media_id}")
+    user_lang = 'en'
+    if last_msg and last_msg.text_content:
+        if any(u'\u0900' <= char <= u'\u097f' for char in last_msg.text_content):
+            user_lang = 'hi'
     
-    message = create_message(
-        conversation, whatsapp_message_id, 'audio', 'inbound',
-        None, media_id, mime_type, None, 'delivered', timestamp
-    )
+    media_type_names = {
+        'image': ('फोटो', 'Photo'),
+        'video': ('वीडियो', 'Video'),
+        'document': ('डॉक्यूमेंट', 'Document/PDF')
+    }
     
-    download_and_save_media(message, media_id)
+    media_name = media_type_names.get(media_type, ('Media', 'Media'))
     
-    conversation.last_message_preview = "[AUDIO]"
-    conversation.unread_count += 1
-    conversation.save()
+    if user_lang == 'hi':
+        message = f"""धन्यवाद {media_name[0]} भेजने के लिए! 📎
+
+मैं अभी सिर्फ:
+✅ टेक्स्ट मैसेज
+✅ ऑडियो/वॉइस मैसेज
+
+इन्हें समझ सकता हूँ। कृपया अपना सवाल टेक्स्ट या ऑडियो में भेजें। 🙏
+
+खेती और मजूर के बारे में कुछ भी पूछें! 🌾"""
+    else:
+        message = f"""Thank you for sending {media_name[1]}! 📎
+
+I currently understand only:
+✅ Text messages
+✅ Audio/Voice messages
+
+Please send your question as text or audio. 🙏
+
+Ask me anything about farming and labor! 🌾"""
     
-    whatsapp_user.last_message_at = timestamp
-    whatsapp_user.save()
+    WhatsAppService().send_text_message(from_number, message, conversation)
+    logger.info(f"📎 Sent 'media not supported' message for {media_type}")
+
+
+def handle_sticker_response(conversation, whatsapp_user, from_number):
+    """
+    Fun response to stickers based on conversation context
+    """
+    import random
+    
+    # Check recent conversation tone
+    recent_msgs = conversation.messages.filter(
+        direction='inbound',
+        message_type='text'
+    ).order_by('-timestamp')[:3]
+    
+    user_lang = 'en'
+    if recent_msgs.exists():
+        last_text = recent_msgs.first().text_content or ''
+        if any(u'\u0900' <= char <= u'\u097f' for char in last_text):
+            user_lang = 'hi'
+    
+    responses_hi = [
+        "😊 स्टीकर अच्छा है! कोई खेती का सवाल? 🌾",
+        "👍 बढ़िया! मजूर या फसल के बारे में कुछ पूछना है? 👨‍🌾",
+        "😄 मस्त! खेती में कैसे मदद करूं? 🍇"
+    ]
+    
+    responses_en = [
+        "😊 Nice sticker! Any farming questions? 🌾",
+        "👍 Great! Need help with labor or crops? 👨‍🌾",
+        "😄 Cool! How can I help with farming? 🍇"
+    ]
+    
+    response = random.choice(responses_hi if user_lang == 'hi' else responses_en)
+    WhatsAppService().send_text_message(from_number, response, conversation)
+    logger.info(f"😀 Sent sticker response")
+
+
+def handle_reaction_response(msg_data, conversation, whatsapp_user, from_number):
+    """
+    Smart emoji reaction responses
+    """
+    import random
+    
+    reaction_data = msg_data.get('reaction', {})
+    emoji = reaction_data.get('emoji', '👍')
+    
+    # Detect language from recent messages
+    recent_msg = conversation.messages.filter(
+        direction='inbound',
+        message_type='text'
+    ).order_by('-timestamp').first()
+    
+    user_lang = 'en'
+    if recent_msg and recent_msg.text_content:
+        if any(u'\u0900' <= char <= u'\u097f' for char in recent_msg.text_content):
+            user_lang = 'hi'
+    
+    # Map emojis to responses
+    emoji_responses = {
+        '❤️': {
+            'hi': ["धन्यवाद! ❤️ खेती में और कैसे मदद करूं? 🌾", "बहुत अच्छा! ❤️ कोई और सवाल? 👨‍🌾"],
+            'en': ["Thank you! ❤️ How else can I help? 🌾", "Glad to help! ❤️ Any other questions? 👨‍🌾"]
+        },
+        '👍': {
+            'hi': ["बढ़िया! 👍 कुछ और चाहिए? 🌾", "शानदार! 👍 और मदद? 🍇"],
+            'en': ["Great! 👍 Anything else? 🌾", "Perfect! 👍 Need more help? 🍇"]
+        },
+        '🙏': {
+            'hi': ["स्वागत है! 🙏 हमेशा यहाँ हैं 🌾", "कोई बात नहीं! 🙏 फिर पूछिएगा 👨‍🌾"],
+            'en': ["Welcome! 🙏 Always here to help 🌾", "No problem! 🙏 Ask anytime 👨‍🌾"]
+        },
+        '😊': {
+            'hi': ["😊 खुशी हुई मदद करके! कुछ और? 🌾", "😊 बहुत बढ़िया! और सवाल? 🍇"],
+            'en': ["😊 Happy to help! Anything else? 🌾", "😊 Glad you're satisfied! More questions? 🍇"]
+        }
+    }
+    
+    # Get response for emoji (or default)
+    responses = emoji_responses.get(emoji, emoji_responses['👍'])
+    response = random.choice(responses[user_lang])
+    
+    WhatsAppService().send_text_message(from_number, response, conversation)
+    logger.info(f"❤️ Sent reaction response for {emoji}")
 
 
 def handle_document_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp):

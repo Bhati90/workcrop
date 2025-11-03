@@ -44,6 +44,8 @@ class Message(models.Model):
         ('audio', 'Audio'),
         ('document', 'Document'),
         ('template', 'Template'),
+        ('sticker', 'Sticker'),      # ✅ NEW
+        ('reaction', 'Reaction'),
     ]
 
     STATUS_CHOICES = [
