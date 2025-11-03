@@ -447,6 +447,8 @@ def _save_incoming_message(msg_data, conversation, whatsapp_user, whatsapp_messa
         'image': handle_image_message,
         'video': handle_video_message,
         'audio': handle_audio_message,
+        'sticker': handle_sticker_message,    # ✅ ADD THIS
+        'reaction': handle_reaction_message,
         'document': handle_document_message,
         'location': handle_location_message,
         'button': handle_button_message,
@@ -463,6 +465,99 @@ def _save_incoming_message(msg_data, conversation, whatsapp_user, whatsapp_messa
         return handle_unknown_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp)
     
 
+def handle_audio_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp):
+    """Handle incoming audio/voice messages"""
+    try:
+        audio_data = msg_data.get('audio', {})
+        audio_id = audio_data.get('id')
+        mime_type = audio_data.get('mime_type', 'audio/ogg')
+        
+        # Save message to DB first
+        msg_obj = Message.objects.create(
+            conversation=conversation,
+            whatsapp_message_id=whatsapp_message_id,
+            message_type='audio',
+            direction='inbound',
+            media_id=audio_id,
+            mime_type=mime_type,
+            timestamp=timestamp,
+            status='delivered'
+        )
+        
+        # Update conversation preview
+        conversation.last_message_preview = "[AUDIO]"
+        conversation.unread_count += 1
+        conversation.save()
+        
+        whatsapp_user.last_message_at = timestamp
+        whatsapp_user.save()
+        
+        logger.info(f"🎤 Audio message received from {whatsapp_user.phone_number}")
+        return msg_obj
+        
+    except Exception as e:
+        logger.error(f"Error handling audio: {str(e)}")
+        return None
+
+
+def handle_sticker_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp):
+    """Handle incoming stickers"""
+    try:
+        sticker_data = msg_data.get('sticker', {})
+        sticker_id = sticker_data.get('id')
+        mime_type = sticker_data.get('mime_type', 'image/webp')
+        
+        msg_obj = Message.objects.create(
+            conversation=conversation,
+            whatsapp_message_id=whatsapp_message_id,
+            message_type='sticker',
+            direction='inbound',
+            media_id=sticker_id,
+            mime_type=mime_type,
+            timestamp=timestamp,
+            status='delivered'
+        )
+        
+        conversation.last_message_preview = "[STICKER]"
+        conversation.unread_count += 1
+        conversation.save()
+        
+        whatsapp_user.last_message_at = timestamp
+        whatsapp_user.save()
+        
+        logger.info(f"😀 Sticker received from {whatsapp_user.phone_number}")
+        return msg_obj
+        
+    except Exception as e:
+        logger.error(f"Error handling sticker: {str(e)}")
+        return None
+
+
+def handle_reaction_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp):
+    """Handle message reactions"""
+    try:
+        reaction_data = msg_data.get('reaction', {})
+        emoji = reaction_data.get('emoji', '👍')
+        message_id = reaction_data.get('message_id')
+        
+        msg_obj = Message.objects.create(
+            conversation=conversation,
+            whatsapp_message_id=whatsapp_message_id,
+            message_type='reaction',
+            direction='inbound',
+            text_content=emoji,
+            timestamp=timestamp,
+            status='delivered'
+        )
+        
+        logger.info(f"❤️ Reaction {emoji} received from {whatsapp_user.phone_number}")
+        return msg_obj
+        
+    except Exception as e:
+        logger.error(f"Error handling reaction: {str(e)}")
+        return None
+    
+    
 def handle_text_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp):
     """Handle text messages - FIXED"""
     text_content = msg_data.get('text', {}).get('body', '')
