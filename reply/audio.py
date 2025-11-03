@@ -25,30 +25,61 @@ class AudioTranscriptionService:
         No external libraries needed!
         """
         try:
-            # Create temporary file
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.ogg') as temp_audio:
+            # WhatsApp sends "audio/ogg; codecs=opus" - clean it
+            clean_mime_type = mime_type.split(';')[0].strip()
+            
+            # Map WhatsApp MIME types to Gemini-supported ones
+            mime_type_map = {
+                'audio/ogg': 'audio/ogg',
+                'audio/mpeg': 'audio/mpeg',
+                'audio/mp3': 'audio/mpeg',
+                'audio/mp4': 'audio/mp4',
+                'audio/aac': 'audio/aac',
+                'audio/amr': 'audio/amr',
+                'audio/wav': 'audio/wav',
+            }
+            
+            gemini_mime_type = mime_type_map.get(clean_mime_type, 'audio/ogg')
+            
+            # Determine file extension
+            ext_map = {
+                'audio/ogg': '.ogg',
+                'audio/mpeg': '.mp3',
+                'audio/mp4': '.m4a',
+                'audio/aac': '.aac',
+                'audio/amr': '.amr',
+                'audio/wav': '.wav',
+            }
+            
+            extension = ext_map.get(gemini_mime_type, '.ogg')
+            
+            # Create temporary file with correct extension
+            with tempfile.NamedTemporaryFile(delete=False, suffix=extension) as temp_audio:
                 temp_audio.write(audio_bytes)
                 temp_audio_path = temp_audio.name
             
-            logger.info(f"🎤 Uploading audio to Gemini...")
+            logger.info(f"🎤 Uploading audio to Gemini (type: {gemini_mime_type})...")
             
-            # Upload audio directly to Gemini (supports audio/ogg, audio/mp3, etc.)
-            audio_file = genai.upload_file(path=temp_audio_path)
+            # Upload audio with EXPLICIT mime_type
+            audio_file = genai.upload_file(
+                path=temp_audio_path,
+                mime_type=gemini_mime_type  # ✅ FIX: Explicitly set MIME type
+            )
             
             # Gemini 2.0 Flash can process audio natively
             prompt = """
-Listen to this audio message and transcribe it accurately.
+    Listen to this audio message and transcribe it accurately.
 
-Rules:
-- Auto-detect language (Marathi/Hindi/English/Mixed)
-- Write in the SAME language as spoken
-- If Hindi/Marathi, use Devanagari script (देवनागरी)
-- If English, use English script
-- Keep natural and conversational
-- Handle code-mixing (Hinglish/Marathlish)
+    Rules:
+    - Auto-detect language (Marathi/Hindi/English/Mixed)
+    - Write in the SAME language as spoken
+    - If Hindi/Marathi, use Devanagari script (देवनागरी)
+    - If English, use English script
+    - Keep natural and conversational
+    - Handle code-mixing (Hinglish/Marathlish)
 
-Return ONLY the transcription text, nothing else.
-"""
+    Return ONLY the transcription text, nothing else.
+    """
             
             # Generate transcription
             response = self.model.generate_content([prompt, audio_file])
