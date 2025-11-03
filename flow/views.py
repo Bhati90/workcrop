@@ -1020,6 +1020,10 @@ def whatsapp_webhook_view(request):
     return JsonResponse({"status": "success"}, status=200)
 
 
+from django.http import JsonResponse
+
+def test_view(request):
+    return JsonResponse({"status": "ok", "message": "Flow app is working!"})
 
 
 def get_media_url_from_id(media_id):

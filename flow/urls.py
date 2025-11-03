@@ -14,7 +14,7 @@ urlpatterns = [
     path('api/attributes/<int:pk>/', views.attribute_detail_view, name='attribute-detail'),
     # path('api/initiate-call/', views.initiate_whatsapp_call_view, name='initiate_whatsapp_call'),
     # path('api/get-flow-details/<str:flow_id>/', views.get_flow_details_api_view, name='get_flow_details_api'),
-
+    path('test/', views.test_view, name='test-view'),
 #    path('api/whatsapp-forms/', views.get_whatsapp_forms_api, name='get_whatsapp_forms'),
     path('api/whatsapp-forms/<int:form_id>/', views.flow_form_detail_api, name='flow_form_detail'),
     

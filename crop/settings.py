@@ -249,6 +249,7 @@ CSRF_TRUSTED_ORIGINS = [
     'https://workcrop-1.onrender.com',
     'http://localhost:8000',
     'http://127.0.0.1:8000',
+    'https://workcrop-dc8o.vercel.app',
 ]
 REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
@@ -363,7 +364,7 @@ APPEND_SLASH = False  # Prevent automatic slash redirects
 
 CORS_ALLOWED_ORIGINS = config(
     'CORS_ALLOWED_ORIGINS',
-    default='https://workcrop.onrender.com,http://localhost:3000,http://127.0.0.1:3000,http://127.0.0.1:8000',
+    default='https://workcrop.onrender.com,http://localhost:3000,http://127.0.0.1:3000,http://127.0.0.1:8000,https://workcrop-dc8o.vercel.app',
     cast=Csv()
 )
 
