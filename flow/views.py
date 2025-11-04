@@ -59,7 +59,7 @@ def home_page(request):
 # --- Constants ---
 API_VERSION = 'v23.0'
 META_API_URL = f"https://graph.facebook.com/{API_VERSION}"
-PHONE_NUMBER_ID = "705449502657013" # Replace with your Phone Number ID
+PHONE_NUMBER_ID = '694609297073147' # Replace with your Phone Number ID
 META_ACCESS_TOKEN = "EAAhMBt21QaMBPvjRpT7P1mhB0xKD1sb7ZCsal0MfRM6yx3p5hInGYHguN70XRCuo18NeuB2BYlM6e1ZBJtpH1ZBmRg6BZB9MeULcfXWdYptZCpzHzSXa0fFBlAzVJh7ZC22njeo5mgIWKY5ZBsiJrryJTh8sOvBp4HZBy51hnZA7hDegmowduSachpXCvH5vLlVMunBAv6ej41X6143kP5pSEKQfqO6NzlVUnA7ZC4HHTj" # Replace with your Meta Access Token
 WABA_ID = "1477047197063313" # Replace with your WABA ID
 
