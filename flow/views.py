@@ -1949,7 +1949,7 @@ def submit_customized_template(request):
         # Upload media if provided
         media_id = None
         if media_file and not remove_media:
-            media_id = upload_media_to_meta_helper(media_file)
+            media_id = upload_media_to_meta(media_file)
             if not media_id:
                 return JsonResponse({
                     'status': 'error',
@@ -2229,7 +2229,7 @@ def submit_template_to_meta(request):
         # Upload media to Meta if provided
         media_id = None
         if media_file:
-            media_id = upload_media_to_meta_helper(media_file)
+            media_id = upload_media_to_meta(media_file)
             if not media_id:
                 logger.warning("Media upload failed, proceeding without header image")
         
@@ -2319,6 +2319,43 @@ def submit_template_to_meta(request):
         }, status=500)
 
 
+
+def upload_media_to_meta(media_file):
+    """
+    Uploads an image/media file to Meta and returns the media ID.
+    """
+    try:
+        url = f"https://graph.facebook.com/v23.0/{WABA_ID}/media"
+        
+        files = {
+            'file': (media_file.name, media_file, media_file.content_type),
+        }
+        
+        data = {
+            'messaging_product': 'whatsapp',
+            'type': media_file.content_type.split('/')[0]  # 'image', 'video', etc.
+        }
+        
+        headers = {
+            "Authorization": f"Bearer {META_ACCESS_TOKEN}",
+        }
+        
+        logger.info(f"Uploading media: {media_file.name}, type: {media_file.content_type}")
+        
+        response = requests.post(url, files=files, data=data, headers=headers)
+        response_data = response.json()
+        
+        logger.info(f"Media upload response: {json.dumps(response_data, indent=2)}")
+        
+        if response.status_code == 200 and 'id' in response_data:
+            return response_data['id']
+        else:
+            logger.error(f"Media upload failed: {response_data}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"Error uploading media: {e}", exc_info=True)
+        return None
 
 def analyze_requirements_with_ai(requirements):
     """
