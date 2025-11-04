@@ -1949,7 +1949,7 @@ def submit_customized_template(request):
         # Upload media if provided
         media_id = None
         if media_file and not remove_media:
-            media_id = upload_media_to_meta(media_file)
+            media_id = upload_media_to_meta_api(media_file)
             if not media_id:
                 return JsonResponse({
                     'status': 'error',
