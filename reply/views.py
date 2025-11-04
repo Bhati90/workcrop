@@ -123,7 +123,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Cache key for singleton
-GEMINI_SERVICE_CACHE_KEY = 'gemini_service_singletonV4'
+GEMINI_SERVICE_CACHE_KEY = 'gemini_service_singletonV6'
 
 def get_gemini_service():
     """
