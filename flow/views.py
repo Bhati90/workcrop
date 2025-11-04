@@ -1818,8 +1818,6 @@ You are a WhatsApp Business API template expert. Generate 3-4 different template
 USER REQUIREMENTS:
 {requirements}
 
-
-
 META'S TEMPLATE GUIDELINES:
 - UTILITY category: Transactional, account updates, order status
 - MARKETING category: Promotional offers, announcements
@@ -1827,15 +1825,17 @@ META'S TEMPLATE GUIDELINES:
 - Body: Max 1024 characters
 - Header: Optional (TEXT, IMAGE, VIDEO, DOCUMENT)
 - Footer: Optional (max 60 characters)
-- Buttons: Max 3 QUICK_REPLY or 2 CALL_TO_ACTION buttons
-- Language: en, hi, es, pt_BR, etc.
+- Buttons: Max 3 buttons
+  - QUICK_REPLY: Simple reply buttons (no URL or phone)
+  - URL: Website links (must include "url" field)
+  - PHONE_NUMBER: Call buttons (must include "phone_number" field)
+- Language: en, hi, mr, es, pt_BR, etc.
 
-TASK:
-1. Check if any EXISTING template matches requirements (include 1 if found)
-2. Generate 2-3 NEW template variations:
-   - Variation A: Simple text-only (no media)
-   - Variation B: With IMAGE header (suggest but mark as optional)
-   - Variation C: More detailed version with buttons
+CRITICAL BUTTON RULES:
+- NEVER use "CALL_TO_ACTION" as button type
+- For website links: use "URL" type with "url" field
+- For phone calls: use "PHONE_NUMBER" type with "phone_number" field
+- For simple replies: use "QUICK_REPLY" type
 
 OUTPUT FORMAT (JSON):
 {{
@@ -1844,13 +1844,12 @@ OUTPUT FORMAT (JSON):
       "id": "generated_1",
       "source": "generated",
       "name": "template_name_lowercase_underscores",
-      "language": "hi" or "en",
+      "language": "mr" or "hi" or "en",
       "category": "UTILITY" or "MARKETING",
-      "match_score": 85 (only for existing),
-      "description": "Brief description of this template option",
+      "description": "Brief description",
       "has_media": false,
-      "media_type": null or "IMAGE" or "VIDEO",
-      "media_optional": true/false,
+      "media_type": null or "IMAGE",
+      "media_optional": true,
       "components": [
         {{
           "type": "HEADER",
@@ -1860,7 +1859,7 @@ OUTPUT FORMAT (JSON):
         }},
         {{
           "type": "BODY",
-          "text": "नमस्कार {{{{1}}}},\\n\\nमुख्य मजकूर येथे...",
+          "text": "नमस्कार {{{{1}}}},\\n\\nमुख्य मजकूर...",
           "example": {{
             "body_text": [["उदाहरण १", "उदाहरण २"]]
           }}
@@ -1873,29 +1872,27 @@ OUTPUT FORMAT (JSON):
         {{
           "type": "BUTTONS",
           "buttons": [
-            {{"type": "QUICK_REPLY", "text": "बटण १"}},
-            {{"type": "QUICK_REPLY", "text": "बटण २"}}
+            {{"type": "URL", "text": "ऑर्डर ट्रॅक करा", "url": "https://example.com/track/{{{{2}}}}"}},
+            {{"type": "QUICK_REPLY", "text": "मदत हवी"}}
           ],
           "optional": true
         }}
       ],
       "variables_needed": [
-        {{"name": "farmer_name", "description": "शेतकऱ्याचे नाव", "example": "राजू पाटील", "position": 1}},
-        {{"name": "location", "description": "स्थान", "example": "नाशिक", "position": 2}}
+        {{"name": "customer_name", "description": "ग्राहकाचे नाव", "example": "राजू पाटील", "position": 1}}
       ],
       "pros": ["फायदा १", "फायदा २"],
-      "cons": ["तोटा १", "तोटा २"]
+      "cons": ["तोटा १"]
     }}
   ]
 }}
 
-IMPORTANT RULES:
-1. Use Marathi देवनागरी for Indian farmers
-2. Include personalization {{{{1}}}}, {{{{2}}}} with examples
-3. Professional but friendly tone
-4. Mark media and optional components clearly
-5. Provide pros/cons for each option
-6. Generate ONLY valid JSON, no markdown.
+IMPORTANT:
+1. Use Marathi for Indian farmers/businesses
+2. Include proper variable examples
+3. Use CORRECT button types (URL, QUICK_REPLY, PHONE_NUMBER)
+4. Mark optional components
+5. Generate ONLY valid JSON
 """
         
         response = model.generate_content(prompt)
@@ -1915,12 +1912,11 @@ IMPORTANT RULES:
         logger.error(f"Error in template generation: {e}", exc_info=True)
         return None
 
-
 @csrf_exempt
 def submit_customized_template(request):
     """
     Submits user-customized template to Meta.
-    Handles dynamic media addition/removal.
+    Handles all dynamic media and component scenarios.
     """
     if request.method != 'POST':
         return JsonResponse({'status': 'error', 'message': 'Invalid method'}, status=405)
@@ -1943,21 +1939,15 @@ def submit_customized_template(request):
         
         template_data = json.loads(template_data_str)
         
-        # Check if user wants to remove media
-        remove_media = template_data.get('remove_media', False)
+        # Validate template name
+        if not re.match(r'^[a-z0-9_]+$', template_data['name']):
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Template name must be lowercase letters, numbers, and underscores only'
+            }, status=400)
         
-        # Upload media if provided
-        media_id = None
-        if media_file and not remove_media:
-            media_id = upload_media_to_meta(media_file)
-            if not media_id:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': 'Media upload failed'
-                }, status=500)
-        
-        # Build Meta API payload dynamically
-        meta_payload = build_meta_payload(template_data, media_id, remove_media)
+        # Build Meta API payload dynamically based on actual components
+        meta_payload = build_meta_payload_v2(template_data, media_file)
         
         # Submit to Meta
         url = f"https://graph.facebook.com/v23.0/{WABA_ID}/message_templates"
@@ -1991,6 +1981,12 @@ def submit_customized_template(request):
                 'suggestion': get_fix_suggestion(error_details)
             }, status=response.status_code)
             
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON decode error: {e}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Invalid JSON format'
+        }, status=400)
     except Exception as e:
         logger.error(f"Error submitting template: {e}", exc_info=True)
         return JsonResponse({
@@ -1998,9 +1994,11 @@ def submit_customized_template(request):
             'message': str(e)
         }, status=500)
 
-def build_meta_payload(template_data, media_id, remove_media):
+
+def build_meta_payload_v2(template_data, media_file):
     """
-    Dynamically builds Meta API payload based on user customizations.
+    Dynamically builds Meta API payload based on ACTUAL user customizations.
+    Handles all edge cases and component types correctly.
     """
     meta_payload = {
         "name": template_data['name'],
@@ -2009,109 +2007,225 @@ def build_meta_payload(template_data, media_id, remove_media):
         "components": []
     }
     
-    for component in template_data['components']:
-        # Skip optional components if user removed them
+    # Check flags
+    remove_media = template_data.get('remove_media', False)
+    wants_to_add_media = template_data.get('wants_to_add_media', False)
+    
+    for component in template_data.get('components', []):
+        # Skip components marked as removed
         if component.get('removed', False):
+            logger.info(f"Skipping removed component: {component['type']}")
             continue
         
-        meta_component = {"type": component['type']}
+        component_type = component['type']
+        meta_component = {"type": component_type}
         
-        if component['type'] == 'HEADER':
+        # ===== HEADER COMPONENT =====
+        if component_type == 'HEADER':
             header_format = component.get('format', 'TEXT')
             
-            # If user removed media or format is media type, skip the entire header
+            # If user explicitly wants to remove media, skip media headers
             if remove_media and header_format in ['IMAGE', 'VIDEO', 'DOCUMENT']:
-                continue
-            
-            # For media formats without media_id, skip header
-            if header_format in ['IMAGE', 'VIDEO', 'DOCUMENT'] and not media_id:
-                logger.warning(f"Skipping HEADER with format {header_format} - no media provided")
+                logger.info(f"Skipping HEADER - user removed media")
                 continue
             
             meta_component['format'] = header_format
             
-            # Handle TEXT headers
             if header_format == 'TEXT':
-                meta_component['text'] = component.get('text', '')
-            # Handle media headers with media_id
-            elif header_format in ['IMAGE', 'VIDEO', 'DOCUMENT'] and media_id:
-                meta_component['example'] = {
-                    'header_handle': [media_id]
-                }
+                # Text header - must have text
+                header_text = component.get('text', '').strip()
+                if not header_text:
+                    logger.warning("TEXT header has no text, skipping")
+                    continue
+                meta_component['text'] = header_text
+                
+            elif header_format in ['IMAGE', 'VIDEO', 'DOCUMENT']:
+                # Media header - skip if no media file provided
+                if not media_file:
+                    logger.warning(f"Skipping {header_format} header - no media file provided")
+                    continue
+                # For templates, we skip the example - Meta doesn't need it for approval
+                # The actual media will be provided when sending messages
+                # Just include the format, no example needed
+                pass
         
-        elif component['type'] == 'BODY':
-            body_text = component['text']
+        # ===== BODY COMPONENT =====
+        elif component_type == 'BODY':
+            body_text = component.get('text', '').strip()
+            if not body_text:
+                logger.warning("BODY component has no text, skipping")
+                continue
+                
             meta_component['text'] = body_text
             
-            # Extract variables
-            import re
+            # Extract variables like {{1}}, {{2}}
             variables = re.findall(r'\{\{(\d+)\}\}', body_text)
             
-            if variables and 'example' in component:
-                example_values = component['example'].get('body_text', [[]])[0]
-                if example_values:
-                    meta_component['example'] = {'body_text': [example_values]}
+            # If variables exist, add examples
+            if variables:
+                example_data = component.get('example', {})
+                example_values = example_data.get('body_text', [[]])
+                
+                if example_values and len(example_values) > 0 and len(example_values[0]) > 0:
+                    # Ensure we have enough example values for all variables
+                    num_variables = len(variables)
+                    provided_examples = example_values[0]
+                    
+                    if len(provided_examples) >= num_variables:
+                        meta_component['example'] = {
+                            'body_text': [provided_examples[:num_variables]]
+                        }
+                    else:
+                        logger.warning(f"Not enough example values. Need {num_variables}, got {len(provided_examples)}")
         
-        elif component['type'] == 'FOOTER':
-            meta_component['text'] = component.get('text', '')
+        # ===== FOOTER COMPONENT =====
+        elif component_type == 'FOOTER':
+            footer_text = component.get('text', '').strip()
+            if not footer_text:
+                logger.warning("FOOTER component has no text, skipping")
+                continue
+            if len(footer_text) > 60:
+                logger.warning(f"Footer text too long ({len(footer_text)} chars), truncating to 60")
+                footer_text = footer_text[:60]
+            meta_component['text'] = footer_text
         
-        elif component['type'] == 'BUTTONS':
+        # ===== BUTTONS COMPONENT =====
+        elif component_type == 'BUTTONS':
             buttons = component.get('buttons', [])
-            if buttons:  # Only add if buttons exist
-                meta_component['buttons'] = buttons
+            
+            if not buttons or len(buttons) == 0:
+                logger.warning("BUTTONS component has no buttons, skipping")
+                continue
+            
+            # Convert and validate buttons
+            meta_buttons = []
+            for btn in buttons[:3]:  # Max 3 buttons
+                btn_type = btn.get('type', '').upper()
+                btn_text = btn.get('text', '').strip()
+                
+                if not btn_text:
+                    logger.warning(f"Button has no text, skipping")
+                    continue
+                
+                # Fix button type naming
+                if btn_type == 'CALL_TO_ACTION':
+                    # Determine actual type based on presence of URL or phone
+                    if 'url' in btn:
+                        btn_type = 'URL'
+                    elif 'phone_number' in btn:
+                        btn_type = 'PHONE_NUMBER'
+                    else:
+                        logger.warning(f"CALL_TO_ACTION button without URL or phone, defaulting to QUICK_REPLY")
+                        btn_type = 'QUICK_REPLY'
+                
+                meta_btn = {
+                    'type': btn_type,
+                    'text': btn_text[:25]  # Max 25 chars for button text
+                }
+                
+                # Add URL for URL buttons
+                if btn_type == 'URL':
+                    url = btn.get('url', '').strip()
+                    if url:
+                        meta_btn['url'] = url
+                    else:
+                        logger.warning(f"URL button without URL, converting to QUICK_REPLY")
+                        meta_btn['type'] = 'QUICK_REPLY'
+                        meta_btn.pop('url', None)
+                
+                # Add phone number for PHONE_NUMBER buttons
+                elif btn_type == 'PHONE_NUMBER':
+                    phone = btn.get('phone_number', '').strip()
+                    if phone:
+                        meta_btn['phone_number'] = phone
+                    else:
+                        logger.warning(f"PHONE_NUMBER button without number, converting to QUICK_REPLY")
+                        meta_btn['type'] = 'QUICK_REPLY'
+                
+                meta_buttons.append(meta_btn)
+            
+            if meta_buttons:
+                meta_component['buttons'] = meta_buttons
+            else:
+                logger.warning("No valid buttons after processing, skipping BUTTONS component")
+                continue
         
+        # Add the component to payload
         meta_payload['components'].append(meta_component)
     
+    # Validation: Must have at least BODY
+    has_body = any(c['type'] == 'BODY' for c in meta_payload['components'])
+    if not has_body:
+        raise ValueError("Template must have at least a BODY component")
+    
     return meta_payload
-@csrf_exempt
-def upload_image_to_meta_api(request):
-    """
-    API endpoint to upload an image file directly to Meta's WhatsApp Business API
-    and return the Meta Media ID.
-    """
-    if request.method == 'POST':
-        if 'image' not in request.FILES:
-            return JsonResponse({'status': 'error', 'message': 'No image file provided.'}, status=400)
 
-        image_file: InMemoryUploadedFile = request.FILES['image']
+
+def get_fix_suggestion(error_details):
+    """
+    Provides user-friendly suggestions based on Meta API errors.
+    """
+    error_code = error_details.get('code')
+    error_subcode = error_details.get('error_subcode')
+    error_message = error_details.get('message', '').lower()
+    
+    suggestions = {
+        100: "Invalid parameters. Check your template format.",
+        131009: "Media upload issue. Try uploading a different image or skip media.",
+        2388043: "Missing required fields. Ensure all components have necessary data.",
+        2494102: "Invalid media handle. The uploaded media cannot be used for templates.",
+    }
+    
+    # Specific suggestions
+    if 'button' in error_message and 'type' in error_message:
+        return "Button type error. Use QUICK_REPLY, URL, or PHONE_NUMBER for buttons."
+    
+    if 'media' in error_message or 'handle' in error_message:
+        return "Media error. Try submitting template without media first, then add media when sending."
+    
+    if 'variable' in error_message or 'example' in error_message:
+        return "Variable examples issue. Ensure you provide example values for all {{1}}, {{2}} variables."
+    
+    return suggestions.get(error_code, "Check Meta's error message above for details.")
+
+
+def upload_media_to_meta(media_file):
+    """
+    Uploads media to Meta - NOTE: This is for message sending, NOT template creation.
+    For templates, we just specify format without uploading.
+    """
+    try:
+        url = f"https://graph.facebook.com/v23.0/{PHONE_NUMBER_ID}/media"
         
-        # Determine content type (e.g., image/jpeg, image/png)
-        content_type, _ = mimetypes.guess_type(image_file.name)
-        if not content_type or not content_type.startswith('image/'):
-            return JsonResponse({'status': 'error', 'message': 'Invalid file type. Only images are allowed.'}, status=400)
-
-        upload_url = f"{META_API_URL}/{PHONE_NUMBER_ID}/media"
+        files = {
+            'file': (media_file.name, media_file, media_file.content_type),
+        }
+        
+        data = {
+            'messaging_product': 'whatsapp',
+            'type': media_file.content_type.split('/')[0]
+        }
+        
         headers = {
             "Authorization": f"Bearer {META_ACCESS_TOKEN}",
         }
-        files = {
-            'file': (image_file.name, image_file.read(), content_type),
-            'type': (None, content_type), # Important for Meta API
-            'messaging_product': (None, 'whatsapp'),
-        }
-
-        try:
-            response = requests.post(upload_url, headers=headers, files=files)
-            response.raise_for_status() # Raise an exception for HTTP errors
-            meta_response = response.json()
+        
+        logger.info(f"Uploading media: {media_file.name}, type: {media_file.content_type}")
+        
+        response = requests.post(url, files=files, data=data, headers=headers)
+        response_data = response.json()
+        
+        logger.info(f"Media upload response: {json.dumps(response_data, indent=2)}")
+        
+        if response.status_code == 200 and 'id' in response_data:
+            return response_data['id']
+        else:
+            logger.error(f"Media upload failed: {response_data}")
+            return None
             
-            media_id = meta_response.get('id')
-            if media_id:
-                logger.info(f"Image uploaded to Meta, Media ID: {media_id}")
-                return JsonResponse({'status': 'success', 'media_id': media_id})
-            else:
-                logger.error(f"Meta upload response missing media ID: {meta_response}")
-                return JsonResponse({'status': 'error', 'message': 'Meta did not return a media ID.'}, status=500)
-
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Error uploading image to Meta: {e}. Response: {response.text if 'response' in locals() else 'No response.'}", exc_info=True)
-            return JsonResponse({'status': 'error', 'message': f'Failed to upload image to Meta: {e}'}, status=500)
-        except Exception as e:
-            logger.error(f"Unexpected error in upload_image_to_meta_api: {e}", exc_info=True)
-            return JsonResponse({'status': 'error', 'message': f'An unexpected error occurred: {e}'}, status=500)
-
-    return JsonResponse({'status': 'error', 'message': 'Invalid method'}, status=405)
-
+    except Exception as e:
+        logger.error(f"Error uploading media: {e}", exc_info=True)
+        return None
 
 
 
