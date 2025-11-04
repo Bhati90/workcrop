@@ -1993,11 +1993,11 @@ def submit_customized_template(request):
             'status': 'error',
             'message': str(e)
         }, status=500)
-
+    
 def build_meta_payload_v2(template_data, media_file):
     """
     Dynamically builds Meta API payload based on ACTUAL user customizations.
-    Handles all edge cases and component types correctly.
+    For templates, we specify media format but don't upload media examples.
     """
     meta_payload = {
         "name": template_data['name'],
@@ -2008,7 +2008,6 @@ def build_meta_payload_v2(template_data, media_file):
     
     # Check flags
     remove_media = template_data.get('remove_media', False)
-    wants_to_add_media = template_data.get('wants_to_add_media', False)
     
     for component in template_data.get('components', []):
         # Skip components marked as removed
@@ -2039,22 +2038,11 @@ def build_meta_payload_v2(template_data, media_file):
                 meta_component['text'] = header_text
                 
             elif header_format in ['IMAGE', 'VIDEO', 'DOCUMENT']:
-                # CRITICAL: Media headers REQUIRE example field
-                # Skip entirely if no media file is provided
-                if not media_file:
-                    logger.warning(f"Skipping {header_format} header - no media file provided (Meta requires example)")
-                    continue
-                
-                # Upload media and get handle
-                media_handle = upload_media_for_template(media_file)
-                if not media_handle:
-                    logger.error(f"Failed to upload media for {header_format} header, skipping")
-                    continue
-                
-                # Add example with media handle
-                meta_component['example'] = {
-                    'header_handle': [media_handle]
-                }
+                # For media headers in templates:
+                # We only specify the format, NO example needed
+                # The actual media will be provided when sending messages
+                logger.info(f"Adding {header_format} header format (no example needed for template creation)")
+                # Just add format, no example field
         
         # ===== BODY COMPONENT =====
         elif component_type == 'BODY':
@@ -2166,6 +2154,7 @@ def build_meta_payload_v2(template_data, media_file):
         raise ValueError("Template must have at least a BODY component")
     
     return meta_payload
+
 
 
 def upload_media_for_template(media_file):
