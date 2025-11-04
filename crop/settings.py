@@ -242,7 +242,7 @@ SECRET_KEY = 'django-insecure-l6c$=vdsv7n-ng7cd_^6fvi7lig^+_a2!dzg5oy1^a6qklw$9t
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost','https://workcrop-dc8o.vercel.app/']
+ALLOWED_HOSTS = ['127.0.0.1','workcrop.onrender.com','localhost','https://workcrop-dc8o.vercel.app/']
 
 
 # Add this for Render
@@ -437,7 +437,8 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
-    "https://workcrop-dc8o.vercel.app/"
+    "https://workcrop-dc8o.vercel.app/",
+    "https://workcrop.onrender.com"
 ]
 
 # Logging configuration
