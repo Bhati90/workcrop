@@ -2325,7 +2325,7 @@ def upload_media_to_meta(media_file):
     Uploads an image/media file to Meta and returns the media ID.
     """
     try:
-        url = f"https://graph.facebook.com/v23.0/{WABA_ID}/media"
+        url = f"https://graph.facebook.com/v23.0/{PHONE_NUMBER_ID}/media"
         
         files = {
             'file': (media_file.name, media_file, media_file.content_type),
