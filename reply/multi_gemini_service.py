@@ -82,18 +82,18 @@ class MultiGeminiService:
         # Define Gemini models (ordered by preference)
         models = [
             # Tier 1: Best models (highest priority)
-            {
-                'id': 'gemini-2.5-flash', 
-                'name': '2.5-flash-exp',
-                'priority': 1,
-                
-            },
             # {
-            #     'id': 'gemini-1.5-flash-',
-            #     'name': '1.5-flash-002',
+            #     'id': 'gemini-2.5-flash', 
+            #     'name': '2.5-flash-exp',
             #     'priority': 1,
                 
             # },
+            {
+                'id': 'gemini-2.5-pro',
+                'name': '2.0-flash-002',
+                'priority': 1,
+                
+            },
             # Tier 2: Stable models
             # {
             #     'id': 'gemini-1.5-flash',
