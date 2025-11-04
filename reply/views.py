@@ -722,7 +722,15 @@ def handle_audio_transcription(msg_data, conversation, whatsapp_user, from_numbe
             
         except Exception as e:
             logger.error(f"AI error on audio: {str(e)}", exc_info=True)
-            reply = "[ESCALATE]"
+            # reply = "[ESCALATE]"
+            reply = None
+            fallback_msg = (
+                "हमारी टीम आपके सवाल पर काम कर रही है। जल्द संपर्क करेंगे। 🙏"
+                if user_lang == 'hi' else
+                "Our team is working on your question. Will contact soon. 🙏"
+            )
+            WhatsAppService().send_text_message(from_number, fallback_msg, conversation)
+            return
         
         # Handle response (same logic as text)
         if reply == "[IGNORE]":

@@ -105,12 +105,12 @@ class MultiAudioTranscriptionService:
                 'max_audio_hours': 8.4,
             },
             # Tier 3: Backup options
-            {
-                'id': 'gemini-1.5-flash',
-                'name': '1.5-flash',
-                'priority': 3,
-                'max_audio_hours': 8.4,
-            },
+            # {
+            #     'id': 'gemini-1.5-flash',
+            #     'name': '1.5-flash',
+            #     'priority': 3,
+            #     'max_audio_hours': 8.4,
+            # },
             {
                 'id': 'gemini-1.5-pro',
                 'name': '1.5-pro',
