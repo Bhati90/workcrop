@@ -1994,10 +1994,81 @@ def submit_customized_template(request):
             'message': str(e)
         }, status=500)
     
+def upload_media_via_resumable_upload(media_file):
+    """
+    Uses Meta's Resumable Upload API for template media.
+    Uses PHONE_NUMBER_ID instead of APP_ID.
+    Returns media handle (h value) to use in template example.
+    """
+    try:
+        # Reset file pointer and read content
+        media_file.seek(0)
+        file_content = media_file.read()
+        file_length = len(file_content)
+        file_type = media_file.content_type
+        
+        logger.info(f"Starting resumable upload for {media_file.name}")
+        logger.info(f"File size: {file_length} bytes, Type: {file_type}")
+        
+        # Step 1: Create upload session using PHONE_NUMBER_ID
+        session_url = f"https://graph.facebook.com/v23.0/{PHONE_NUMBER_ID}/uploads"
+        session_headers = {
+            "Authorization": f"Bearer {META_ACCESS_TOKEN}",
+            "Content-Type": "application/json"
+        }
+        
+        session_payload = {
+            "file_length": file_length,
+            "file_type": file_type,
+            "file_name": media_file.name
+        }
+        
+        logger.info(f"Creating upload session: {json.dumps(session_payload, indent=2)}")
+        session_response = requests.post(session_url, json=session_payload, headers=session_headers)
+        session_data = session_response.json()
+        
+        logger.info(f"Session response: {json.dumps(session_data, indent=2)}")
+        
+        if 'id' not in session_data:
+            logger.error(f"Failed to create upload session: {session_data}")
+            return None
+        
+        upload_session_id = session_data['id']
+        logger.info(f"Upload session created: {upload_session_id}")
+        
+        # Step 2: Upload file content
+        upload_url = f"https://graph.facebook.com/v23.0/{upload_session_id}"
+        upload_headers = {
+            "Authorization": f"Bearer {META_ACCESS_TOKEN}",
+            "file_offset": "0",
+            "Content-Type": "application/octet-stream"
+        }
+        
+        logger.info(f"Uploading {file_length} bytes to session {upload_session_id}")
+        upload_response = requests.post(
+            upload_url, 
+            data=file_content, 
+            headers=upload_headers
+        )
+        upload_data = upload_response.json()
+        
+        logger.info(f"Upload response: {json.dumps(upload_data, indent=2)}")
+        
+        if 'h' in upload_data:
+            media_handle = upload_data['h']
+            logger.info(f"✅ Media uploaded successfully! Handle: {media_handle}")
+            return media_handle
+        else:
+            logger.error(f"Resumable upload failed - no handle returned: {upload_data}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"Error in resumable upload: {e}", exc_info=True)
+        return None
+    
 def build_meta_payload_v2(template_data, media_file):
     """
-    Dynamically builds Meta API payload based on ACTUAL user customizations.
-    For templates, we specify media format but don't upload media examples.
+    Dynamically builds Meta API payload with proper media upload support.
     """
     meta_payload = {
         "name": template_data['name'],
@@ -2038,11 +2109,23 @@ def build_meta_payload_v2(template_data, media_file):
                 meta_component['text'] = header_text
                 
             elif header_format in ['IMAGE', 'VIDEO', 'DOCUMENT']:
-                # For media headers in templates:
-                # We only specify the format, NO example needed
-                # The actual media will be provided when sending messages
-                logger.info(f"Adding {header_format} header format (no example needed for template creation)")
-                # Just add format, no example field
+                # Media header - upload using Resumable Upload API
+                if not media_file:
+                    logger.warning(f"Skipping {header_format} header - no media file provided")
+                    continue
+                
+                logger.info(f"Uploading media for {header_format} header using Resumable Upload API")
+                media_handle = upload_media_via_resumable_upload(media_file)
+                
+                if not media_handle:
+                    logger.error(f"Failed to upload media for {header_format} header, skipping")
+                    continue
+                
+                # Add example with media handle
+                meta_component['example'] = {
+                    'header_handle': [media_handle]
+                }
+                logger.info(f"✅ Added {header_format} header with handle: {media_handle}")
         
         # ===== BODY COMPONENT =====
         elif component_type == 'BODY':
@@ -2062,7 +2145,6 @@ def build_meta_payload_v2(template_data, media_file):
                 example_values = example_data.get('body_text', [[]])
                 
                 if example_values and len(example_values) > 0 and len(example_values[0]) > 0:
-                    # Ensure we have enough example values for all variables
                     num_variables = len(variables)
                     provided_examples = example_values[0]
                     
@@ -2092,49 +2174,40 @@ def build_meta_payload_v2(template_data, media_file):
                 logger.warning("BUTTONS component has no buttons, skipping")
                 continue
             
-            # Convert and validate buttons
             meta_buttons = []
-            for btn in buttons[:3]:  # Max 3 buttons
+            for btn in buttons[:3]:
                 btn_type = btn.get('type', '').upper()
                 btn_text = btn.get('text', '').strip()
                 
                 if not btn_text:
-                    logger.warning(f"Button has no text, skipping")
                     continue
                 
-                # Fix button type naming
                 if btn_type == 'CALL_TO_ACTION':
-                    # Determine actual type based on presence of URL or phone
                     if 'url' in btn:
                         btn_type = 'URL'
                     elif 'phone_number' in btn:
                         btn_type = 'PHONE_NUMBER'
                     else:
-                        logger.warning(f"CALL_TO_ACTION button without URL or phone, defaulting to QUICK_REPLY")
                         btn_type = 'QUICK_REPLY'
                 
                 meta_btn = {
                     'type': btn_type,
-                    'text': btn_text[:25]  # Max 25 chars for button text
+                    'text': btn_text[:25]
                 }
                 
-                # Add URL for URL buttons
                 if btn_type == 'URL':
                     url = btn.get('url', '').strip()
                     if url:
                         meta_btn['url'] = url
                     else:
-                        logger.warning(f"URL button without URL, converting to QUICK_REPLY")
                         meta_btn['type'] = 'QUICK_REPLY'
                         meta_btn.pop('url', None)
                 
-                # Add phone number for PHONE_NUMBER buttons
                 elif btn_type == 'PHONE_NUMBER':
                     phone = btn.get('phone_number', '').strip()
                     if phone:
                         meta_btn['phone_number'] = phone
                     else:
-                        logger.warning(f"PHONE_NUMBER button without number, converting to QUICK_REPLY")
                         meta_btn['type'] = 'QUICK_REPLY'
                 
                 meta_buttons.append(meta_btn)
@@ -2142,20 +2215,17 @@ def build_meta_payload_v2(template_data, media_file):
             if meta_buttons:
                 meta_component['buttons'] = meta_buttons
             else:
-                logger.warning("No valid buttons after processing, skipping BUTTONS component")
                 continue
         
-        # Add the component to payload
+        # Add component to payload
         meta_payload['components'].append(meta_component)
     
-    # Validation: Must have at least BODY
+    # Validation
     has_body = any(c['type'] == 'BODY' for c in meta_payload['components'])
     if not has_body:
         raise ValueError("Template must have at least a BODY component")
     
     return meta_payload
-
-
 
 def upload_media_for_template(media_file):
     """
