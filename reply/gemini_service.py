@@ -567,7 +567,7 @@ class GeminiService:
             if user_lang == 'hi':
                 return "धन्यवाद! 🙏"
             return "Thank you! 🙏"
-    def _get_simple_reply(self, history, user_message, user_lang, user_name):
+    def _get_simple_reply(self, history, user_message, user_lang    , user_name             ):
         """Get simple reply without RAG - OPTIMIZED"""
         try:
             # Build minimal prompt
@@ -596,7 +596,7 @@ class GeminiService:
             return "[ESCALATE]"
         
 
-    def generate_reply(self, history, user_message, user_lang, user_name, message_type="text"):
+    def generate_reply(self, history, user_message, user_lang, user_name, message_type="text", whatsapp_user=None, conversation=None):
         """
         Main reply generation - OPTIMIZED VERSION
         """
