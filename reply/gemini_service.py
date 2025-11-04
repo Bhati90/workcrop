@@ -274,14 +274,14 @@ class GeminiService:
         models = [
             # Tier 1: Best models
             {'id': 'gemini-2.0-flash-exp', 'name': '2.0-flash', 'priority': 1},
-            {'id': 'gemini-1.5-flash', 'name': '1.5-flash', 'priority': 1},
+            {'id': 'gemini-2.5-flash', 'name': '1.5-flash', 'priority': 1},
             
             # Tier 2: Stable models
-            {'id': 'gemini-1.5-pro', 'name': '1.5-pro', 'priority': 2},
-            {'id': 'gemini-1.5-flash-8b', 'name': '1.5-flash-8b', 'priority': 2},
+            {'id': 'gemini-2.5-pro', 'name': '1.5-pro', 'priority': 2},
+            # {'id': 'gemini-1.5-flash-8b', 'name': '1.5-flash-8b', 'priority': 2},
             
             # Tier 3: Backup
-            {'id': 'gemini-pro', 'name': 'pro', 'priority': 3},
+            {'id': 'gemini-1.5-pro', 'name': 'pro', 'priority': 3},
         ]
         
         # Create instances for each combination
