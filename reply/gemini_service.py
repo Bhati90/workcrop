@@ -274,7 +274,7 @@ class GeminiService:
         models = [
             # Tier 1: Best models
             {'id': 'gemini-2.0-flash-exp', 'name': '2.0-flash', 'priority': 1},
-            {'id': 'gemini-2.5-flash', 'name': '1.5-flash', 'priority': 1},
+            {'id': 'gemini-2.5-flash', 'name': '2.5-flash', 'priority': 1},
             
             # Tier 2: Stable models
             {'id': 'gemini-2.5-pro', 'name': '1.5-pro', 'priority': 2},

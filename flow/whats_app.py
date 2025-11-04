@@ -53,7 +53,7 @@ def send_whatsapp_template(to_number, template_name, components):
     """ 
     access_token ="EAAhMBt21QaMBPCyLtJj6gwjDy6Gai4fZApb3MXuZBZCCm0iSEd8ZCZCJdkRt4cOtvhyeFLZCNUwitFaLZA3ZCwv7enN6FBFgDMAOKl7LMx0J2kCjy6Qd6AqnbnhB2bo2tgsdGmn9ZCN5MD6yCgE3shuP62t1spfSB6ZALy1QkNLvIaeWZBcvPH00HHpyW6US4kil2ENZADL4ZCvDLVWV9seSbZCxXYzVCezIenCjhSYtoKTIlJ"
 
-    phone_id = 705449502657013
+    phone_id = 694609297073147
     
     if not all([access_token, phone_id]):
         logger.error("WhatsApp API credentials are not set.")
