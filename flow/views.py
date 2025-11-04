@@ -1994,7 +1994,6 @@ def submit_customized_template(request):
             'message': str(e)
         }, status=500)
 
-
 def build_meta_payload_v2(template_data, media_file):
     """
     Dynamically builds Meta API payload based on ACTUAL user customizations.
@@ -2040,14 +2039,22 @@ def build_meta_payload_v2(template_data, media_file):
                 meta_component['text'] = header_text
                 
             elif header_format in ['IMAGE', 'VIDEO', 'DOCUMENT']:
-                # Media header - skip if no media file provided
+                # CRITICAL: Media headers REQUIRE example field
+                # Skip entirely if no media file is provided
                 if not media_file:
-                    logger.warning(f"Skipping {header_format} header - no media file provided")
+                    logger.warning(f"Skipping {header_format} header - no media file provided (Meta requires example)")
                     continue
-                # For templates, we skip the example - Meta doesn't need it for approval
-                # The actual media will be provided when sending messages
-                # Just include the format, no example needed
-                pass
+                
+                # Upload media and get handle
+                media_handle = upload_media_for_template(media_file)
+                if not media_handle:
+                    logger.error(f"Failed to upload media for {header_format} header, skipping")
+                    continue
+                
+                # Add example with media handle
+                meta_component['example'] = {
+                    'header_handle': [media_handle]
+                }
         
         # ===== BODY COMPONENT =====
         elif component_type == 'BODY':
@@ -2161,6 +2168,47 @@ def build_meta_payload_v2(template_data, media_file):
     return meta_payload
 
 
+def upload_media_for_template(media_file):
+    """
+    Uploads media specifically for template creation.
+    Returns the media handle/ID to use in template's example field.
+    """
+    try:
+        # Use the regular media upload endpoint
+        url = f"https://graph.facebook.com/v23.0/{PHONE_NUMBER_ID}/media"
+        
+        files = {
+            'file': (media_file.name, media_file, media_file.content_type),
+        }
+        
+        data = {
+            'messaging_product': 'whatsapp',
+            'type': media_file.content_type.split('/')[0]  # 'image', 'video', etc.
+        }
+        
+        headers = {
+            "Authorization": f"Bearer {META_ACCESS_TOKEN}",
+        }
+        
+        logger.info(f"Uploading media for template: {media_file.name}, type: {media_file.content_type}")
+        
+        response = requests.post(url, files=files, data=data, headers=headers)
+        response_data = response.json()
+        
+        logger.info(f"Media upload response: {json.dumps(response_data, indent=2)}")
+        
+        if response.status_code == 200 and 'id' in response_data:
+            media_id = response_data['id']
+            logger.info(f"Media uploaded successfully, ID: {media_id}")
+            return media_id
+        else:
+            logger.error(f"Media upload failed: {response_data}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"Error uploading media for template: {e}", exc_info=True)
+        return None
+    
 def get_fix_suggestion(error_details):
     """
     Provides user-friendly suggestions based on Meta API errors.
