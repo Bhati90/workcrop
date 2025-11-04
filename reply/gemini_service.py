@@ -364,7 +364,7 @@ class GeminiService:
             chunk = self.db_chunks[i]
             context += f"📄 {chunk['source']} ({chunk['type']}): {chunk['content']}\n---\n"
         
-        logger.info(f"🔍 RAG: Found {top_k} chunks for query: '{query[:50]}...'")
+        logger.info(f"🔍 RAG: Found {top_k} chunks for query: '{query[:50]}'")
         return context
 
     # --- Helper Functions ---
@@ -822,98 +822,175 @@ class GeminiService:
 
     def _handle_labor_multi(self, history, user_message, user_lang):
         """Labor queries with multi-instance - EXACT SAME LOGIC"""
-        
-        # ✅ SAME: Extract what we already know
-        labor_info = self._extract_labor_info(history + [{"role": "user", "parts": [user_message]}])
-        
-        # ✅ SAME: Build conversation history
-        history_formatted = self._format_history(history[-5:])
-        
-        # ✅ SAME: Build labor details text
-        labor_details = f"""- Task: {labor_info['task'] or 'Not mentioned'}
-    - Workers: {labor_info['count'] or 'Not mentioned'}
-    - Date: {labor_info['date'] or 'Not mentioned'}
-    - Location: {labor_info['location'] or 'Not mentioned'}"""
-        
-        # ✅ SAME: Build MINIMAL prompt (IDENTICAL)
-        prompt = f"""Conversation:
-    {history_formatted}
-
-    User: "{user_message}"
-
-    Known details:
-    {labor_details}
-
-    Instructions:
-    - Reply in {user_lang}
-    - If all 4 details known: Confirm you're arranging it
-    - If any missing: Ask ONLY for missing info (1 question max)
-    - Keep SHORT (2 sentences max)
-    - Use emojis: 👨‍🌾 📅 ✅
-    - Do NOT add spray disclaimer for labor queries
-
-    Reply:"""
-        
-        # ✅ NEW: Select best available API key + model (instead of fixed self.llm)
-        instance = self._select_instance(query_type="labor")
-        
         try:
-            # ✅ NEW: Configure with selected instance's API key
-            genai.configure(api_key=instance.api_key)
+        # ✅ FAILSAFE: Validate all inputs
+            if not isinstance(user_message, str):
+                logger.error(f"❌ Invalid user_message type: {type(user_message)}")
+                user_message = str(user_message)
             
-            # ✅ NEW: Create model with selected instance's model_id
-            model = genai.GenerativeModel(instance.model_id, system_instruction=SYSTEM_PROMPT)
+            user_message = user_message.strip()
             
-            # ✅ SAME: Start chat and send message (IDENTICAL LOGIC)
-            chat = model.start_chat(history=[])
-            response = chat.send_message(prompt)
-            reply = response.text.strip()
+            if not user_message or len(user_message) < 1:
+                logger.error(f"❌ Empty user_message")
+                if user_lang == 'hi':
+                    return "कृपया अपना सवाल भेजें। 🙏"
+                return "Please send your question. 🙏"
             
-            # ✅ NEW: Record usage for this specific instance (quota tracking)
-            instance.record_request()
-            logger.info(f"✅ Labor from {instance.name}")
+            lowered_message = user_message.lower()
+
+            # --- CHECK FOR ILLEGAL CROPS FIRST ---
+            if self._is_illegal_crop(lowered_message):
+                logger.warning(f"🚫 Illegal crop detected: {user_message}")
+                if user_lang == 'hi':
+                    return "क्षमा करें, हम इस प्रकार की फसलों के लिए सेवा नहीं देते। यह हमारे नियमों के विरुद्ध है। 🙏"
+                elif user_lang == 'mr':
+                    return "क्षमस्व, आम्ही या प्रकारच्या पिकांसाठी सेवा देत नाही। हे आमच्या नियमांच्या विरुद्ध आहे. 🙏"
+                else:
+                    return "Sorry, we don't provide services for this type of crop. It's against our policy. 🙏"
+        
+            # ✅ SAME: Extract what we already know
+            labor_info = self._extract_labor_info(history + [{"role": "user", "parts": [user_message]}])
             
-            return reply
+            # ✅ SAME: Build conversation history
+            history_formatted = self._format_history(history[-5:])
+            
+            # ✅ SAME: Build labor details text
+            labor_details = f"""- Task: {labor_info['task'] or 'Not mentioned'}
+        - Workers: {labor_info['count'] or 'Not mentioned'}
+        - Date: {labor_info['date'] or 'Not mentioned'}
+        - Location: {labor_info['location'] or 'Not mentioned'}"""
+            
+            # ✅ SAME: Build MINIMAL prompt (IDENTICAL)
+            prompt = f"""Conversation:
+        {history_formatted}
+
+        User: "{user_message}"
+
+        Known details:
+        {labor_details}
+
+        Instructions:
+        - Reply in {user_lang}
+        - If all 4 details known: Confirm you're arranging it
+        - If any missing: Ask ONLY for missing info (1 question max)
+        - Keep SHORT (2 sentences max)
+        - Use emojis: 👨‍🌾 📅 ✅
+        - Do NOT add spray disclaimer for labor queries
+
+        Reply:"""
+            
+            # ✅ NEW: Select best available API key + model (instead of fixed self.llm)
+            instance = self._select_instance(query_type="labor")
+            
+            try:
+                # ✅ NEW: Configure with selected instance's API key
+                genai.configure(api_key=instance.api_key)
+                
+                # ✅ NEW: Create model with selected instance's model_id
+                model = genai.GenerativeModel(instance.model_id, system_instruction=SYSTEM_PROMPT)
+                
+                # ✅ SAME: Start chat and send message (IDENTICAL LOGIC)
+                chat = model.start_chat(history=[])
+                response = chat.send_message(prompt)
+                reply = response.text.strip()
+                
+                # ✅ NEW: Record usage for this specific instance (quota tracking)
+                instance.record_request()
+                logger.info(f"✅ Labor from {instance.name}")
+                
+                return reply
+                
+            except Exception as e:
+                logger.error(f"Labor error: {e}")
+                # ✅ NEW: Mark this instance as failed (won't use it next time)
+                instance.failure_count += 1
+                return "[ESCALATE]"
             
         except Exception as e:
-            logger.error(f"Labor error: {e}")
-            # ✅ NEW: Mark this instance as failed (won't use it next time)
-            instance.failure_count += 1
-            return "[ESCALATE]"
+            logger.error(f"💥 CRITICAL ERROR in generate_reply: {e}", exc_info=True)
+        
+        # ✅ FAILSAFE: Never crash, always return something
+        if user_lang == 'hi':
+            return "क्षमा करें, technical समस्या है। हमारी टीम आपसे संपर्क करेगी। 🙏"
+        return "Sorry, technical issue. Our team will contact you. 🙏"
+    
+    
     def _handle_rag_multi(self, history, user_message, user_lang, whatsapp_user=None, conversation=None):
-        """RAG queries - EXACT SAME LOGIC with multi-instance"""
+        """RAG queries with multi-instance + user-specific memory - FAILSAFE VERSION"""
         
-        # ✅ SAME: Check if crop-related
-        crop_keywords = ['spray', 'फवारणी', 'crop', 'फसल', ...]
-        is_crop_query = any(keyword in user_message.lower() for keyword in crop_keywords)
+        # ✅ FAILSAFE: Validate user_message first
+        if not isinstance(user_message, str):
+            logger.error(f"❌ Invalid user_message type: {type(user_message)}")
+            user_message = str(user_message)  # Force convert to string
         
-        # ✅ SAME: RAG search if crop-related
-        if is_crop_query:
-            retrieved_context = self.search_knowledge_base(user_message, top_k=3)
-        else:
+        user_message = user_message.strip()
+        
+        if not user_message or len(user_message) < 2:
+            logger.error(f"❌ Empty or too short user_message")
+            if user_lang == 'hi':
+                return "कृपया अपना सवाल फिर से भेजें। 🙏"
+            return "Please send your question again. 🙏"
+        
+        instance = self._select_instance(query_type="rag")
+        
+        try:
+            # Check if crop-related
+            crop_keywords = ['spray', 'फवारणी', 'crop', 'फसल', 'fertilizer', 'खाद', 
+                            'pest', 'कीट', 'disease', 'रोग', 'बीमारी', 'product', 'उत्पाद',
+                            'grape', 'अंगूर', 'द्राक्ष', 'powder', 'पावडर', 'chemical', 'रसायन']
+            
+            # ✅ FAILSAFE: Ensure all keywords are strings
+            crop_keywords = [str(kw) for kw in crop_keywords if kw and isinstance(kw, str)]
+            
+            # ✅ FAILSAFE: Safe keyword check
+            is_crop_query = False
+            try:
+                user_message_lower = user_message.lower()
+                is_crop_query = any(keyword in user_message_lower for keyword in crop_keywords)
+            except Exception as e:
+                logger.error(f"❌ Error in keyword check: {e}")
+                is_crop_query = False
+            
+            # Check if asking about orders/history
+            order_keywords = ['order', 'आर्डर', 'inquiry', 'पूछताछ', 'booking', 'बुकिंग', 
+                            'last time', 'पिछली बार', 'मेरा ऑर्डर']
+            
+            # ✅ FAILSAFE: Safe order check
+            is_order_query = False
+            try:
+                is_order_query = any(kw in user_message_lower for kw in order_keywords)
+            except Exception as e:
+                logger.error(f"❌ Error in order check: {e}")
+                is_order_query = False
+            
+            # Get user's order history if asking about orders
+            user_history = ""
+            if is_order_query and whatsapp_user and conversation:
+                try:
+                    user_history = self._get_user_order_history(whatsapp_user, conversation) or ""
+                except Exception as e:
+                    logger.error(f"❌ Error getting order history: {e}")
+                    user_history = ""
+            
+            # Only search knowledge base if crop-related
             retrieved_context = ""
-        
-        # ✅ NEW: Check for order history queries
-        order_keywords = ['order', 'आर्डर', 'inquiry', 'booking', 'last time']
-        is_order_query = any(kw in user_message.lower() for kw in order_keywords)
-        
-        # ✅ NEW: Get user's order history if asking
-        user_history = ""
-        if is_order_query and whatsapp_user and conversation:
-            user_history = self._get_user_order_history(whatsapp_user, conversation) or ""
-        
-        # ✅ SAME: Build conversation history
-        history_formatted = self._format_history(history[-15:])
-        
-        # ✅ SAME: Build sections
-        kb_section = f"\nKnowledge base:\n{retrieved_context}" if retrieved_context else ""
-        order_section = f"\n{user_history}" if user_history else ""
-        
-        disclaimer_text = "(कृपया फवारणी करण्यापूर्वी तुमच्या प्लॉटची परिस्थिती आणि हवामान तपासून घ्या.)"
-        
-        # ✅ SAME: Build prompt (IDENTICAL)
-        prompt = f"""Recent conversation:
-    {history_formatted}
+            if is_crop_query:
+                try:
+                    retrieved_context = self.search_knowledge_base(user_message, top_k=3)
+                except Exception as e:
+                    logger.error(f"❌ Error in RAG search: {e}")
+                    retrieved_context = ""
+            
+            # Build conversation history
+            history_formatted = self._format_history(history[-10:])
+            
+            # Build context sections
+            kb_section = f"\nKnowledge base: {retrieved_context}" if retrieved_context else ""
+            order_section = f"\n{user_history}" if user_history else ""
+            
+            disclaimer_text = "(कृपया फवारणी करण्यापूर्वी तुमच्या प्लॉटची परिस्थिती आणि हवामान तपासून घ्या.)"
+            
+            prompt = f"""Conversation: {history_formatted}
 
     User: "{user_message}"
     {kb_section}
@@ -921,38 +998,28 @@ class GeminiService:
 
     Instructions:
     - Reply in {user_lang}
-    - Keep SHORT (2 sentences max)
-    - DISCLAIMER RULE: Add the disclaimer ONLY IF:
-    1. You mention a SPECIFIC product name (like Ranman, Profiler, Emamectin, Score, etc.)
-    2. AND the query is about spraying/fertilizer
-    - DO NOT add disclaimer for:
-    - Labor/worker discussions
-    - General greetings
-    - Questions without product names
-    - Follow-up questions
-    - If no relevant info: Say "मुझे इसके बारे में पक्की जानकारी नहीं है"
-    - Use emojis: 🌾 🍇 ✅
+    - SHORT (2 sentences max)
+    - If user asks about their orders: use "Your past inquiries" info ONLY
+    - NEVER mention other users' data
+    - Add disclaimer ONLY if you mention specific product name
+    - Use 🌾 🍇 ✅
 
     Reply:"""
-        
-        # ✅ NEW: Select best instance for RAG queries
-        instance = self._select_instance(query_type="rag")
-        
-        try:
-            # ✅ NEW: Configure with selected instance
+            
+            # Configure API
             genai.configure(api_key=instance.api_key)
             model = genai.GenerativeModel(instance.model_id, system_instruction=SYSTEM_PROMPT)
             
-            # ✅ SAME: Start chat and send (IDENTICAL)
+            # Generate response
             chat = model.start_chat(history=[])
             response = chat.send_message(prompt)
             reply = response.text.strip()
             
-            # ✅ SAME: All disclaimer checks (IDENTICAL)
+            # Remove disclaimer if not crop-related
             if not is_crop_query and disclaimer_text in reply:
                 reply = reply.replace(disclaimer_text, "").strip()
-                logger.info("🧹 Removed incorrect disclaimer from non-crop query")
             
+            # Check if product name mentioned
             product_names = [
                 'ranman', 'profiler', 'emamectin', 'score', 'ridomil', 
                 'mancozeb', 'carbendazim', 'imidacloprid', 'copper', 'sulphur'
@@ -961,18 +1028,23 @@ class GeminiService:
             
             if disclaimer_text in reply and not has_product:
                 reply = reply.replace(disclaimer_text, "").strip()
-                logger.info("🧹 Removed disclaimer - no product name mentioned")
             
-            # ✅ NEW: Record instance usage
+            # Record success
             instance.record_request()
             logger.info(f"✅ RAG from {instance.name}")
             
             return reply
             
         except Exception as e:
-            logger.error(f"RAG error: {e}")
+            logger.error(f"❌ RAG error: {e}", exc_info=True)
             instance.failure_count += 1
-            return "[ESCALATE]"
+            
+            # ✅ FAILSAFE: Return helpful error message instead of crashing
+            if user_lang == 'hi':
+                return "क्षमा करें, technical समस्या है। कृपया थोड़ी देर बाद try करें या text में लिखें। 🙏"
+            return "Sorry, technical issue. Please try again later or send text. 🙏"
+    
+    
     def _get_user_order_history(self, whatsapp_user, conversation):
         """
         Get THIS user's past inquiries/orders ONLY (not other users)

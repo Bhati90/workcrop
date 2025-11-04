@@ -101,12 +101,12 @@ class MultiGeminiService:
                 'priority': 2,
                 
             },
-            {
-                'id': 'gemini-1.5-flash',
-                'name': '1.5-flash-8b',
-                'priority': 2,
+            # {
+            #     'id': 'gemini-1.5-flash',
+            #     'name': '1.5-flash-8b',
+            #     'priority': 2,
                 
-            },
+            # },
             # Tier 3: Backup models
             {
                 'id': 'gemini-1.5-pro',
