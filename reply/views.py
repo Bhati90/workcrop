@@ -302,7 +302,7 @@ def process_incoming_messages(value, full_webhook_data):
                 logger.info(f"↩️ First escalation - sent redirect message")
             
             # Second strike: Block
-            elif recent_redirects >= 1 or recent_escalations >= 1:
+            elif recent_redirects >= 8 or recent_escalations >= 8:
                 escalation_msg = (
                     "हमारी टीम जल्द ही आपसे संपर्क करेगी।" 
                     if user_lang == 'hi' else 
