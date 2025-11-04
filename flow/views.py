@@ -1998,7 +1998,6 @@ def submit_customized_template(request):
             'message': str(e)
         }, status=500)
 
-
 def build_meta_payload(template_data, media_id, remove_media):
     """
     Dynamically builds Meta API payload based on user customizations.
@@ -2018,19 +2017,25 @@ def build_meta_payload(template_data, media_id, remove_media):
         meta_component = {"type": component['type']}
         
         if component['type'] == 'HEADER':
-            meta_component['format'] = component.get('format', 'IMAGE')
+            header_format = component.get('format', 'TEXT')
+            meta_component['format'] = header_format
             
             # If user removed media, skip HEADER with media
-           
+            if remove_media and header_format in ['IMAGE', 'VIDEO', 'DOCUMENT']:
+                continue
             
-        if component['format'] == 'TEXT':
-            meta_component['text'] = component.get('text', '')
-
+            # Handle TEXT headers
+            if header_format == 'TEXT':
+                meta_component['text'] = component.get('text', '')
+            # For IMAGE/VIDEO/DOCUMENT, just specify format without example
+            # Users will provide media when actually sending messages
+        
         elif component['type'] == 'BODY':
             body_text = component['text']
             meta_component['text'] = body_text
             
             # Extract variables
+            import re
             variables = re.findall(r'\{\{(\d+)\}\}', body_text)
             
             if variables and 'example' in component:
@@ -2049,7 +2054,6 @@ def build_meta_payload(template_data, media_id, remove_media):
         meta_payload['components'].append(meta_component)
     
     return meta_payload
-
 
 @csrf_exempt
 def upload_image_to_meta_api(request):
