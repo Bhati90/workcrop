@@ -194,10 +194,10 @@ LABOR_KEYWORDS = {
 }
     # ✅ More specific spam detection
 SPAM_KEYWORDS = {
-    'test123', 'testing', 'asdfgh', 'xyz123',  # Actual spam
-    'joke', 'song', 'video game', 'movie ticket',  # Entertainment
-    'cricket score', 'ipl', 'match',  # Sports
-    'paytm offer',   # Finance spam
+    # 'test123', 'testing', 'asdfgh', 'xyz123',  # Actual spam
+    # 'joke', 'song', 'video game', 'movie ticket',  # Entertainment
+    # 'cricket score', 'ipl', 'match',  # Sports
+    # 'paytm offer',   # Finance spam
 }
 # Add this after SPAM_KEYWORDS
 ILLEGAL_CROP_KEYWORDS = {
@@ -395,12 +395,7 @@ class GeminiService:
         
         # Updated spam keywords (more specific)
         SPECIFIC_SPAM = {
-            'test123', 'testing123', 'asdfgh', 'qwerty', 'xyz123',
-            'joke', 'funny', 'meme', 'song lyrics', 'video game',
-            'cricket score', 'ipl', 'match prediction',
-            'movie ticket', 'film', 'entertainment',
-            'paytm offer', 'bank loan', 'credit card offer',
-            'win prize', 'lottery', 'free gift'
+            
         }
         
         # Check spam keywords
@@ -670,135 +665,7 @@ class GeminiService:
     
     # --- 5. FARM/CROP QUERIES (RAG) ---
         return self._handle_rag_multi(history, user_message, user_lang)
-            # Extract what we already know
-    #         labor_info = self._extract_labor_info(history + [{"role": "user", "parts": [user_message]}])
-            
-    #         # Build conversation history
-    #         history_formatted = self._format_history(history[-5:])
-            
-    #         # Build labor details text
-    #         labor_details = f"""- Task: {labor_info['task'] or 'Not mentioned'}
-    # - Workers: {labor_info['count'] or 'Not mentioned'}
-    # - Date: {labor_info['date'] or 'Not mentioned'}
-    # - Location: {labor_info['location'] or 'Not mentioned'}"""
-            
-    #         # Build MINIMAL prompt (no system instruction duplication)
-    #         prompt = f"""Conversation:
-    # {history_formatted}
-
-    # User: "{user_message}"
-
-    # Known details:
-    # {labor_details}
-
-    # Instructions:
-    # - Reply in {user_lang}
-    # - If all 4 details known: Confirm you're arranging it
-    # - If any missing: Ask ONLY for missing info (1 question max)
-    # - Keep SHORT (2 sentences max)
-    # - Use emojis: 👨‍🌾 📅 ✅
-    # - Do NOT add spray disclaimer for labor queries
-
-    # Reply:"""
-            
-    #         try:
-    #             # Use pre-initialized model
-    #             chat = self.llm.start_chat(history=[])
-    #             response = chat.send_message(prompt)
-    #             reply = response.text.strip()
-                
-    #             # Log API usage
-    #             self._log_api_usage("Labor Query", len(prompt.split()) * 1.3, len(reply.split()) * 1.3)
-                
-    #             return reply
-    #         except Exception as e:
-    #             logger.error(f"Labor flow error: {e}")
-    #             return "[ESCALATE]"
-
-    #     # --- 5. FARM/CROP QUERIES (OPTIMIZED RAG) ---
-    #     logger.info(f"🌾 Farm query - Running RAG")
-        
-    #     # Check if query is ACTUALLY about crops/sprays
-    #     crop_keywords = [
-    #         'spray', 'फवारणी', 'crop', 'फसल', 'फसलं', 'fertilizer', 'खाद', 
-    #         'pest', 'कीट', 'disease', 'रोग', 'बीमारी', 'product', 'उत्पाद',
-    #         'grape', 'अंगूर', 'द्राक्ष', 'powder', 'पावडर', 'chemical', 'रसायन'
-    #     ]
-        
-    #     is_crop_query = any(keyword in lowered_message for keyword in crop_keywords)
-        
-    #     # Only do RAG search if crop-related
-    #     if is_crop_query:
-    #         retrieved_context = self.search_knowledge_base(user_message, top_k=3)
-    #         logger.info("🔍 RAG Search: Found context for crop query")
-    #     else:
-    #         retrieved_context = ""
-    #         logger.info("⏭️ Skipping RAG: Not a crop query")
-        
-    #     # Build conversation history
-    #     history_formatted = self._format_history(history[-15:])
-        
-    #     # Build knowledge base section
-    #     kb_section = ""
-    #     if retrieved_context:
-    #         kb_section = f"\nKnowledge base:\n{retrieved_context}"
-        
-    #     # Build MINIMAL prompt
-    #     disclaimer_text = "(कृपया फवारणी करण्यापूर्वी तुमच्या प्लॉटची परिस्थिती आणि हवामान तपासून घ्या.)"
-        
-    #     prompt = f"""Recent conversation:
-    # {history_formatted}
-
-    # User: "{user_message}"
-    # {kb_section}
-
-    # Instructions:
-    # - Reply in {user_lang}
-    # - Keep SHORT (2 sentences max)
-    # - DISCLAIMER RULE: Add the disclaimer ONLY IF:
-    # 1. You mention a SPECIFIC product name (like Ranman, Profiler, Emamectin, Score, etc.)
-    # 2. AND the query is about spraying/fertilizer
-    # - DO NOT add disclaimer for:
-    # - Labor/worker discussions
-    # - General greetings
-    # - Questions without product names
-    # - Follow-up questions
-    # - If no relevant info: Say "मुझे इसके बारे में पक्की जानकारी नहीं है"
-    # - Use emojis: 🌾 🍇 ✅
-
-    # Reply:"""
-
-    #     try:
-    #         # Use pre-initialized model
-    #         chat = self.llm.start_chat(history=[])
-    #         response = chat.send_message(prompt)
-    #         reply = response.text.strip()
-            
-    #         # SAFETY CHECK: Remove disclaimer if not crop-related
-    #         if not is_crop_query and disclaimer_text in reply:
-    #             reply = reply.replace(disclaimer_text, "").strip()
-    #             logger.info("🧹 Removed incorrect disclaimer from non-crop query")
-            
-    #         # Also check if disclaimer is added without product name
-    #         product_names = [
-    #             'ranman', 'profiler', 'emamectin', 'score', 'ridomil', 
-    #             'mancozeb', 'carbendazim', 'imidacloprid', 'copper', 'sulphur'
-    #         ]
-    #         has_product = any(prod in reply.lower() for prod in product_names)
-            
-    #         if disclaimer_text in reply and not has_product:
-    #             reply = reply.replace(disclaimer_text, "").strip()
-    #             logger.info("🧹 Removed disclaimer - no product name mentioned")
-            
-    #         # Log API usage
-    #         self._log_api_usage("RAG Query", len(prompt.split()) * 1.3, len(reply.split()) * 1.3)
-            
-    #         logger.info(f"✅ RAG Reply: {reply[:100]}...")
-    #         return reply
-            
-    #     except Exception as e:
-    #         logger.error(f"RAG error: {str(e)}", exc_info=True)
-    #         return "[ESCALATE]"
+          
 
     def _get_simple_reply_multi(self, history, user_message, user_lang, user_name):
         """Greeting with multi-instance"""
