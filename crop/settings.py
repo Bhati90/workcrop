@@ -242,15 +242,12 @@ SECRET_KEY = 'django-insecure-l6c$=vdsv7n-ng7cd_^6fvi7lig^+_a2!dzg5oy1^a6qklw$9t
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
-ALLOWED_HOSTS = ["*"]
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost','https://workcrop-dc8o.vercel.app/']
+
 
 # Add this for Render
-CSRF_TRUSTED_ORIGINS = [
-    'https://workcrop-1.onrender.com',
-    'http://localhost:8000',
-    'http://127.0.0.1:8000',
-    'https://workcrop-dc8o.vercel.app',
-]
+CORS_ALLOW_ALL_ORIGINS = True
+
 REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 1000,
@@ -268,11 +265,12 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    "corsheaders",
     'reply',
     'flow',
     'storages',
     'rest_framework',
-    'corsheaders',
+    
     
 ]
 
@@ -353,8 +351,8 @@ MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/media/'
 
 DATABASES = {
     'default': dj_database_url.config(
-        # default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a.oregon-postgres.render.com/registerdb_od8n',
-        default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a/registerdb_od8n',
+        default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a.oregon-postgres.render.com/registerdb_od8n',
+        # default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a/registerdb_od8n',
         conn_max_age=600,
         conn_health_checks=True,
     )
@@ -362,11 +360,13 @@ DATABASES = {
 # At the end of settings.py
 APPEND_SLASH = False  # Prevent automatic slash redirects
 
-CORS_ALLOWED_ORIGINS = config(
-    'CORS_ALLOWED_ORIGINS',
-    default='https://workcrop.onrender.com,http://localhost:3000,http://127.0.0.1:3000,http://127.0.0.1:8000,https://workcrop-dc8o.vercel.app',
-    cast=Csv()
-)
+# CORS_ALLOWED_ORIGINS = config(
+#     'CORS_ALLOWED_ORIGINS',
+#     default='https://workcrop.onrender.com,http://localhost:3000,http://127.0.0.1:3000,http://127.0.0.1:8000,https://workcrop-dc8o.vercel.app,http://localhost:5173/',
+#     cast=Csv()
+# )
+
+
 
 WHATSAPP_ALLOWED_MEDIA_TYPES = {
     'image': ['image/jpeg', 'image/png'],
@@ -434,6 +434,11 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://workcrop-dc8o.vercel.app/"
+]
 
 # Logging configuration
 LOGGING = {

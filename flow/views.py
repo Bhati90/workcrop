@@ -1648,7 +1648,7 @@ from django.core.files.uploadedfile import InMemoryUploadedFile # Add this impor
 import google.generativeai as genai
 
 # Configure Gemini API
-GEMINI_API_KEY = 'AIzaSyBwgjwmBlcQp2W5pX5UlopmKUOqVjWLcYg'  # Add to settings.py
+GEMINI_API_KEY = 'AIzaSyCh0DeWCZr8m3kF4LDB2A_xoAlqbmKjvgs'  # Add to settings.py
 genai.configure(api_key=GEMINI_API_KEY)
 
 
@@ -1812,89 +1812,96 @@ def generate_template_options_with_ai(requirements):
     try:
         model = genai.GenerativeModel('gemini-2.5-flash')
         
+        # In generate_template_options_with_ai, update the prompt:
+
         prompt = f"""
 You are a WhatsApp Business API template expert. Generate 3-4 different template options based on user requirements.
 
 USER REQUIREMENTS:
 {requirements}
 
-META'S TEMPLATE GUIDELINES:
-- UTILITY category: Transactional, account updates, order status
-- MARKETING category: Promotional offers, announcements
-- Variables: {{{{1}}}}, {{{{2}}}} for personalization
-- Body: Max 1024 characters
-- Header: Optional (TEXT, IMAGE, VIDEO, DOCUMENT)
-- Footer: Optional (max 60 characters)
-- Buttons: Max 3 buttons
-  - QUICK_REPLY: Simple reply buttons (no URL or phone)
-  - URL: Website links (must include "url" field)
-  - PHONE_NUMBER: Call buttons (must include "phone_number" field)
-- Language: en, hi, mr, es, pt_BR, etc.
+META'S CRITICAL RULES:
+1. Variables {{{{1}}}}, {{{{2}}}} must be sequential in BODY text
+2. URL button variables MUST reference variables already in the BODY
+3. NO markdown formatting (**bold**, *italic*) - not supported
+4. URL format: https://example.com/page?param={{{{1}}}} (variable MUST exist in body)
+5. Max 3 buttons: QUICK_REPLY, URL, or PHONE_NUMBER
+6. Body max 1024 chars, Footer max 60 chars
+7. Language: en, hi, mr, es, pt_BR
+8. Category: UTILITY (transactional) or MARKETING (promotional)
 
-CRITICAL BUTTON RULES:
-- NEVER use "CALL_TO_ACTION" as button type
-- For website links: use "URL" type with "url" field
-- For phone calls: use "PHONE_NUMBER" type with "phone_number" field
-- For simple replies: use "QUICK_REPLY" type
+EXAMPLES OF CORRECT TEMPLATES:
+
+Example 1 - With URL variable:
+{{
+  "type": "BODY",
+  "text": "Hi {{{{1}}}}, your order {{{{2}}}} is ready!",
+  "example": {{"body_text": [["John", "ORD123"]]}}
+}}
+{{
+  "type": "BUTTONS",
+  "buttons": [
+    {{"type": "URL", "text": "Track Order", "url": "https://example.com/track?id={{{{2}}}}"}}
+  ]
+}}
+
+Example 2 - No URL variable (safer):
+{{
+  "type": "BUTTONS",
+  "buttons": [
+    {{"type": "URL", "text": "Visit Website", "url": "https://example.com/offers"}},
+    {{"type": "QUICK_REPLY", "text": "Contact Support"}}
+  ]
+}}
 
 OUTPUT FORMAT (JSON):
 {{
   "templates": [
     {{
       "id": "generated_1",
-      "source": "generated",
-      "name": "template_name_lowercase_underscores",
-      "language": "mr" or "hi" or "en",
-      "category": "UTILITY" or "MARKETING",
-      "description": "Brief description",
+      "name": "order_confirmation_simple",
+      "language": "en",
+      "category": "UTILITY",
+      "description": "Simple order confirmation",
       "has_media": false,
-      "media_type": null or "IMAGE",
-      "media_optional": true,
+      "media_type": null,
       "components": [
         {{
-          "type": "HEADER",
-          "format": "TEXT" or "IMAGE",
-          "text": "हेडर मजकूर" (if TEXT),
-          "optional": false
-        }},
-        {{
           "type": "BODY",
-          "text": "नमस्कार {{{{1}}}},\\n\\nमुख्य मजकूर...",
-          "example": {{
-            "body_text": [["उदाहरण १", "उदाहरण २"]]
-          }}
+          "text": "Hi {{{{1}}}}, your order {{{{2}}}} is confirmed. Total: ${{{{3}}}}. Delivery: {{{{4}}}}.",
+          "example": {{"body_text": [["Sarah", "ORD456", "99.99", "Dec 25"]]}}
         }},
         {{
           "type": "FOOTER",
-          "text": "फूटर मजकूर",
-          "optional": true
+          "text": "Thank you for shopping!"
         }},
         {{
           "type": "BUTTONS",
           "buttons": [
-            {{"type": "URL", "text": "ऑर्डर ट्रॅक करा", "url": "https://example.com/track/{{{{2}}}}"}},
-            {{"type": "QUICK_REPLY", "text": "मदत हवी"}}
-          ],
-          "optional": true
+            {{"type": "URL", "text": "Track", "url": "https://example.com/track?order={{{{2}}}}"}},
+            {{"type": "QUICK_REPLY", "text": "Help"}}
+          ]
         }}
       ],
       "variables_needed": [
-        {{"name": "customer_name", "description": "ग्राहकाचे नाव", "example": "राजू पाटील", "position": 1}}
+        {{"name": "name", "position": 1, "example": "Sarah"}},
+        {{"name": "order_id", "position": 2, "example": "ORD456"}},
+        {{"name": "amount", "position": 3, "example": "99.99"}},
+        {{"name": "date", "position": 4, "example": "Dec 25"}}
       ],
-      "pros": ["फायदा १", "फायदा २"],
-      "cons": ["तोटा १"]
+      "pros": ["Clear", "Professional"],
+      "cons": ["Basic design"]
     }}
   ]
 }}
 
-IMPORTANT:
-1. Use Marathi for Indian farmers/businesses
-2. Include proper variable examples
-3. Use CORRECT button types (URL, QUICK_REPLY, PHONE_NUMBER)
-4. Mark optional components
-5. Generate ONLY valid JSON
+CRITICAL:
+- NO IMAGE headers (will be added later when sending)
+- URL variables MUST exist in body text
+- NO markdown formatting
+- Sequential variables only
+- Generate ONLY valid JSON
 """
-        
         response = model.generate_content(prompt)
         response_text = response.text.strip()
         
@@ -1997,7 +2004,7 @@ def submit_customized_template(request):
 def upload_media_via_resumable_upload(media_file):
     """
     Uses Meta's Resumable Upload API for template media.
-    Uses PHONE_NUMBER_ID instead of APP_ID.
+    MUST use WABA_ID (not PHONE_NUMBER_ID) for uploads endpoint.
     Returns media handle (h value) to use in template example.
     """
     try:
@@ -2010,8 +2017,8 @@ def upload_media_via_resumable_upload(media_file):
         logger.info(f"Starting resumable upload for {media_file.name}")
         logger.info(f"File size: {file_length} bytes, Type: {file_type}")
         
-        # Step 1: Create upload session using PHONE_NUMBER_ID
-        session_url = f"https://graph.facebook.com/v23.0/{PHONE_NUMBER_ID}/uploads"
+        # Step 1: Create upload session using WABA_ID (NOT PHONE_NUMBER_ID)
+        session_url = f"https://graph.facebook.com/v23.0/{WABA_ID}/uploads"
         session_headers = {
             "Authorization": f"Bearer {META_ACCESS_TOKEN}",
             "Content-Type": "application/json"
@@ -2064,11 +2071,12 @@ def upload_media_via_resumable_upload(media_file):
             
     except Exception as e:
         logger.error(f"Error in resumable upload: {e}", exc_info=True)
-        return None
-    
+        return None  
+
 def build_meta_payload_v2(template_data, media_file):
     """
-    Dynamically builds Meta API payload with proper media upload support.
+    Builds Meta API payload.
+    Uses QUICK_REPLY buttons only for maximum reliability.
     """
     meta_payload = {
         "name": template_data['name'],
@@ -2077,11 +2085,9 @@ def build_meta_payload_v2(template_data, media_file):
         "components": []
     }
     
-    # Check flags
     remove_media = template_data.get('remove_media', False)
     
     for component in template_data.get('components', []):
-        # Skip components marked as removed
         if component.get('removed', False):
             logger.info(f"Skipping removed component: {component['type']}")
             continue
@@ -2093,7 +2099,6 @@ def build_meta_payload_v2(template_data, media_file):
         if component_type == 'HEADER':
             header_format = component.get('format', 'TEXT')
             
-            # If user explicitly wants to remove media, skip media headers
             if remove_media and header_format in ['IMAGE', 'VIDEO', 'DOCUMENT']:
                 logger.info(f"Skipping HEADER - user removed media")
                 continue
@@ -2101,31 +2106,24 @@ def build_meta_payload_v2(template_data, media_file):
             meta_component['format'] = header_format
             
             if header_format == 'TEXT':
-                # Text header - must have text
                 header_text = component.get('text', '').strip()
                 if not header_text:
                     logger.warning("TEXT header has no text, skipping")
                     continue
+                
+                # Check if variable at start or end
+                if header_text.startswith('{{') or header_text.endswith('}}'):
+                    logger.warning(f"TEXT header has variable at start/end, adding prefix/suffix")
+                    if header_text.startswith('{{'):
+                        header_text = 'Hello ' + header_text
+                    if header_text.endswith('}}'):
+                        header_text = header_text + '!'
+                
                 meta_component['text'] = header_text
                 
             elif header_format in ['IMAGE', 'VIDEO', 'DOCUMENT']:
-                # Media header - upload using Resumable Upload API
-                if not media_file:
-                    logger.warning(f"Skipping {header_format} header - no media file provided")
-                    continue
-                
-                logger.info(f"Uploading media for {header_format} header using Resumable Upload API")
-                media_handle = upload_media_via_resumable_upload(media_file)
-                
-                if not media_handle:
-                    logger.error(f"Failed to upload media for {header_format} header, skipping")
-                    continue
-                
-                # Add example with media handle
-                meta_component['example'] = {
-                    'header_handle': [media_handle]
-                }
-                logger.info(f"✅ Added {header_format} header with handle: {media_handle}")
+                logger.info(f"Skipping {header_format} header - will be provided when sending messages")
+                continue
         
         # ===== BODY COMPONENT =====
         elif component_type == 'BODY':
@@ -2133,13 +2131,26 @@ def build_meta_payload_v2(template_data, media_file):
             if not body_text:
                 logger.warning("BODY component has no text, skipping")
                 continue
+            
+            # Remove markdown formatting
+            body_text = body_text.replace('**', '')
+            
+            # CRITICAL: Check if variable at start or end
+            if body_text.startswith('{{') or body_text.endswith('}}'):
+                logger.warning(f"Body text has variable at start/end")
                 
+                if body_text.startswith('{{'):
+                    body_text = 'Hello ' + body_text
+                    logger.info(f"Fixed start with 'Hello'")
+                
+                if body_text.endswith('}}'):
+                    body_text = body_text + '.'
+                    logger.info(f"Fixed end with '.'")
+            
             meta_component['text'] = body_text
             
-            # Extract variables like {{1}}, {{2}}
             variables = re.findall(r'\{\{(\d+)\}\}', body_text)
             
-            # If variables exist, add examples
             if variables:
                 example_data = component.get('example', {})
                 example_values = example_data.get('body_text', [[]])
@@ -2152,8 +2163,6 @@ def build_meta_payload_v2(template_data, media_file):
                         meta_component['example'] = {
                             'body_text': [provided_examples[:num_variables]]
                         }
-                    else:
-                        logger.warning(f"Not enough example values. Need {num_variables}, got {len(provided_examples)}")
         
         # ===== FOOTER COMPONENT =====
         elif component_type == 'FOOTER':
@@ -2162,71 +2171,52 @@ def build_meta_payload_v2(template_data, media_file):
                 logger.warning("FOOTER component has no text, skipping")
                 continue
             if len(footer_text) > 60:
-                logger.warning(f"Footer text too long ({len(footer_text)} chars), truncating to 60")
                 footer_text = footer_text[:60]
+            
+            # Check if variable at start or end
+            if footer_text.startswith('{{') or footer_text.endswith('}}'):
+                logger.warning(f"Footer has variable at start/end, adding text")
+                if footer_text.startswith('{{'):
+                    footer_text = 'From ' + footer_text
+                if footer_text.endswith('}}'):
+                    footer_text = footer_text + '.'
+            
             meta_component['text'] = footer_text
         
         # ===== BUTTONS COMPONENT =====
         elif component_type == 'BUTTONS':
             buttons = component.get('buttons', [])
             
-            if not buttons or len(buttons) == 0:
-                logger.warning("BUTTONS component has no buttons, skipping")
+            if not buttons:
                 continue
             
             meta_buttons = []
-            for btn in buttons[:3]:
-                btn_type = btn.get('type', '').upper()
+            for btn in buttons[:3]:  # Max 3 buttons
                 btn_text = btn.get('text', '').strip()
                 
                 if not btn_text:
                     continue
                 
-                if btn_type == 'CALL_TO_ACTION':
-                    if 'url' in btn:
-                        btn_type = 'URL'
-                    elif 'phone_number' in btn:
-                        btn_type = 'PHONE_NUMBER'
-                    else:
-                        btn_type = 'QUICK_REPLY'
-                
+                # FORCE ALL BUTTONS TO BE QUICK_REPLY
+                # This is the most reliable approach - no URL or PHONE_NUMBER issues
                 meta_btn = {
-                    'type': btn_type,
-                    'text': btn_text[:25]
+                    'type': 'QUICK_REPLY',
+                    'text': btn_text[:25]  # Max 25 chars
                 }
                 
-                if btn_type == 'URL':
-                    url = btn.get('url', '').strip()
-                    if url:
-                        meta_btn['url'] = url
-                    else:
-                        meta_btn['type'] = 'QUICK_REPLY'
-                        meta_btn.pop('url', None)
-                
-                elif btn_type == 'PHONE_NUMBER':
-                    phone = btn.get('phone_number', '').strip()
-                    if phone:
-                        meta_btn['phone_number'] = phone
-                    else:
-                        meta_btn['type'] = 'QUICK_REPLY'
-                
                 meta_buttons.append(meta_btn)
+                logger.info(f"Added QUICK_REPLY button: {btn_text}")
             
             if meta_buttons:
                 meta_component['buttons'] = meta_buttons
-            else:
-                continue
         
-        # Add component to payload
         meta_payload['components'].append(meta_component)
     
-    # Validation
     has_body = any(c['type'] == 'BODY' for c in meta_payload['components'])
     if not has_body:
         raise ValueError("Template must have at least a BODY component")
     
     return meta_payload
-
 def upload_media_for_template(media_file):
     """
     Uploads media specifically for template creation.
@@ -2417,18 +2407,90 @@ def analyze_and_generate_template(request):
         }, status=500)
 
 
+def upload_media_via_resumable_upload(media_file):
+    """
+    Uploads media using Meta's Resumable Upload API.
+    This is the ONLY way to get valid media handles for template creation.
+    """
+    try:
+        # Reset file pointer and read content
+        media_file.seek(0)
+        file_content = media_file.read()
+        file_length = len(file_content)
+        file_type = media_file.content_type
+        
+        logger.info(f"Starting resumable upload for {media_file.name}")
+        logger.info(f"File size: {file_length} bytes, Type: {file_type}")
+        
+        # Step 1: Create upload session using WABA_ID
+        session_url = f"https://graph.facebook.com/v23.0/{WABA_ID}/uploads"
+        session_headers = {
+            "Authorization": f"Bearer {META_ACCESS_TOKEN}",
+            "Content-Type": "application/json"
+        }
+        
+        session_payload = {
+            "file_length": file_length,
+            "file_type": file_type,
+            "file_name": media_file.name
+        }
+        
+        logger.info(f"Creating upload session: {json.dumps(session_payload, indent=2)}")
+        session_response = requests.post(session_url, json=session_payload, headers=session_headers)
+        session_data = session_response.json()
+        
+        logger.info(f"Session response: {json.dumps(session_data, indent=2)}")
+        
+        if 'id' not in session_data:
+            logger.error(f"Failed to create upload session: {session_data}")
+            return None
+        
+        upload_session_id = session_data['id']
+        logger.info(f"Upload session created: {upload_session_id}")
+        
+        # Step 2: Upload file content
+        upload_url = f"https://graph.facebook.com/v23.0/{upload_session_id}"
+        upload_headers = {
+            "Authorization": f"Bearer {META_ACCESS_TOKEN}",
+            "file_offset": "0",
+            "Content-Type": "application/octet-stream"
+        }
+        
+        logger.info(f"Uploading {file_length} bytes to session {upload_session_id}")
+        upload_response = requests.post(
+            upload_url, 
+            data=file_content, 
+            headers=upload_headers
+        )
+        upload_data = upload_response.json()
+        
+        logger.info(f"Upload response: {json.dumps(upload_data, indent=2)}")
+        
+        if 'h' in upload_data:
+            media_handle = upload_data['h']
+            logger.info(f"✅ Media uploaded successfully! Handle: {media_handle}")
+            return media_handle
+        else:
+            logger.error(f"Resumable upload failed - no handle returned: {upload_data}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"Error in resumable upload: {e}", exc_info=True)
+        return None
+
+
 @csrf_exempt
 def submit_template_to_meta(request):
     """
     Submits the approved template design to Meta for review.
-    Handles media upload if needed. Uses correct Meta API v23.0 format.
+    Handles media upload using Resumable Upload API.
     """
     if request.method != 'POST':
         return JsonResponse({'status': 'error', 'message': 'Invalid method'}, status=405)
     
     try:
         # Check if it's multipart (with image) or JSON only
-        if request.content_type.startswith('multipart/form-data'):
+        if request.content_type and request.content_type.startswith('multipart/form-data'):
             # Has image upload
             template_data_str = request.POST.get('template_data')
             media_file = request.FILES.get('media_file')
@@ -2446,12 +2508,12 @@ def submit_template_to_meta(request):
         
         template_data = json.loads(template_data_str)
         
-        # Upload media to Meta if provided
-        media_id = None
-        if media_file:
-            media_id = upload_media_to_meta(media_file)
-            if not media_id:
-                logger.warning("Media upload failed, proceeding without header image")
+        # Validate template name
+        if not re.match(r'^[a-z0-9_]+$', template_data['name']):
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Template name must be lowercase letters, numbers, and underscores only'
+            }, status=400)
         
         # Build Meta API v23.0 compliant payload
         meta_payload = {
@@ -2463,34 +2525,177 @@ def submit_template_to_meta(request):
         
         # Process components for Meta API format
         for component in template_data['components']:
+            # Skip removed components
+            if component.get('removed', False):
+                logger.info(f"Skipping removed component: {component['type']}")
+                continue
+            
             meta_component = {"type": component['type']}
             
+            # ===== HEADER COMPONENT =====
             if component['type'] == 'HEADER':
-                meta_component['format'] = component.get('format', 'IMAGE')
+                header_format = component.get('format', 'TEXT')
+                meta_component['format'] = header_format
                 
-                if component['format'] == 'TEXT':
-                    meta_component['text'] = component.get('text', '')
+                if header_format == 'TEXT':
+                    header_text = component.get('text', '').strip()
+                    if not header_text:
+                        logger.warning("TEXT header has no text, skipping")
+                        continue
+                    
+                    # Check if variable at start or end
+                    if header_text.startswith('{{') or header_text.endswith('}}'):
+                        if header_text.startswith('{{'):
+                            header_text = 'Hello ' + header_text
+                        if header_text.endswith('}}'):
+                            header_text = header_text + '!'
+                    
+                    meta_component['text'] = header_text
                 
+                elif header_format in ['IMAGE', 'VIDEO', 'DOCUMENT']:
+                    # Upload media using Resumable Upload API
+                    if not media_file:
+                        logger.warning(f"Skipping {header_format} header - no media file provided")
+                        continue
+                    
+                    logger.info(f"Uploading media for {header_format} header")
+                    media_handle = upload_media_via_resumable_upload(media_file)
+                    
+                    if not media_handle:
+                        logger.error(f"Failed to upload media, skipping {header_format} header")
+                        continue
+                    
+                    # Add example with media handle
+                    meta_component['example'] = {
+                        'header_handle': [media_handle]
+                    }
+                    logger.info(f"✅ Added {header_format} header with handle: {media_handle}")
             
+            # ===== BODY COMPONENT =====
             elif component['type'] == 'BODY':
-                body_text = component['text']
+                body_text = component.get('text', '').strip()
+                if not body_text:
+                    logger.warning("BODY component has no text, skipping")
+                    continue
+                
+                # Remove markdown formatting
+                body_text = body_text.replace('**', '')
+                
+                # Check if variable at start or end
+                if body_text.startswith('{{') or body_text.endswith('}}'):
+                    if body_text.startswith('{{'):
+                        body_text = 'Hello ' + body_text
+                    if body_text.endswith('}}'):
+                        body_text = body_text + '.'
+                
                 meta_component['text'] = body_text
                 
-                import re
+                # Extract variables
                 variables = re.findall(r'\{\{(\d+)\}\}', body_text)
                 
                 if variables and 'example' in component:
                     example_values = component['example'].get('body_text', [[]])[0]
-                    if example_values:
-                        meta_component['example'] = {'body_text': [example_values]}
+                    if example_values and len(example_values) >= len(variables):
+                        meta_component['example'] = {
+                            'body_text': [example_values[:len(variables)]]
+                        }
             
+            # ===== FOOTER COMPONENT =====
             elif component['type'] == 'FOOTER':
-                meta_component['text'] = component.get('text', '')
+                footer_text = component.get('text', '').strip()
+                if not footer_text:
+                    logger.warning("FOOTER component has no text, skipping")
+                    continue
+                
+                if len(footer_text) > 60:
+                    footer_text = footer_text[:60]
+                
+                # Check if variable at start or end
+                if footer_text.startswith('{{') or footer_text.endswith('}}'):
+                    if footer_text.startswith('{{'):
+                        footer_text = 'From ' + footer_text
+                    if footer_text.endswith('}}'):
+                        footer_text = footer_text + '.'
+                
+                meta_component['text'] = footer_text
             
+            # ===== BUTTONS COMPONENT =====
             elif component['type'] == 'BUTTONS':
-                meta_component['buttons'] = component.get('buttons', [])
+                buttons = component.get('buttons', [])
+                
+                if not buttons:
+                    continue
+                
+                meta_buttons = []
+                for btn in buttons[:3]:  # Max 3 buttons
+                    btn_type = btn.get('type', '').upper()
+                    btn_text = btn.get('text', '').strip()
+                    
+                    if not btn_text:
+                        continue
+                    
+                    # Convert CALL_TO_ACTION to appropriate type
+                    if btn_type == 'CALL_TO_ACTION':
+                        if 'url' in btn:
+                            btn_type = 'URL'
+                        elif 'phone_number' in btn:
+                            btn_type = 'PHONE_NUMBER'
+                        else:
+                            btn_type = 'QUICK_REPLY'
+                    
+                    meta_btn = {
+                        'type': btn_type,
+                        'text': btn_text[:25]
+                    }
+                    
+                    # Handle URL buttons
+                    if btn_type == 'URL':
+                        url = btn.get('url', '').strip()
+                        if url:
+                            # Validate URL and remove invalid variables
+                            body_component = next((c for c in template_data.get('components', []) 
+                                                 if c.get('type') == 'BODY'), None)
+                            if body_component:
+                                body_variables = re.findall(r'\{\{(\d+)\}\}', body_component.get('text', ''))
+                                url_variables = re.findall(r'\{\{(\d+)\}\}', url)
+                                
+                                for url_var in url_variables:
+                                    if url_var not in body_variables:
+                                        logger.warning(f"URL variable {{{{{url_var}}}}} not in body, removing")
+                                        url = re.sub(r'\?[^?]*\{\{\d+\}\}', '', url)
+                                        break
+                            
+                            if url.startswith('http://') or url.startswith('https://'):
+                                meta_btn['url'] = url
+                            else:
+                                meta_btn['type'] = 'QUICK_REPLY'
+                                meta_btn.pop('url', None)
+                        else:
+                            meta_btn['type'] = 'QUICK_REPLY'
+                    
+                    # Handle PHONE_NUMBER buttons
+                    elif btn_type == 'PHONE_NUMBER':
+                        phone = btn.get('phone_number', '').strip()
+                        if phone:
+                            meta_btn['phone_number'] = phone
+                        else:
+                            meta_btn['type'] = 'QUICK_REPLY'
+                    
+                    meta_buttons.append(meta_btn)
+                
+                if meta_buttons:
+                    meta_component['buttons'] = meta_buttons
             
+            # Add component to payload
             meta_payload['components'].append(meta_component)
+        
+        # Validate: Must have at least BODY
+        has_body = any(c['type'] == 'BODY' for c in meta_payload['components'])
+        if not has_body:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Template must have at least a BODY component'
+            }, status=400)
         
         # Submit to Meta API
         url = f"https://graph.facebook.com/v23.0/{WABA_ID}/message_templates"
@@ -2530,8 +2735,6 @@ def submit_template_to_meta(request):
             'status': 'error',
             'message': str(e)
         }, status=500)
-
-
 
 def upload_media_to_meta(media_file):
     """
@@ -2579,102 +2782,79 @@ def analyze_requirements_with_ai(requirements):
         model = genai.GenerativeModel('gemini-2.5-flash')
         
         prompt = f"""
-You are a WhatsApp Business API template expert. Analyze the user's requirements and decide:
-1. Can an existing approved template be used?
-2. Or should a new template be created?
+You are a WhatsApp Business API template expert. Generate 3-4 different template options.
 
 USER REQUIREMENTS:
 {requirements}
 
+META'S RULES:
+1. ✅ Text BEFORE first variable: "Dear {{{{1}}}}, ..."
+2. ✅ Text AFTER last variable: "... on {{{{2}}}}."
+3. ❌ NO variables at start or end
+4. ❌ NO markdown formatting (**bold**)
+5. Variables sequential: {{{{1}}}}, {{{{2}}}}, {{{{3}}}}
+6. Body max 1024 chars, Footer max 60 chars
+7. ✅ ONLY use QUICK_REPLY buttons (most reliable)
+8. Max 3 buttons
+9. Language: en, hi, mr, es, pt_BR
+10. Category: UTILITY or MARKETING
 
-META'S TEMPLATE APPROVAL GUIDELINES:
-- Templates must provide value to users
-- No promotional content in UTILITY category
-- Use MARKETING category for promotional content
-- Variables {{{{1}}}}, {{{{2}}}} etc. for dynamic content
-- Keep body under 1024 characters
-- Header optional (TEXT, IMAGE, VIDEO, or DOCUMENT)
-- Footer optional (up to 60 characters)
-- Buttons optional (max 3 quick reply buttons OR 2 call-to-action buttons)
-- Language must be specified (en, hi, es, etc.)
+BUTTON RULES:
+- Use ONLY QUICK_REPLY button type
+- No URL buttons (causes issues)
+- No PHONE_NUMBER buttons (causes issues)
+- Keep button text short and action-oriented
 
-DECISION TASK:
-If an existing template is suitable, recommend it.
-If not, generate a NEW template following Meta's guidelines.
+CORRECT TEMPLATE EXAMPLE:
+
+{{
+  "name": "order_status_update",
+  "language": "en",
+  "category": "UTILITY",
+  "description": "Order status notification",
+  "has_media": false,
+  "components": [
+    {{
+      "type": "BODY",
+      "text": "Hello {{{{1}}}}, your order {{{{2}}}} has been shipped and will arrive by {{{{3}}}}. Thank you for shopping with us!",
+      "example": {{"body_text": [["Sarah", "ORD123", "Dec 25"]]}}
+    }},
+    {{
+      "type": "FOOTER",
+      "text": "Questions? Just reply to this message."
+    }},
+    {{
+      "type": "BUTTONS",
+      "buttons": [
+        {{"type": "QUICK_REPLY", "text": "Track My Order"}},
+        {{"type": "QUICK_REPLY", "text": "Contact Support"}},
+        {{"type": "QUICK_REPLY", "text": "View Receipt"}}
+      ]
+    }}
+  ],
+  "variables_needed": [
+    {{"name": "customer_name", "position": 1, "example": "Sarah"}},
+    {{"name": "order_id", "position": 2, "example": "ORD123"}},
+    {{"name": "delivery_date", "position": 3, "example": "Dec 25"}}
+  ],
+  "pros": ["Clear communication", "Easy interaction"],
+  "cons": ["No direct links"]
+}}
 
 OUTPUT FORMAT (JSON):
 {{
-  "recommendation": "use_existing" or "create_new",
-  "reasoning": "Why this decision was made",
-  "existing_template": "template_name" (if use_existing),
-  "new_template": {{
-    "name": "descriptive_lowercase_with_underscores",
-    "language": "hi" (for Marathi/Hindi) or "en",
-    "category": "UTILITY" or "MARKETING",
-    "components": [
-      {{
-        "type": "HEADER",
-        "format": "TEXT" or "IMAGE",
-        "text": "⭐ हेडर मजकूर" (if TEXT format)
-      }},
-      {{
-        "type": "BODY",
-        "text": "⭐ नमस्कार {{{{1}}}},\n\nआम्ही {{{{2}}}} मधील द्राक्ष उत्पादक शेतकऱ्यांसाठी कुशल मजूर थेट उपलब्ध करून देण्यासाठी एक नवीन लेबर प्लॅटफॉर्म सुरू केले आहे.\n\n🍇 आमच्या प्रशिक्षित टीम्स सप्टेंबर छाटणी हंगामासाठी सज्ज आहेत – बांधणी, डिपिंग, पातळणी, घड निवड आणि आणखी बरेच काही.\n\n✅ कुशल आणि विश्वासार्ह मजूर\n✅ संपूर्ण सेवा आमच्याकडून व्यवस्थापित\n✅ तुमच्यासाठी कोणताही त्रास नाही\n\nइच्छुक असल्यास खाली क्लिक करा 👇👇👇",
-        "example": {{
-          "body_text": [["शेतकरी नाव", "तालुका नाव"]]
-        }}
-      }},
-      {{
-        "type": "BUTTONS",
-        "buttons": [
-          {{
-            "type": "QUICK_REPLY",
-            "text": "मजूर हवे आहेत"
-          }},
-          {{
-            "type": "QUICK_REPLY",
-            "text": "सेवा पहा"
-          }}
-        ]
-      }}
-    ]
-  }} (if create_new),
-  "variables_needed": [
-    {{"name": "farmer_name", "description": "शेतकऱ्याचे नाव", "example": "राजू पाटील"}},
-    {{"name": "location", "description": "तालुका/गाव", "example": "नाशिक"}}
-  ],
-  "needs_media": true/false,
-  "media_type": "image" (if needs_media),
-  "suggested_flow": {{
-    "description": "Flow काय करेल",
-    "steps": ["स्टेप 1", "स्टेप 2", "स्टेप 3"]
-  }}
+  "templates": [
+    // 3-4 template options here
+  ]
 }}
-TEMPLATE WRITING GUIDELINES:
-1. Use Marathi देवनागरी script (not English)
-2. ALWAYS include personalization variables {{1}}, {{2}} etc.
-   - {{1}} for farmer name
-   - {{2}} for location/village
-   - Use these in the greeting!
-3. Start with ⭐ नमस्कार {{1}},
-4. Write 4-6 lines in body (detailed, not short)
-5. Mention specific services: बांधणी, डिपिंग, पातळणी, घड निवड
-6. Use bullet points with ✅ for benefits
-7. End with call-to-action: "इच्छुक असल्यास खाली क्लिक करा 👇"
-8. Professional farmer language
-9. Button text in Marathi: "मजूर हवे आहेत", "सेवा पहा", "संपर्क करा"
-10. CRITICAL: If you use {{1}}, MUST provide example like ["राजू पाटील"]
-11. If you use {{1}} and {{2}}, MUST provide examples like ["राजू पाटील", "नाशिक"]
 
-EXAMPLE WITH VARIABLES (CORRECT):
-Body: "⭐ नमस्कार {{1}},\n\nआम्ही {{2}} मधील शेतकऱ्यांसाठी..."
-Example: {{"body_text": [["राजू पाटील", "नाशिक"]]}}
-
-NO VARIABLES = NO EXAMPLE FIELD (also acceptable but less personal)
-
-Generate ONLY valid JSON, no markdown.
+CRITICAL:
+- ONLY QUICK_REPLY buttons
+- Text before first variable
+- Text after last variable
+- NO markdown
+- Generate ONLY valid JSON
 """
-        
         response = model.generate_content(prompt)
         response_text = response.text.strip()
         
