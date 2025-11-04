@@ -1949,7 +1949,7 @@ def submit_customized_template(request):
         # Upload media if provided
         media_id = None
         if media_file and not remove_media:
-            media_id = upload_media_to_meta_api(media_file)
+            media_id = upload_media_to_meta_helper(media_file)
             if not media_id:
                 return JsonResponse({
                     'status': 'error',
@@ -2229,7 +2229,7 @@ def submit_template_to_meta(request):
         # Upload media to Meta if provided
         media_id = None
         if media_file:
-            media_id = upload_media_to_meta_api(media_file)
+            media_id = upload_media_to_meta_helper(media_file)
             if not media_id:
                 logger.warning("Media upload failed, proceeding without header image")
         
@@ -2441,106 +2441,108 @@ Generate ONLY valid JSON, no markdown.
     except Exception as e:
         logger.error(f"Error in AI analysis: {e}", exc_info=True)
         return None
-
-
 @csrf_exempt
 def upload_media_to_meta_api(request):
     """
     API endpoint to upload any media file (image, video, document, etc.) 
     directly to Meta's WhatsApp Business API and return the Meta Media ID.
     """
-    if request.method == 'POST':
-        # The key for the file in the form data should be 'media'
-        if 'media' not in request.FILES:
-            return JsonResponse({'status': 'error', 'message': 'No media file provided.'}, status=400)
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Invalid method'}, status=405)
 
-        media_file: InMemoryUploadedFile = request.FILES['media']
-        
-        # Determine the file's content type (e.g., 'image/jpeg', 'application/pdf')
+    if 'media' not in request.FILES:
+        return JsonResponse({'status': 'error', 'message': 'No media file provided.'}, status=400)
+
+    media_file = request.FILES['media']
+    media_id = upload_media_to_meta_helper(media_file)
+    
+    if not media_id:
+        return JsonResponse({'status': 'error', 'message': 'Media upload failed'}, status=500)
+
+    return JsonResponse({'status': 'success', 'media_id': media_id})
+
+def upload_media_to_meta_helper(media_file):
+    """
+    Helper function (non-view) to upload a file to Meta and return its media_id.
+    Can be used internally in other views.
+    """
+    try:
         content_type, _ = mimetypes.guess_type(media_file.name)
         if not content_type:
-            return JsonResponse({'status': 'error', 'message': 'Could not determine the file type.'}, status=400)
+            logger.error("Could not determine file type for upload.")
+            return None
 
         upload_url = f"{META_API_URL}/{PHONE_NUMBER_ID}/media"
-        headers = {
-            "Authorization": f"Bearer {META_ACCESS_TOKEN}",
-        }
+        headers = {"Authorization": f"Bearer {META_ACCESS_TOKEN}"}
         files = {
             'file': (media_file.name, media_file.read(), content_type),
-            'type': (None, content_type),  # Important for Meta API
+            'type': (None, content_type),
             'messaging_product': (None, 'whatsapp'),
         }
 
-        try:
-            response = requests.post(upload_url, headers=headers, files=files)
-            response.raise_for_status()  # Raise an exception for HTTP errors (like 4xx or 5xx)
-            meta_response = response.json()
-            
-            media_id = meta_response.get('id')
-            if media_id:
-                logger.info(f"Media uploaded to Meta, Media ID: {media_id}")
-                return JsonResponse({'status': 'success', 'media_id': media_id})
-            else:
-                logger.error(f"Meta upload response missing media ID: {meta_response}")
-                return JsonResponse({'status': 'error', 'message': 'Meta did not return a media ID.'}, status=500)
+        response = requests.post(upload_url, headers=headers, files=files)
+        logger.info(f"Meta upload response: {response.text}")
 
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Error uploading media to Meta: {e}. Response: {e.response.text if e.response else 'No response.'}", exc_info=True)
-            return JsonResponse({'status': 'error', 'message': f'Failed to upload media to Meta: {e}'}, status=500)
-        except Exception as e:
-            logger.error(f"Unexpected error in upload_media_to_meta_api: {e}", exc_info=True)
-            return JsonResponse({'status': 'error', 'message': f'An unexpected error occurred: {e}'}, status=500)
+        if response.status_code == 200:
+            data = response.json()
+            return data.get('id')
+        else:
+            logger.error(f"Meta upload failed ({response.status_code}): {response.text}")
+            return None
 
-    return JsonResponse({'status': 'error', 'message': 'Invalid method'}, status=405)
-@csrf_exempt
-def upload_media_to_meta_api(request):
-    """
-    API endpoint to upload any media file (image, video, document, etc.) 
-    directly to Meta's WhatsApp Business API and return the Meta Media ID.
-    """
-    if request.method == 'POST':
-        # The key for the file in the form data should be 'media'
-        if 'media' not in request.FILES:
-            return JsonResponse({'status': 'error', 'message': 'No media file provided.'}, status=400)
+    except Exception as e:
+        logger.error(f"Error in upload_media_to_meta_helper: {e}", exc_info=True)
+        return None
 
-        media_file: InMemoryUploadedFile = request.FILES['media']
+# @csrf_exempt
+# def upload_media_to_meta_api(request):
+#     """
+#     API endpoint to upload any media file (image, video, document, etc.) 
+#     directly to Meta's WhatsApp Business API and return the Meta Media ID.
+#     """
+#     if request.method == 'POST':
+#         # The key for the file in the form data should be 'media'
+#         if 'media' not in request.FILES:
+#             return JsonResponse({'status': 'error', 'message': 'No media file provided.'}, status=400)
+
+#         media_file: InMemoryUploadedFile = request.FILES['media']
         
-        # Determine the file's content type (e.g., 'image/jpeg', 'application/pdf')
-        content_type, _ = mimetypes.guess_type(media_file.name)
-        if not content_type:
-            return JsonResponse({'status': 'error', 'message': 'Could not determine the file type.'}, status=400)
+#         # Determine the file's content type (e.g., 'image/jpeg', 'application/pdf')
+#         content_type, _ = mimetypes.guess_type(media_file.name)
+#         if not content_type:
+#             return JsonResponse({'status': 'error', 'message': 'Could not determine the file type.'}, status=400)
 
-        upload_url = f"{META_API_URL}/{PHONE_NUMBER_ID}/media"
-        headers = {
-            "Authorization": f"Bearer {META_ACCESS_TOKEN}",
-        }
-        files = {
-            'file': (media_file.name, media_file.read(), content_type),
-            'type': (None, content_type),  # Important for Meta API
-            'messaging_product': (None, 'whatsapp'),
-        }
+#         upload_url = f"{META_API_URL}/{PHONE_NUMBER_ID}/media"
+#         headers = {
+#             "Authorization": f"Bearer {META_ACCESS_TOKEN}",
+#         }
+#         files = {
+#             'file': (media_file.name, media_file.read(), content_type),
+#             'type': (None, content_type),  # Important for Meta API
+#             'messaging_product': (None, 'whatsapp'),
+#         }
 
-        try:
-            response = requests.post(upload_url, headers=headers, files=files)
-            response.raise_for_status()  # Raise an exception for HTTP errors (like 4xx or 5xx)
-            meta_response = response.json()
+#         try:
+#             response = requests.post(upload_url, headers=headers, files=files)
+#             response.raise_for_status()  # Raise an exception for HTTP errors (like 4xx or 5xx)
+#             meta_response = response.json()
             
-            media_id = meta_response.get('id')
-            if media_id:
-                logger.info(f"Media uploaded to Meta, Media ID: {media_id}")
-                return JsonResponse({'status': 'success', 'media_id': media_id})
-            else:
-                logger.error(f"Meta upload response missing media ID: {meta_response}")
-                return JsonResponse({'status': 'error', 'message': 'Meta did not return a media ID.'}, status=500)
+#             media_id = meta_response.get('id')
+#             if media_id:
+#                 logger.info(f"Media uploaded to Meta, Media ID: {media_id}")
+#                 return JsonResponse({'status': 'success', 'media_id': media_id})
+#             else:
+#                 logger.error(f"Meta upload response missing media ID: {meta_response}")
+#                 return JsonResponse({'status': 'error', 'message': 'Meta did not return a media ID.'}, status=500)
 
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Error uploading media to Meta: {e}. Response: {e.response.text if e.response else 'No response.'}", exc_info=True)
-            return JsonResponse({'status': 'error', 'message': f'Failed to upload media to Meta: {e}'}, status=500)
-        except Exception as e:
-            logger.error(f"Unexpected error in upload_media_to_meta_api: {e}", exc_info=True)
-            return JsonResponse({'status': 'error', 'message': f'An unexpected error occurred: {e}'}, status=500)
+#         except requests.exceptions.RequestException as e:
+#             logger.error(f"Error uploading media to Meta: {e}. Response: {e.response.text if e.response else 'No response.'}", exc_info=True)
+#             return JsonResponse({'status': 'error', 'message': f'Failed to upload media to Meta: {e}'}, status=500)
+#         except Exception as e:
+#             logger.error(f"Unexpected error in upload_media_to_meta_api: {e}", exc_info=True)
+#             return JsonResponse({'status': 'error', 'message': f'An unexpected error occurred: {e}'}, status=500)
 
-    return JsonResponse({'status': 'error', 'message': 'Invalid method'}, status=405)
+#     return JsonResponse({'status': 'error', 'message': 'Invalid method'}, status=405)
 
 @csrf_exempt
 def upload_image_to_meta_api(request):
