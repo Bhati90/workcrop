@@ -235,7 +235,7 @@ def process_incoming_messages(value, full_webhook_data):
         # --- 8. Get CACHED GeminiService instance ---
         ai_service = get_gemini_service()
         
-       
+        
         # --- 9. Handle quota errors gracefully ---
         try:
             reply = ai_service.generate_reply(
@@ -565,6 +565,62 @@ def handle_video_message(msg_data, conversation, whatsapp_user, whatsapp_message
     whatsapp_user.last_message_at = timestamp
     whatsapp_user.save()
 
+def handle_sticker_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp):
+    """Handle incoming stickers"""
+    try:
+        sticker_data = msg_data.get('sticker', {})
+        sticker_id = sticker_data.get('id')
+        mime_type = sticker_data.get('mime_type', 'image/webp')
+        
+        msg_obj = Message.objects.create(
+            conversation=conversation,
+            whatsapp_message_id=whatsapp_message_id,
+            message_type='sticker',
+            direction='inbound',
+            media_id=sticker_id,
+            mime_type=mime_type,
+            timestamp=timestamp,
+            status='delivered'
+        )
+        
+        conversation.last_message_preview = "[STICKER]"
+        conversation.unread_count += 1
+        conversation.save()
+        
+        whatsapp_user.last_message_at = timestamp
+        whatsapp_user.save()
+        
+        logger.info(f"😀 Sticker received from {whatsapp_user.phone_number}")
+        return msg_obj
+        
+    except Exception as e:
+        logger.error(f"Error handling sticker: {str(e)}")
+        return None
+
+
+def handle_reaction_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp):
+    """Handle message reactions"""
+    try:
+        reaction_data = msg_data.get('reaction', {})
+        emoji = reaction_data.get('emoji', '👍')
+        message_id = reaction_data.get('message_id')
+        
+        msg_obj = Message.objects.create(
+            conversation=conversation,
+            whatsapp_message_id=whatsapp_message_id,
+            message_type='reaction',
+            direction='inbound',
+            text_content=emoji,
+            timestamp=timestamp,
+            status='delivered'
+        )
+        
+        logger.info(f"❤️ Reaction {emoji} received from {whatsapp_user.phone_number}")
+        return msg_obj
+        
+    except Exception as e:
+        logger.error(f"Error handling reaction: {str(e)}")
+        return None
 # Add at the top
 from .audio import AudioTranscriptionService
 
@@ -635,18 +691,17 @@ def handle_audio_transcription(msg_data, conversation, whatsapp_user, from_numbe
         
         # Process like normal text message
         ai_service = get_gemini_service()
-       
+        
         
         # Generate AI response
         try:
             reply = ai_service.generate_reply(
                 history=history,
-        user_message=transcription,
-        user_lang=user_lang,
-        user_name=user_name,
-        message_type='text',  # Audio is processed as text
-        whatsapp_user=whatsapp_user,
-        conversation=conversation
+                user_message=transcription,
+    user_lang=user_lang,
+    user_name=user_name,
+    whatsapp_user=whatsapp_user,      # ← ADD THIS
+    conversation=conversation
             )
             log_inquiry_details(transcription, reply, whatsapp_user, conversation, user_lang)
         except Exception as e:
