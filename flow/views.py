@@ -2229,7 +2229,7 @@ def submit_template_to_meta(request):
         # Upload media to Meta if provided
         media_id = None
         if media_file:
-            media_id = upload_media_to_meta(media_file)
+            media_id = upload_media_to_meta_api(media_file)
             if not media_id:
                 logger.warning("Media upload failed, proceeding without header image")
         
