@@ -362,11 +362,15 @@ class GeminiService:
         context = ""
         for i in top_k_indices:
             chunk = self.db_chunks[i]
-            context += f"📄 {chunk['source']} ({chunk['type']}): {chunk['content']}\n---\n"
+            # ✅ FIX: Show FULL content, not truncated
+            context += f"📄 Source: {chunk['source']}\n"
+            context += f"Content: {chunk['content']}\n"  # ← Show full content
+            context += "---\n"
         
         logger.info(f"🔍 RAG: Found {top_k} chunks for query: '{query[:50]}'")
+        logger.info(f"📊 RAG context length: {len(context)} chars")  # ← Log context size
+        
         return context
-
     # --- Helper Functions ---
     def _is_match(self, text, word_set):
         """Check if text matches any word in set"""
@@ -913,15 +917,14 @@ class GeminiService:
         if user_lang == 'hi':
             return "क्षमा करें, technical समस्या है। हमारी टीम आपसे संपर्क करेगी। 🙏"
         return "Sorry, technical issue. Our team will contact you. 🙏"
-    
-    
+        
     def _handle_rag_multi(self, history, user_message, user_lang, whatsapp_user=None, conversation=None):
-        """RAG queries with multi-instance + user-specific memory - FAILSAFE VERSION"""
+        """RAG queries with multi-instance + AUTOMATIC RETRY on 429"""
         
         # ✅ FAILSAFE: Validate user_message first
         if not isinstance(user_message, str):
             logger.error(f"❌ Invalid user_message type: {type(user_message)}")
-            user_message = str(user_message)  # Force convert to string
+            user_message = str(user_message)
         
         user_message = user_message.strip()
         
@@ -931,39 +934,24 @@ class GeminiService:
                 return "कृपया अपना सवाल फिर से भेजें। 🙏"
             return "Please send your question again. 🙏"
         
-        instance = self._select_instance(query_type="rag")
-        
         try:
             # Check if crop-related
-            crop_keywords = ['spray', 'फवारणी', 'crop', 'फसल', 'fertilizer', 'खाद', 
+            crop_keywords = ['spray', 'फवारणी', 'crop', 'फसल', 'पीक', 'fertilizer', 'खाद', 
                             'pest', 'कीट', 'disease', 'रोग', 'बीमारी', 'product', 'उत्पाद',
-                            'grape', 'अंगूर', 'द्राक्ष', 'powder', 'पावडर', 'chemical', 'रसायन']
+                            'grape', 'अंगूर', 'द्राक्ष', 'berry', 'बेरी', 'stage', 'अवस्था',
+                            'day', 'दिन', 'powder', 'पावडर', 'chemical', 'रसायन']
             
-            # ✅ FAILSAFE: Ensure all keywords are strings
             crop_keywords = [str(kw) for kw in crop_keywords if kw and isinstance(kw, str)]
             
-            # ✅ FAILSAFE: Safe keyword check
-            is_crop_query = False
-            try:
-                user_message_lower = user_message.lower()
-                is_crop_query = any(keyword in user_message_lower for keyword in crop_keywords)
-            except Exception as e:
-                logger.error(f"❌ Error in keyword check: {e}")
-                is_crop_query = False
+            user_message_lower = user_message.lower()
+            is_crop_query = any(keyword in user_message_lower for keyword in crop_keywords)
             
             # Check if asking about orders/history
             order_keywords = ['order', 'आर्डर', 'inquiry', 'पूछताछ', 'booking', 'बुकिंग', 
                             'last time', 'पिछली बार', 'मेरा ऑर्डर']
+            is_order_query = any(kw in user_message_lower for kw in order_keywords)
             
-            # ✅ FAILSAFE: Safe order check
-            is_order_query = False
-            try:
-                is_order_query = any(kw in user_message_lower for kw in order_keywords)
-            except Exception as e:
-                logger.error(f"❌ Error in order check: {e}")
-                is_order_query = False
-            
-            # Get user's order history if asking about orders
+            # Get user's order history
             user_history = ""
             if is_order_query and whatsapp_user and conversation:
                 try:
@@ -972,78 +960,175 @@ class GeminiService:
                     logger.error(f"❌ Error getting order history: {e}")
                     user_history = ""
             
-            # Only search knowledge base if crop-related
+            # RAG search with multilingual enhancement
             retrieved_context = ""
             if is_crop_query:
                 try:
-                    retrieved_context = self.search_knowledge_base(user_message, top_k=3)
+                    rag_query = user_message
+                    
+                    # ✅ Enhance query with translations for better matching
+                    if user_lang == 'en':
+                        translations = {
+                            'crop': 'फसल पीक',
+                            'stage': 'अवस्था टप्पा',
+                            'day': 'दिन',
+                            'spray': 'फवारणी छिडकाव',
+                            'berry': 'बेरी',
+                            'arra': 'आरा',
+                            'touch': 'टच',
+                        }
+                        
+                        for eng, trans in translations.items():
+                            if eng in user_message.lower():
+                                rag_query += f" {trans}"
+                        
+                        logger.info(f"🌐 Enhanced query: {rag_query[:80]}")
+                    
+                    retrieved_context = self.search_knowledge_base(rag_query, top_k=5)
+                    
                 except Exception as e:
                     logger.error(f"❌ Error in RAG search: {e}")
                     retrieved_context = ""
             
-            # Build conversation history
+            # Build history
             history_formatted = self._format_history(history[-10:])
             
-            # Build context sections
-            kb_section = f"\nKnowledge base: {retrieved_context}" if retrieved_context else ""
+            # Build context
+            kb_section = f"\nKnowledge base:\n{retrieved_context}" if retrieved_context else ""
             order_section = f"\n{user_history}" if user_history else ""
             
             disclaimer_text = "(कृपया फवारणी करण्यापूर्वी तुमच्या प्लॉटची परिस्थिती आणि हवामान तपासून घ्या.)"
             
-            prompt = f"""Conversation: {history_formatted}
+            has_rag_context = bool(retrieved_context.strip())
+            
+            if has_rag_context:
+                # Detailed prompt with RAG
+                prompt = f"""Conversation: {history_formatted}
 
     User: "{user_message}"
-    {kb_section}
+
+    Knowledge Base:
+    {retrieved_context}
+    {order_section}
+
+    CRITICAL INSTRUCTIONS:
+    1. **USE KNOWLEDGE BASE**: Provide COMPLETE answer from above information
+    2. **BE SPECIFIC**: Include ALL relevant details (stages, sprays, dosages, timing)
+    3. **NEVER say "check document"**: Give direct answer
+    4. **Language**: Reply in {user_lang}
+    5. **Length**: Full details (4-6 sentences OK for schedules)
+    6. **Format**: Use bullet points for multi-step info
+    7. **Disclaimer**: Add ONLY if specific chemical/spray names mentioned
+    8. **Emojis**: Use 🌾 🍇 ✅ 📅
+
+    Reply:"""
+            else:
+                # Short prompt without RAG
+                prompt = f"""Conversation: {history_formatted}
+
+    User: "{user_message}"
     {order_section}
 
     Instructions:
     - Reply in {user_lang}
-    - SHORT (2 sentences max)
-    - If user asks about their orders: use "Your past inquiries" info ONLY
-    - NEVER mention other users' data
-    - Add disclaimer ONLY if you mention specific product name
-    - Use 🌾 🍇 ✅
+    - No knowledge base info available
+    - Be honest: "मुझे इस बारे में पक्की जानकारी नहीं है। कृपया crop type और details बताएं?"
+    - SHORT (2 sentences)
+    - Use 🌾
 
     Reply:"""
             
-            # Configure API
-            genai.configure(api_key=instance.api_key)
-            model = genai.GenerativeModel(instance.model_id, system_instruction=SYSTEM_PROMPT)
+            # ✅ RETRY LOGIC: Try up to 3 different instances
+            max_attempts = 3
+            attempted_instances = []
             
-            # Generate response
-            chat = model.start_chat(history=[])
-            response = chat.send_message(prompt)
-            reply = response.text.strip()
+            for attempt in range(max_attempts):
+                # Select instance (avoid already tried ones)
+                instance = self._select_instance(query_type="rag")
+                
+                # Skip if already tried
+                if instance.name in attempted_instances:
+                    # Get different instance
+                    available = [inst for inst in self.instances 
+                            if inst.is_available() 
+                            and inst.name not in attempted_instances
+                            and inst.failure_count < 3]
+                    
+                    if not available:
+                        logger.warning(f"⚠️ No more available instances")
+                        break
+                    
+                    instance = available[0]
+                
+                attempted_instances.append(instance.name)
+                
+                try:
+                    logger.info(f"🤖 RAG Attempt {attempt + 1}: {instance.name} (Usage: {instance.get_today_usage()}/1450)")
+                    
+                    # Configure API
+                    genai.configure(api_key=instance.api_key)
+                    model = genai.GenerativeModel(instance.model_id, system_instruction=SYSTEM_PROMPT)
+                    
+                    # Generate response
+                    chat = model.start_chat(history=[])
+                    response = chat.send_message(prompt)
+                    reply = response.text.strip()
+                    
+                    # Success! Remove disclaimers if needed
+                    if not is_crop_query and disclaimer_text in reply:
+                        reply = reply.replace(disclaimer_text, "").strip()
+                    
+                    product_names = [
+                        'ranman', 'profiler', 'emamectin', 'score', 'ridomil', 
+                        'mancozeb', 'carbendazim', 'imidacloprid', 'copper', 'sulphur'
+                    ]
+                    has_product = any(prod in reply.lower() for prod in product_names)
+                    
+                    if disclaimer_text in reply and not has_product:
+                        reply = reply.replace(disclaimer_text, "").strip()
+                    
+                    # Record success
+                    instance.record_request()
+                    logger.info(f"✅ RAG success with {instance.name}")
+                    
+                    return reply
+                    
+                except Exception as e:
+                    error_msg = str(e)
+                    logger.error(f"❌ {instance.name} failed: {error_msg[:100]}")
+                    
+                    # Mark instance as failed
+                    instance.failure_count += 1
+                    
+                    # Check if quota error
+                    if '429' in error_msg or 'quota' in error_msg.lower() or 'exhausted' in error_msg.lower():
+                        logger.warning(f"⏱️ {instance.name} quota exceeded, trying next instance...")
+                        
+                        # Mark this instance as temporarily unavailable
+                        cache_key = f"gemini_{instance.name}_quota_exceeded"
+                        cache.set(cache_key, True, timeout=3600)  # Block for 1 hour
+                        
+                        continue  # Try next instance
+                    
+                    # For other errors, still retry
+                    if attempt < max_attempts - 1:
+                        logger.info(f"🔄 Retrying with different instance...")
+                        continue
             
-            # Remove disclaimer if not crop-related
-            if not is_crop_query and disclaimer_text in reply:
-                reply = reply.replace(disclaimer_text, "").strip()
+            # All attempts failed
+            logger.error(f"💥 All {len(attempted_instances)} RAG attempts failed!")
             
-            # Check if product name mentioned
-            product_names = [
-                'ranman', 'profiler', 'emamectin', 'score', 'ridomil', 
-                'mancozeb', 'carbendazim', 'imidacloprid', 'copper', 'sulphur'
-            ]
-            has_product = any(prod in reply.lower() for prod in product_names)
-            
-            if disclaimer_text in reply and not has_product:
-                reply = reply.replace(disclaimer_text, "").strip()
-            
-            # Record success
-            instance.record_request()
-            logger.info(f"✅ RAG from {instance.name}")
-            
-            return reply
+            # Return helpful fallback
+            if user_lang == 'hi':
+                return "क्षमा करें, अभी system व्यस्त है। हमारी टीम आपसे contact करेगी। 🙏"
+            return "Sorry, system busy. Our team will contact you. 🙏"
             
         except Exception as e:
-            logger.error(f"❌ RAG error: {e}", exc_info=True)
-            instance.failure_count += 1
+            logger.error(f"💥 CRITICAL RAG error: {e}", exc_info=True)
             
-            # ✅ FAILSAFE: Return helpful error message instead of crashing
             if user_lang == 'hi':
-                return "क्षमा करें, technical समस्या है। कृपया थोड़ी देर बाद try करें या text में लिखें। 🙏"
-            return "Sorry, technical issue. Please try again later or send text. 🙏"
-    
+                return "क्षमा करें, technical समस्या है। हमारी टीम आपसे संपर्क करेगी। 🙏"
+            return "Sorry, technical issue. Our team will contact you. 🙏"
     
     def _get_user_order_history(self, whatsapp_user, conversation):
         """
