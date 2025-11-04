@@ -82,38 +82,38 @@ class MultiGeminiService:
         # Define Gemini models (ordered by preference)
         models = [
             # Tier 1: Best models (highest priority)
-            # {
-            #     'id': 'gemini-2.5-flash', 
-            #     'name': '2.5-flash-exp',
-            #     'priority': 1,
-                
-            # },
             {
-                'id': 'gemini-2.5-pro',
+                'id': 'gemini-2.5-flash', 
+                'name': '2.5-flash-exp',
+                'priority': 1,
+                
+            },
+            {
+                'id': 'gemini-2.0-flash-exp',
                 'name': '2.0-flash-002',
                 'priority': 1,
                 
             },
             # Tier 2: Stable models
-            # {
-            #     'id': 'gemini-1.5-flash',
-            #     'name': '1.5-flash',
-            #     'priority': 2,
+            {
+                'id': 'gemini-2.5-pro',
+                'name': '1.5-flash',
+                'priority': 2,
                 
-            # },
-            # {
-            #     'id': 'gemini-1.5-flash-8b',
-            #     'name': '1.5-flash-8b',
-            #     'priority': 2,
+            },
+            {
+                'id': 'gemini-1.5-flash',
+                'name': '1.5-flash-8b',
+                'priority': 2,
                 
-            # },
+            },
             # Tier 3: Backup models
-            # {
-            #     'id': 'gemini-pro',
-            #     'name': 'pro',
-            #     'priority': 3,
+            {
+                'id': 'gemini-1.5-pro',
+                'name': 'pro',
+                'priority': 3,
                 
-            # },
+            },
         ]
         
         # Create instances for each API key + model combination

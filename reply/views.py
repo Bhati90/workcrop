@@ -252,10 +252,14 @@ def process_incoming_messages(value, full_webhook_data):
             query_type = "rag"
         # --- 9. Handle quota errors gracefully ---
         try:
-            reply = ai_service.generate_reply(system_prompt=formatted_prompt,
-                user_message=txt,
+            reply = ai_service.generate_reply(
                 history=history,
-                query_type=query_type)
+    user_message=txt,
+    user_lang=user_lang,
+    user_name=user_name,
+    message_type=message_type,
+    whatsapp_user=whatsapp_user,      # ← ADD THIS
+    conversation=conversation     )
             log_inquiry_details(
             txt, 
             reply, 
@@ -557,7 +561,7 @@ def handle_reaction_message(msg_data, conversation, whatsapp_user, whatsapp_mess
         logger.error(f"Error handling reaction: {str(e)}")
         return None
     
-    
+
 def handle_text_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp):
     """Handle text messages - FIXED"""
     text_content = msg_data.get('text', {}).get('body', '')
@@ -702,7 +706,7 @@ def handle_audio_transcription(msg_data, conversation, whatsapp_user, from_numbe
                 history.append({"role": role, "parts": [content]})
         
         # Process like normal text message
-        ai_service = get_multi_gemini_service()
+        ai_service = get_gemini_service()
         formatted_prompt = SYSTEM_PROMPT.format(
             user_lang=user_lang,
             user_name=user_name
