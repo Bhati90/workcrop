@@ -2018,27 +2018,14 @@ def build_meta_payload(template_data, media_id, remove_media):
         meta_component = {"type": component['type']}
         
         if component['type'] == 'HEADER':
-            header_format = component.get('format', 'TEXT')
+            meta_component['format'] = component.get('format', 'IMAGE')
             
             # If user removed media, skip HEADER with media
-            if remove_media and header_format in ['IMAGE', 'VIDEO', 'DOCUMENT']:
-                continue
+           
             
-            # If user wants to add media
-            if header_format in ['IMAGE', 'VIDEO', 'DOCUMENT']:
-                if media_id:
-                    meta_component['format'] = header_format
-                    meta_component['example'] = {
-                        'header_handle': [media_id]
-                    }
-                else:
-                    # No media provided, skip header
-                    continue
-            else:
-                # TEXT header
-                meta_component['format'] = 'TEXT'
-                meta_component['text'] = component.get('text', '')
-        
+        if component['format'] == 'TEXT':
+            meta_component['text'] = component.get('text', '')
+
         elif component['type'] == 'BODY':
             body_text = component['text']
             meta_component['text'] = body_text
@@ -2250,14 +2237,7 @@ def submit_template_to_meta(request):
                 
                 if component['format'] == 'TEXT':
                     meta_component['text'] = component.get('text', '')
-                elif component['format'] in ['IMAGE', 'VIDEO', 'DOCUMENT']:
-                    if media_id:
-                        meta_component['example'] = {
-                            'header_handle': [media_id]
-                        }
-                    else:
-                        logger.warning("Skipping HEADER - no media ID")
-                        continue
+                
             
             elif component['type'] == 'BODY':
                 body_text = component['text']
