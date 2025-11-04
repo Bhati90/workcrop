@@ -2018,17 +2018,26 @@ def build_meta_payload(template_data, media_id, remove_media):
         
         if component['type'] == 'HEADER':
             header_format = component.get('format', 'TEXT')
-            meta_component['format'] = header_format
             
-            # If user removed media, skip HEADER with media
+            # If user removed media or format is media type, skip the entire header
             if remove_media and header_format in ['IMAGE', 'VIDEO', 'DOCUMENT']:
                 continue
+            
+            # For media formats without media_id, skip header
+            if header_format in ['IMAGE', 'VIDEO', 'DOCUMENT'] and not media_id:
+                logger.warning(f"Skipping HEADER with format {header_format} - no media provided")
+                continue
+            
+            meta_component['format'] = header_format
             
             # Handle TEXT headers
             if header_format == 'TEXT':
                 meta_component['text'] = component.get('text', '')
-            # For IMAGE/VIDEO/DOCUMENT, just specify format without example
-            # Users will provide media when actually sending messages
+            # Handle media headers with media_id
+            elif header_format in ['IMAGE', 'VIDEO', 'DOCUMENT'] and media_id:
+                meta_component['example'] = {
+                    'header_handle': [media_id]
+                }
         
         elif component['type'] == 'BODY':
             body_text = component['text']
@@ -2054,7 +2063,6 @@ def build_meta_payload(template_data, media_id, remove_media):
         meta_payload['components'].append(meta_component)
     
     return meta_payload
-
 @csrf_exempt
 def upload_image_to_meta_api(request):
     """
