@@ -272,6 +272,10 @@ Return ONLY the transcription text, nothing else.
                 response = model.generate_content([prompt, audio_file])
                 transcription = response.text.strip()
                 
+                if not transcription:
+                        logger.error("Empty transcription")
+                        return None
+                    
                 # Cleanup
                 if temp_audio_path:
                     os.unlink(temp_audio_path)

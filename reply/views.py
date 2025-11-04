@@ -651,8 +651,9 @@ def handle_audio_transcription(msg_data, conversation, whatsapp_user, from_numbe
         transcription_service = AudioTranscriptionService()
         transcription = transcription_service.transcribe_audio(audio_bytes, mime_type)
         
-        if not transcription:
-            logger.error("Transcription failed")
+        # ✅ FIX: Validate transcription
+        if not transcription or not isinstance(transcription, str):
+            logger.error("Transcription failed or returned non-string")
             error_msg = (
                 "माफ़ करें, ऑडियो समझने में समस्या हुई। कृपया text में लिखें। 🙏"
                 if 'hi' in str(whatsapp_user.name) else
@@ -661,7 +662,21 @@ def handle_audio_transcription(msg_data, conversation, whatsapp_user, from_numbe
             WhatsAppService().send_text_message(from_number, error_msg, conversation)
             return
         
-        logger.info(f"✅ Transcribed: {transcription[:100]}...")
+        # ✅ FIX: Ensure it's a clean string
+        transcription = str(transcription).strip()
+        
+        if len(transcription) < 2:
+            logger.error("Transcription too short")
+            error_msg = (
+                "माफ़ करें, ऑडियो साफ नहीं सुनाई दिया। कृपया फिर से भेजें। 🙏"
+                if 'hi' in str(whatsapp_user.name) else
+                "Sorry, couldn't hear clearly. Please try again. 🙏"
+            )
+            WhatsAppService().send_text_message(from_number, error_msg, conversation)
+            return
+        
+        # ✅ FIX: Clean logging (no ellipsis)
+        logger.info(f"✅ Transcribed ({len(transcription)} chars): {transcription[:100]}")
         
         # Update message with transcription
         msg_obj = Message.objects.filter(
@@ -692,20 +707,21 @@ def handle_audio_transcription(msg_data, conversation, whatsapp_user, from_numbe
         # Process like normal text message
         ai_service = get_gemini_service()
         
-        
-        # Generate AI response
         try:
             reply = ai_service.generate_reply(
                 history=history,
                 user_message=transcription,
-    user_lang=user_lang,
-    user_name=user_name,
-    whatsapp_user=whatsapp_user,      # ← ADD THIS
-    conversation=conversation
+                user_lang=user_lang,
+                user_name=user_name,
+                message_type='text',
+                whatsapp_user=whatsapp_user,
+                conversation=conversation
             )
+            
             log_inquiry_details(transcription, reply, whatsapp_user, conversation, user_lang)
+            
         except Exception as e:
-            logger.error(f"AI error on audio: {str(e)}")
+            logger.error(f"AI error on audio: {str(e)}", exc_info=True)
             reply = "[ESCALATE]"
         
         # Handle response (same logic as text)
@@ -728,7 +744,6 @@ def handle_audio_transcription(msg_data, conversation, whatsapp_user, from_numbe
         logger.error(f"Audio handling error: {str(e)}", exc_info=True)
         error_msg = "Sorry, audio processing failed. Please send text."
         WhatsAppService().send_text_message(from_number, error_msg, conversation)
-
 
 def handle_media_not_supported(media_type, from_number, conversation, whatsapp_user):
     """
