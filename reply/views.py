@@ -186,6 +186,16 @@ def process_incoming_messages(value, full_webhook_data):
         if message_type == 'image':
             handle_image_with_ai(msg_data, conversation, whatsapp_user, from_number, timestamp, whatsapp_message_id)
             return
+        
+        # --- 6.5. Handle LOCATION (AI Response) ---
+        if message_type == 'location':
+            handle_location_with_ai(msg_data, conversation, whatsapp_user, from_number, timestamp, whatsapp_message_id)
+            return
+        
+        if message_type == 'audio':
+            handle_audio_transcription(msg_data, conversation, whatsapp_user, from_number, timestamp)
+            return
+        
         # --- 3. Save the Incoming Message to DB ---
         msg_obj = _save_incoming_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp)
         
@@ -206,10 +216,7 @@ def process_incoming_messages(value, full_webhook_data):
             handle_sticker_response(conversation, whatsapp_user, from_number)
             return
         
-        # --- 6.5. Handle LOCATION (AI Response) ---
-        if message_type == 'location':
-            handle_location_with_ai(msg_data, conversation, whatsapp_user, from_number, timestamp, whatsapp_message_id)
-            return
+        
 
         # --- 7. Handle IMAGE/VIDEO/DOCUMENT (Polite decline) ---
         # --- 7. Handle IMAGE (AI Vision Analysis) ---
@@ -221,10 +228,6 @@ def process_incoming_messages(value, full_webhook_data):
             return
 
         # --- 8. Handle AUDIO (Transcription + AI Response) ---
-        if message_type == 'audio':
-            handle_audio_transcription(msg_data, conversation, whatsapp_user, from_number, timestamp)
-            return
-        
 
         # --- 6. Prepare data for Gemini ---
         txt = msg_data.get('text', {}).get('body', '').strip()
@@ -452,7 +455,7 @@ def handle_image_with_ai(msg_data, conversation, whatsapp_user, from_number, tim
             escalation_msg = (
                 "हमारी टीम जल्द ही आपसे संपर्क करेगी।" 
                 if user_lang == 'hi' else 
-                "Our team will reach you soon."
+                "something wrong happen. Our team will reach you soon."
             )
             sent_msg = WhatsAppService().send_text_message(from_number, escalation_msg, conversation)
             if sent_msg:
@@ -471,7 +474,7 @@ def handle_image_with_ai(msg_data, conversation, whatsapp_user, from_number, tim
             fallback_msg = (
                 "हमारी टीम जल्द ही आपसे संपर्क करेगी।" 
                 if user_lang == 'hi' else 
-                "Our team will reach you soon."
+                " i cant understand it. Our team will reach you soon. "
             )
             sent_msg = WhatsAppService().send_text_message(from_number, fallback_msg, conversation)
             if sent_msg:
@@ -1185,7 +1188,7 @@ def handle_location_with_ai(msg_data, conversation, whatsapp_user, from_number, 
             escalation_msg = (
                 "हमारी टीम जल्द ही आपसे संपर्क करेगी।" 
                 if user_lang == 'hi' else 
-                "Our team will reach you soon."
+                "location taken.Our team will reach you soon."
             )
             sent_msg = WhatsAppService().send_text_message(from_number, escalation_msg, conversation)
             if sent_msg:
