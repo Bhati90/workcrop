@@ -81,7 +81,7 @@ class Message(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     error_message = models.TextField(blank=True, null=True)
-
+    is_ai_generated = models.BooleanField(default=False)  # ✅ NEW
     class Meta:
         ordering = ['timestamp']
         db_table = 'whatsapp_message'

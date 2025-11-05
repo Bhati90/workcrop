@@ -88,32 +88,32 @@ class MultiGeminiService:
                 'priority': 1,
                 
             },
-            {
-                'id': 'gemini-2.0-flash-exp',
-                'name': '2.0-flash-002',
-                'priority': 1,
+            # {
+            #     'id': 'gemini-1.5-flash-',
+            #     'name': '1.5-flash-002',
+            #     'priority': 1,
                 
-            },
+            # },
             # Tier 2: Stable models
-            {
-                'id': 'gemini-2.5-pro',
-                'name': '1.5-flash',
-                'priority': 2,
-                
-            },
             # {
             #     'id': 'gemini-1.5-flash',
+            #     'name': '1.5-flash',
+            #     'priority': 2,
+                
+            # },
+            # {
+            #     'id': 'gemini-1.5-flash-8b',
             #     'name': '1.5-flash-8b',
             #     'priority': 2,
                 
             # },
             # Tier 3: Backup models
-            {
-                'id': 'gemini-1.5-pro',
-                'name': 'pro',
-                'priority': 3,
+            # {
+            #     'id': 'gemini-pro',
+            #     'name': 'pro',
+            #     'priority': 3,
                 
-            },
+            # },
         ]
         
         # Create instances for each API key + model combination
@@ -279,6 +279,127 @@ class MultiGeminiService:
         logger.error(f"💥 All {len(tried_instances)} instances failed!")
         return "[ESCALATE]"
     
+
+    def analyze_image(self, image_bytes, mime_type, caption="", user_lang='hi', 
+                    user_name='User', history=None, max_retries=3):
+        """
+        Analyze image with Gemini Vision
+        Detects crops, diseases, pests, equipment, etc.
+        """
+        history = history or []
+        attempts = 0
+        tried_instances = set()
+        
+        # Create farming-specific vision prompt
+        if user_lang == 'hi':
+            vision_prompt = f"""तुम {user_name} के लिए एक खेती सलाहकार हो। 
+
+    इस फोटो को देखो और बताओ:
+    - क्या फसल है?
+    - कोई बीमारी या कीड़ा दिख रहा है?
+    - क्या समस्या है?
+    - क्या करना चाहिए?
+
+    अगर caption है: "{caption}"
+
+    हिंदी में, छोटे और आसान शब्दों में जवाब दो।
+    अगर खेती से related नहीं है, तो कहो: [ESCALATE]
+    """
+        else:
+            vision_prompt = f"""You are a farming advisor for {user_name}.
+
+    Analyze this image and tell:
+    - What crop is this?
+    - Any disease or pest visible?
+    - What's the problem?
+    - What should be done?
+
+    If caption provided: "{caption}"
+
+    Respond in simple English.
+    If not farming-related, say: [ESCALATE]
+    """
+        
+        while attempts < max_retries:
+            # Select best instance (prefer priority 1 for vision)
+            instance = self.select_instance("general")
+            
+            if instance.name in tried_instances and len(tried_instances) < len(self.instances):
+                available = [i for i in self.instances 
+                        if i.name not in tried_instances and i.is_available()]
+                if available:
+                    instance = available[0]
+                else:
+                    break
+            
+            tried_instances.add(instance.name)
+            attempts += 1
+            
+            logger.info(f"🖼️ Vision Attempt {attempts}: {instance.name}")
+            
+            try:
+                # Configure API key
+                genai.configure(api_key=instance.api_key)
+                
+                # Create model with vision support
+                model = genai.GenerativeModel(
+                    instance.model_id,
+                    system_instruction=vision_prompt
+                )
+                
+                # Prepare image data
+                import io
+                from PIL import Image
+                
+                # Convert bytes to PIL Image
+                image = Image.open(io.BytesIO(image_bytes))
+                
+                # Prepare message parts
+                parts = []
+                if caption:
+                    parts.append(f"User's caption: {caption}\n\nAnalyze this image:")
+                else:
+                    parts.append("Analyze this farming-related image:")
+                
+                parts.append(image)
+                
+                # Generate response with history
+                if history:
+                    chat = model.start_chat(history=history)
+                    response = chat.send_message(parts)
+                else:
+                    response = model.generate_content(parts)
+                
+                reply = response.text.strip()
+                
+                # Record success
+                instance.record_request()
+                logger.info(f"✅ Vision success with {instance.name}")
+                
+                return reply
+            
+            except Exception as e:
+                error_msg = str(e)
+                logger.error(f"❌ Vision {instance.name} failed: {error_msg[:100]}")
+                
+                instance.record_failure()
+                
+                if "429" in error_msg or "quota" in error_msg.lower():
+                    logger.warning(f"⏱️ {instance.name} quota exceeded, trying next")
+                    continue
+                
+                if "503" in error_msg or "overloaded" in error_msg.lower():
+                    logger.warning(f"⏱️ {instance.name} overloaded, trying next")
+                    continue
+                
+                if attempts < max_retries:
+                    logger.info(f"🔄 Retrying with different instance...")
+                    time.sleep(0.5)
+                    continue
+        
+        # All instances failed
+        logger.error(f"💥 All vision attempts failed!")
+        return "[ESCALATE]"
     def search_knowledge_base(self, query, top_k=3):
         """RAG search using first available instance for embedding"""
         if self.vector_db is None:

@@ -123,7 +123,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Cache key for singleton
-GEMINI_SERVICE_CACHE_KEY = 'gemini_service_singletonV6'
+GEMINI_SERVICE_CACHE_KEY = 'gemini_service_singleton'
 
 def get_gemini_service():
     """
@@ -201,9 +201,20 @@ def process_incoming_messages(value, full_webhook_data):
         if message_type == 'sticker':
             handle_sticker_response(conversation, whatsapp_user, from_number)
             return
+        
+        # --- 6.5. Handle LOCATION (AI Response) ---
+        if message_type == 'location':
+            handle_location_with_ai(msg_data, conversation, whatsapp_user, from_number, timestamp, whatsapp_message_id)
+            return
 
         # --- 7. Handle IMAGE/VIDEO/DOCUMENT (Polite decline) ---
-        if message_type in ['image', 'video', 'document']:
+        # --- 7. Handle IMAGE (AI Vision Analysis) ---
+        if message_type == 'image':
+            handle_image_with_ai(msg_data, conversation, whatsapp_user, from_number, timestamp, whatsapp_message_id)
+            return
+
+        # --- 8. Handle VIDEO/DOCUMENT (Polite decline) ---
+        if message_type in ['video', 'document']:
             handle_media_not_supported(message_type, from_number, conversation, whatsapp_user)
             return
 
@@ -233,19 +244,29 @@ def process_incoming_messages(value, full_webhook_data):
                 history.append({"role": role, "parts": [content]})
         
         # --- 8. Get CACHED GeminiService instance ---
-        ai_service = get_gemini_service()
+        ai_service = get_multi_gemini_service()
         
-        
+        # Format system prompt
+        formatted_prompt = SYSTEM_PROMPT.format(
+            user_lang=user_lang,
+            user_name=user_name
+        )
+        query_type = "general"
+        txt_lower = txt.lower()
+        if any(kw in txt_lower for kw in ['hello', 'hi', 'namaste', 'नमस्ते']):
+            query_type = "greeting"
+        elif any(kw in txt_lower for kw in ['ok', 'thanks', 'धन्यवाद', 'ठीक']):
+            query_type = "acknowledgment"
+        elif any(kw in txt_lower for kw in ['labor', 'majur', 'मजूर', 'worker']):
+            query_type = "labor"
+        elif any(kw in txt_lower for kw in ['spray', 'फवारणी', 'crop', 'फसल']):
+            query_type = "rag"
         # --- 9. Handle quota errors gracefully ---
         try:
-            reply = ai_service.generate_reply(
+            reply = ai_service.generate_reply(system_prompt=formatted_prompt,
+                user_message=txt,
                 history=history,
-    user_message=txt,
-    user_lang=user_lang,
-    user_name=user_name,
-    message_type=message_type,
-    whatsapp_user=whatsapp_user,      # ← ADD THIS
-    conversation=conversation     )
+                query_type=query_type)
             log_inquiry_details(
             txt, 
             reply, 
@@ -302,7 +323,7 @@ def process_incoming_messages(value, full_webhook_data):
                 logger.info(f"↩️ First escalation - sent redirect message")
             
             # Second strike: Block
-            elif recent_redirects >= 8 or recent_escalations >= 8:
+            elif recent_redirects >= 1 or recent_escalations >= 1:
                 escalation_msg = (
                     "हमारी टीम जल्द ही आपसे संपर्क करेगी।" 
                     if user_lang == 'hi' else 
@@ -318,8 +339,12 @@ def process_incoming_messages(value, full_webhook_data):
             return
 
         # --- 11. Send the Gemini Reply ---
+        # --- 11. Send the Gemini Reply ---
         if reply:
-            WhatsAppService().send_text_message(from_number, reply, conversation)
+            sent_msg = WhatsAppService().send_text_message(from_number, reply, conversation)
+            if sent_msg:
+                sent_msg.is_ai_generated = True  # ✅ Mark as AI
+                sent_msg.save()
         else:
             logger.error("Gemini returned empty reply.")
             fallback_msg = (
@@ -327,11 +352,137 @@ def process_incoming_messages(value, full_webhook_data):
                 if user_lang == 'hi' else 
                 "Our team will reach you soon."
             )
-            WhatsAppService().send_text_message(from_number, fallback_msg, conversation)
-
+            sent_msg = WhatsAppService().send_text_message(from_number, fallback_msg, conversation)
+            if sent_msg:
+                sent_msg.is_ai_generated = True
+                sent_msg.save()
     except Exception as e:
         logger.error(f"CRITICAL Error: {str(e)}", exc_info=True)
 
+def handle_image_with_ai(msg_data, conversation, whatsapp_user, from_number, timestamp, whatsapp_message_id):
+    """
+    Handle image messages + AI Vision Analysis
+    Downloads image → Analyzes with Gemini Vision → Responds
+    """
+    try:
+        # Save image message first
+        msg_obj = handle_image_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp)
+        
+        if not msg_obj:
+            logger.error("Failed to save image message")
+            return
+        
+        if not msg_obj.media_url:
+            logger.warning(f"⚠️ Image {media_id} saved to DB but media_url is empty, may still be downloading")
+        else:
+            logger.info(f"✅ Image available at: {msg_obj.media_url}")
+        
+        image_data = msg_data.get('image', {})
+        media_id = image_data.get('id')
+        caption = image_data.get('caption', '').strip()
+        
+        logger.info(f"🖼️ Processing image {media_id} with AI vision...")
+        
+        # Download image from WhatsApp
+        whatsapp_service = WhatsAppService()
+        image_bytes, mime_type = whatsapp_service.download_media(media_id)
+        
+        if not image_bytes:
+            logger.error("Failed to download image")
+            error_msg = (
+                "माफ़ करें, फोटो देखने में समस्या हुई। कृपया फिर से भेजें। 🙏"
+                if whatsapp_user.name else
+                "Sorry, couldn't process image. Please try again. 🙏"
+            )
+            sent_msg = WhatsAppService().send_text_message(from_number, error_msg, conversation)
+            if sent_msg:
+                sent_msg.is_ai_generated = True
+                sent_msg.save()
+            return
+        
+        # Detect user language from history
+        recent_msg = conversation.messages.filter(
+            direction='inbound',
+            message_type='text'
+        ).order_by('-timestamp').first()
+        
+        user_lang = 'hi'
+        if recent_msg and recent_msg.text_content:
+            if any(u'\u0900' <= char <= u'\u097f' for char in recent_msg.text_content):
+                user_lang = 'hi'
+            else:
+                user_lang = 'en'
+        
+        user_name = whatsapp_user.name
+        
+        # Get conversation history
+        history = []
+        qs = conversation.messages.filter(timestamp__lt=timestamp).order_by('-timestamp')[:10]
+        
+        for m in reversed(qs):
+            if m.message_type in ('text', 'audio'):
+                role = 'user' if m.direction == 'inbound' else 'model'
+                content = m.text_content or f'[{m.message_type}]'
+                content = content.replace('[AUDIO] ', '')
+                history.append({"role": role, "parts": [content]})
+        
+        # Analyze image with Gemini Vision
+        ai_service = get_multi_gemini_service()
+        reply = ai_service.analyze_image(
+            image_bytes=image_bytes,
+            mime_type=mime_type,
+            caption=caption,
+            user_lang=user_lang,
+            user_name=user_name,
+            history=history
+        )
+        
+        # Log inquiry
+        image_query = f"[IMAGE] {caption}" if caption else "[IMAGE]"
+        log_inquiry_details(image_query, reply, whatsapp_user, conversation, user_lang)
+        
+        # Handle response
+        if reply == "[IGNORE]":
+            logger.info("AI classified image as [IGNORE]")
+            return
+        
+        if reply == "[ESCALATE]":
+            escalation_msg = (
+                "हमारी टीम जल्द ही आपसे संपर्क करेगी।" 
+                if user_lang == 'hi' else 
+                "Our team will reach you soon."
+            )
+            sent_msg = WhatsAppService().send_text_message(from_number, escalation_msg, conversation)
+            if sent_msg:
+                sent_msg.is_ai_generated = True
+                sent_msg.save()
+            return
+        
+        if reply:
+            sent_msg = WhatsAppService().send_text_message(from_number, reply, conversation)
+            if sent_msg:
+                sent_msg.is_ai_generated = True  # ✅ Mark as AI
+                sent_msg.save()
+            logger.info(f"✅ AI responded to image")
+        else:
+            logger.error("Gemini returned empty reply for image")
+            fallback_msg = (
+                "हमारी टीम जल्द ही आपसे संपर्क करेगी।" 
+                if user_lang == 'hi' else 
+                "Our team will reach you soon."
+            )
+            sent_msg = WhatsAppService().send_text_message(from_number, fallback_msg, conversation)
+            if sent_msg:
+                sent_msg.is_ai_generated = True
+                sent_msg.save()
+        
+    except Exception as e:
+        logger.error(f"❌ Error processing image with AI: {str(e)}", exc_info=True)
+        error_msg = "Sorry, image processing failed. Please send text."
+        sent_msg = WhatsAppService().send_text_message(from_number, error_msg, conversation)
+        if sent_msg:
+            sent_msg.is_ai_generated = True
+            sent_msg.save()
 
 def log_inquiry_details(user_message, bot_reply, whatsapp_user, conversation, language):
     """
@@ -473,7 +624,7 @@ def handle_audio_message(msg_data, conversation, whatsapp_user, whatsapp_message
             timestamp=timestamp,
             status='delivered'
         )
-        
+        download_and_save_media(msg_obj, audio_id)
         # Update conversation preview
         conversation.last_message_preview = "[AUDIO]"
         conversation.unread_count += 1
@@ -489,81 +640,6 @@ def handle_audio_message(msg_data, conversation, whatsapp_user, whatsapp_message
         logger.error(f"Error handling audio: {str(e)}")
         return None
 
-
-def handle_text_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp):
-    """Handle text messages - FIXED"""
-    text_content = msg_data.get('text', {}).get('body', '')
-    
-    # FIX: Only create the message ONCE
-    msg_obj = create_message(
-        conversation, whatsapp_message_id, 'text', 'inbound',
-        text_content, None, None, None, 'delivered', timestamp
-    )
-    
-    # Update conversation/user for preview
-    conversation.last_message_preview = text_content[:100]
-    conversation.unread_count += 1
-    conversation.save()
-    
-    whatsapp_user.last_message_at = timestamp
-    whatsapp_user.save()
-    
-    logger.info(f"Text message: '{text_content}' from {whatsapp_user.phone_number}")
-    return msg_obj # Return the created object
-
-def handle_image_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp):
-    """Handle image messages"""
-    image_data = msg_data.get('image', {})
-    media_id = image_data.get('id')
-    mime_type = image_data.get('mime_type')
-    caption = image_data.get('caption', '')
-    
-    logger.info(f"Image message from {whatsapp_user.phone_number}, media_id: {media_id}")
-    
-    message = create_message(
-        conversation, whatsapp_message_id, 'image', 'inbound',
-        None, media_id, mime_type, caption, 'delivered', timestamp
-    )
-    
-    # Download media asynchronously
-    download_and_save_media(message, media_id)
-    
-    preview = "[IMAGE]"
-    if caption:
-        preview += f" {caption[:50]}"
-    conversation.last_message_preview = preview
-    conversation.unread_count += 1
-    conversation.save()
-    
-    whatsapp_user.last_message_at = timestamp
-    whatsapp_user.save()
-
-
-def handle_video_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp):
-    """Handle video messages"""
-    video_data = msg_data.get('video', {})
-    media_id = video_data.get('id')
-    mime_type = video_data.get('mime_type')
-    caption = video_data.get('caption', '')
-    
-    logger.info(f"Video message from {whatsapp_user.phone_number}, media_id: {media_id}")
-    
-    message = create_message(
-        conversation, whatsapp_message_id, 'video', 'inbound',
-        None, media_id, mime_type, caption, 'delivered', timestamp
-    )
-    
-    download_and_save_media(message, media_id)
-    
-    preview = "[VIDEO]"
-    if caption:
-        preview += f" {caption[:50]}"
-    conversation.last_message_preview = preview
-    conversation.unread_count += 1
-    conversation.save()
-    
-    whatsapp_user.last_message_at = timestamp
-    whatsapp_user.save()
 
 def handle_sticker_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp):
     """Handle incoming stickers"""
@@ -621,6 +697,92 @@ def handle_reaction_message(msg_data, conversation, whatsapp_user, whatsapp_mess
     except Exception as e:
         logger.error(f"Error handling reaction: {str(e)}")
         return None
+    
+    
+def handle_text_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp):
+    """Handle text messages - FIXED"""
+    text_content = msg_data.get('text', {}).get('body', '')
+    
+    # FIX: Only create the message ONCE
+    msg_obj = create_message(
+        conversation, whatsapp_message_id, 'text', 'inbound',
+        text_content, None, None, None, 'delivered', timestamp
+    )
+    
+    # Update conversation/user for preview
+    conversation.last_message_preview = text_content[:100]
+    conversation.unread_count += 1
+    conversation.save()
+    
+    whatsapp_user.last_message_at = timestamp
+    whatsapp_user.save()
+    
+    logger.info(f"Text message: '{text_content}' from {whatsapp_user.phone_number}")
+    return msg_obj # Return the created object
+
+def handle_image_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp):
+    """Handle image messages - FIXED to ensure download"""
+    image_data = msg_data.get('image', {})
+    media_id = image_data.get('id')
+    mime_type = image_data.get('mime_type')
+    caption = image_data.get('caption', '')
+    
+    logger.info(f"🖼️ Image message from {whatsapp_user.phone_number}, media_id: {media_id}")
+    
+    # Create message first
+    message = create_message(
+        conversation, whatsapp_message_id, 'image', 'inbound',
+        None, media_id, mime_type, caption, 'delivered', timestamp
+    )
+    
+    # ✅ CRITICAL: Download and save media SYNCHRONOUSLY (not async)
+    # This ensures the image is saved before AI processes it
+    download_and_save_media(message, media_id)
+    
+    # Refresh message to get updated media_url
+    message.refresh_from_db()
+    
+    # Update preview
+    preview = "[IMAGE]"
+    if caption:
+        preview += f" {caption[:50]}"
+    conversation.last_message_preview = preview
+    conversation.unread_count += 1
+    conversation.save()
+    
+    whatsapp_user.last_message_at = timestamp
+    whatsapp_user.save()
+    
+    logger.info(f"✅ Image saved: {message.media_url}")
+    
+    return message
+
+def handle_video_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp):
+    """Handle video messages"""
+    video_data = msg_data.get('video', {})
+    media_id = video_data.get('id')
+    mime_type = video_data.get('mime_type')
+    caption = video_data.get('caption', '')
+    
+    logger.info(f"Video message from {whatsapp_user.phone_number}, media_id: {media_id}")
+    
+    message = create_message(
+        conversation, whatsapp_message_id, 'video', 'inbound',
+        None, media_id, mime_type, caption, 'delivered', timestamp
+    )
+    
+    download_and_save_media(message, media_id)
+    
+    preview = "[VIDEO]"
+    if caption:
+        preview += f" {caption[:50]}"
+    conversation.last_message_preview = preview
+    conversation.unread_count += 1
+    conversation.save()
+    
+    whatsapp_user.last_message_at = timestamp
+    whatsapp_user.save()
+
 # Add at the top
 from .audio import AudioTranscriptionService
 
@@ -651,9 +813,8 @@ def handle_audio_transcription(msg_data, conversation, whatsapp_user, from_numbe
         transcription_service = AudioTranscriptionService()
         transcription = transcription_service.transcribe_audio(audio_bytes, mime_type)
         
-        # ✅ FIX: Validate transcription
-        if not transcription or not isinstance(transcription, str):
-            logger.error("Transcription failed or returned non-string")
+        if not transcription:
+            logger.error("Transcription failed")
             error_msg = (
                 "माफ़ करें, ऑडियो समझने में समस्या हुई। कृपया text में लिखें। 🙏"
                 if 'hi' in str(whatsapp_user.name) else
@@ -662,21 +823,7 @@ def handle_audio_transcription(msg_data, conversation, whatsapp_user, from_numbe
             WhatsAppService().send_text_message(from_number, error_msg, conversation)
             return
         
-        # ✅ FIX: Ensure it's a clean string
-        transcription = str(transcription).strip()
-        
-        if len(transcription) < 2:
-            logger.error("Transcription too short")
-            error_msg = (
-                "माफ़ करें, ऑडियो साफ नहीं सुनाई दिया। कृपया फिर से भेजें। 🙏"
-                if 'hi' in str(whatsapp_user.name) else
-                "Sorry, couldn't hear clearly. Please try again. 🙏"
-            )
-            WhatsAppService().send_text_message(from_number, error_msg, conversation)
-            return
-        
-        # ✅ FIX: Clean logging (no ellipsis)
-        logger.info(f"✅ Transcribed ({len(transcription)} chars): {transcription[:100]}")
+        logger.info(f"✅ Transcribed: {transcription[:100]}...")
         
         # Update message with transcription
         msg_obj = Message.objects.filter(
@@ -705,32 +852,35 @@ def handle_audio_transcription(msg_data, conversation, whatsapp_user, from_numbe
                 history.append({"role": role, "parts": [content]})
         
         # Process like normal text message
-        ai_service = get_gemini_service()
+        ai_service = get_multi_gemini_service()
+        formatted_prompt = SYSTEM_PROMPT.format(
+            user_lang=user_lang,
+            user_name=user_name
+        )
         
+        query_type = "general"
+        txt_lower = transcription.lower()
+        if any(kw in txt_lower for kw in ['hello', 'hi', 'namaste', 'नमस्ते']):
+            query_type = "greeting"
+        elif any(kw in txt_lower for kw in ['ok', 'thanks', 'धन्यवाद']):
+            query_type = "acknowledgment"
+        elif any(kw in txt_lower for kw in ['labor', 'majur', 'मजूर']):
+            query_type = "labor"
+        elif any(kw in txt_lower for kw in ['spray', 'फवारणी']):
+            query_type = "rag"
+        
+        # Generate AI response
         try:
             reply = ai_service.generate_reply(
-                history=history,
+                system_prompt=formatted_prompt,
                 user_message=transcription,
-                user_lang=user_lang,
-                user_name=user_name,
-                message_type='text',
-                whatsapp_user=whatsapp_user,
-                conversation=conversation
+                history=history,
+                query_type=query_type
             )
-            
             log_inquiry_details(transcription, reply, whatsapp_user, conversation, user_lang)
-            
         except Exception as e:
-            logger.error(f"AI error on audio: {str(e)}", exc_info=True)
-            # reply = "[ESCALATE]"
-            reply = None
-            fallback_msg = (
-                "हमारी टीम आपके सवाल पर काम कर रही है। जल्द संपर्क करेंगे। 🙏"
-                if user_lang == 'hi' else
-                "Our team is working on your question. Will contact soon. 🙏"
-            )
-            WhatsAppService().send_text_message(from_number, fallback_msg, conversation)
-            return
+            logger.error(f"AI error on audio: {str(e)}")
+            reply = "[ESCALATE]"
         
         # Handle response (same logic as text)
         if reply == "[IGNORE]":
@@ -746,12 +896,15 @@ def handle_audio_transcription(msg_data, conversation, whatsapp_user, from_numbe
             return
         
         if reply:
-            WhatsAppService().send_text_message(from_number, reply, conversation)
-        
+            sent_msg = WhatsAppService().send_text_message(from_number, reply, conversation)
+            if sent_msg:
+                sent_msg.is_ai_generated = True  # ✅ Mark as AI
+                sent_msg.save()
     except Exception as e:
         logger.error(f"Audio handling error: {str(e)}", exc_info=True)
         error_msg = "Sorry, audio processing failed. Please send text."
         WhatsAppService().send_text_message(from_number, error_msg, conversation)
+
 
 def handle_media_not_supported(media_type, from_number, conversation, whatsapp_user):
     """
@@ -797,7 +950,10 @@ Please send your question as text or audio. 🙏
 
 Ask me anything about farming and labor! 🌾"""
     
-    WhatsAppService().send_text_message(from_number, message, conversation)
+    sent_msg = WhatsAppService().send_text_message(from_number, message, conversation)
+    if sent_msg:
+        sent_msg.is_ai_generated = True
+        sent_msg.save()
     logger.info(f"📎 Sent 'media not supported' message for {media_type}")
 
 
@@ -832,7 +988,10 @@ def handle_sticker_response(conversation, whatsapp_user, from_number):
     ]
     
     response = random.choice(responses_hi if user_lang == 'hi' else responses_en)
-    WhatsAppService().send_text_message(from_number, response, conversation)
+    sent_msg = WhatsAppService().send_text_message(from_number, response, conversation)
+    if sent_msg:
+        sent_msg.is_ai_generated = True
+        sent_msg.save()
     logger.info(f"😀 Sent sticker response")
 
 
@@ -880,7 +1039,10 @@ def handle_reaction_response(msg_data, conversation, whatsapp_user, from_number)
     responses = emoji_responses.get(emoji, emoji_responses['👍'])
     response = random.choice(responses[user_lang])
     
-    WhatsAppService().send_text_message(from_number, response, conversation)
+    sent_msg = WhatsAppService().send_text_message(from_number, response, conversation)
+    if sent_msg:
+        sent_msg.is_ai_generated = True
+        sent_msg.save()
     logger.info(f"❤️ Sent reaction response for {emoji}")
 
 
@@ -911,24 +1073,27 @@ def handle_document_message(msg_data, conversation, whatsapp_user, whatsapp_mess
     whatsapp_user.last_message_at = timestamp
     whatsapp_user.save()
 
-
 def handle_location_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp):
-    """Handle location messages"""
+    """Handle location messages - Save only"""
     location = msg_data.get('location', {})
     latitude = location.get('latitude')
     longitude = location.get('longitude')
     name = location.get('name', '')
     address = location.get('address', '')
     
-    logger.info(f"Location from {whatsapp_user.phone_number}: {latitude}, {longitude}")
+    logger.info(f"📍 Location from {whatsapp_user.phone_number}: {latitude}, {longitude}")
     
-    location_text = f"📍 Location: {name or 'Unnamed'}\n"
+    # Create readable location text
+    location_text = f"📍 Location shared:\n"
+    if name:
+        location_text += f"Name: {name}\n"
     if address:
         location_text += f"Address: {address}\n"
-    location_text += f"Coordinates: {latitude}, {longitude}"
+    location_text += f"Coordinates: {latitude}, {longitude}\n"
+    location_text += f"Google Maps: https://www.google.com/maps?q={latitude},{longitude}"
     
-    create_message(
-        conversation, whatsapp_message_id, 'text', 'inbound',
+    msg_obj = create_message(
+        conversation, whatsapp_message_id, 'location', 'inbound',
         location_text, None, None, None, 'delivered', timestamp
     )
     
@@ -938,8 +1103,95 @@ def handle_location_message(msg_data, conversation, whatsapp_user, whatsapp_mess
     
     whatsapp_user.last_message_at = timestamp
     whatsapp_user.save()
+    
+    return msg_obj
 
 
+def handle_location_with_ai(msg_data, conversation, whatsapp_user, from_number, timestamp, whatsapp_message_id):
+    """
+    Handle location + Generate AI response
+    """
+    try:
+        # Save location message first
+        msg_obj = handle_location_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp)
+        
+        if not msg_obj:
+            return
+        
+        location = msg_data.get('location', {})
+        latitude = location.get('latitude')
+        longitude = location.get('longitude')
+        name = location.get('name', '')
+        address = location.get('address', '')
+        
+        # Detect user language
+        recent_msg = conversation.messages.filter(
+            direction='inbound',
+            message_type='text'
+        ).order_by('-timestamp').first()
+        
+        user_lang = 'hi'
+        if recent_msg and recent_msg.text_content:
+            if any(u'\u0900' <= char <= u'\u097f' for char in recent_msg.text_content):
+                user_lang = 'hi'
+            else:
+                user_lang = 'en'
+        
+        user_name = whatsapp_user.name
+        
+        # Prepare location for AI
+        ai_message = f"User shared their location: {name or 'Unknown place'}"
+        if address:
+            ai_message += f" at {address}"
+        ai_message += f". Coordinates: {latitude}, {longitude}"
+        
+        # Get history
+        history = []
+        qs = conversation.messages.filter(timestamp__lt=timestamp).order_by('-timestamp')[:10]
+        
+        for m in reversed(qs):
+            if m.message_type in ('text', 'audio', 'location'):
+                role = 'user' if m.direction == 'inbound' else 'model'
+                content = m.text_content or f'[{m.message_type}]'
+                history.append({"role": role, "parts": [content]})
+        
+        # Get AI service
+        ai_service = get_multi_gemini_service()
+        formatted_prompt = SYSTEM_PROMPT.format(
+            user_lang=user_lang,
+            user_name=user_name
+        )
+        
+        # Generate response
+        reply = ai_service.generate_reply(
+            system_prompt=formatted_prompt,
+            user_message=ai_message,
+            history=history,
+            query_type="general"
+        )
+        
+        log_inquiry_details(ai_message, reply, whatsapp_user, conversation, user_lang)
+        
+        # Send AI response (mark as AI-generated)
+        if reply and reply not in ["[IGNORE]", "[ESCALATE]"]:
+            sent_msg = WhatsAppService().send_text_message(from_number, reply, conversation)
+            if sent_msg:
+                sent_msg.is_ai_generated = True  # ✅ Mark as AI
+                sent_msg.save()
+            logger.info(f"✅ AI responded to location")
+        elif reply == "[ESCALATE]":
+            escalation_msg = (
+                "हमारी टीम जल्द ही आपसे संपर्क करेगी।" 
+                if user_lang == 'hi' else 
+                "Our team will reach you soon."
+            )
+            sent_msg = WhatsAppService().send_text_message(from_number, escalation_msg, conversation)
+            if sent_msg:
+                sent_msg.is_ai_generated = True
+                sent_msg.save()
+        
+    except Exception as e:
+        logger.error(f"❌ Error processing location with AI: {str(e)}", exc_info=True)
 def handle_button_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp):
     """Handle button reply messages"""
     button_data = msg_data.get('button', {})
@@ -1342,5 +1594,3 @@ def handle_unknown_message(msg_data, conversation, whatsapp_user, whatsapp_messa
     
     logger.warning(f"Saved unsupported message type from {whatsapp_user.phone_number}")
     return msg_obj
-
-#test
