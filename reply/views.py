@@ -806,6 +806,12 @@ def handle_audio_transcription(msg_data, conversation, whatsapp_user, from_numbe
         audio_id = audio_data.get('id')
         
         # Download audio from WhatsApp
+        existing_message = Message.objects.filter(media_id=audio_id).first()
+        if existing_message:
+            logger.warning(f"⚠️ Audio {audio_id} already processed. Skipping duplicate webhook.")
+            return
+        
+        # Download audio from WhatsApp
         logger.info(f"🎤 Downloading audio {audio_id}...")
         audio_bytes, mime_type = WhatsAppService().download_media(audio_id)
         
