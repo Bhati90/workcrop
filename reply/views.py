@@ -447,28 +447,34 @@ def handle_image_with_ai(msg_data, conversation, whatsapp_user, from_number, tim
         log_inquiry_details(image_query, reply, whatsapp_user, conversation, user_lang)
         
         # Handle response
+        # Handle response
         if reply == "[IGNORE]":
             logger.info("AI classified image as [IGNORE]")
             return
-        
+
+        # ✅ Don't escalate on image - AI will handle the conversation
         if reply == "[ESCALATE]":
-            escalation_msg = (
-                "हमारी टीम जल्द ही आपसे संपर्क करेगी।" 
+            # For images, send a polite redirect instead of escalating
+            polite_msg = (
+                "मुझे इस फोटो को समझने में दिक्कत हो रही है। क्या आप बता सकते हैं कि आप क्या जानना चाहते हैं? या खेती से related कोई और फोटो भेज सकते हैं? 🌾"
                 if user_lang == 'hi' else 
-                "something wrong happen. Our team will reach you soon."
+                "I'm having trouble understanding this image. Can you tell me what you'd like to know? Or send another farm-related image? 🌾"
             )
-            sent_msg = WhatsAppService().send_text_message(from_number, escalation_msg, conversation)
+            sent_msg = WhatsAppService().send_text_message(from_number, polite_msg, conversation)
             if sent_msg:
                 sent_msg.is_ai_generated = True
                 sent_msg.save()
             return
-        
+
+        # Send AI response
         if reply:
             sent_msg = WhatsAppService().send_text_message(from_number, reply, conversation)
             if sent_msg:
-                sent_msg.is_ai_generated = True  # ✅ Mark as AI
+                sent_msg.is_ai_generated = True
                 sent_msg.save()
             logger.info(f"✅ AI responded to image")
+        
+        
         else:
             logger.error("Gemini returned empty reply for image")
             fallback_msg = (
