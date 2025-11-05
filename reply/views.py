@@ -137,9 +137,9 @@ def get_gemini_service():
         gemini = GeminiService()
         # Cache it forever (or until server restart)
         cache.set(GEMINI_SERVICE_CACHE_KEY, gemini, timeout=None)
-        logger.info("🚀 Created NEW GeminiService and cached it")
+        logger.info("🚀 Created NEW single GeminiService and cached it")
     else:
-        logger.info("♻️ Reusing CACHED GeminiService instance")
+        logger.info("♻️ Reusing CACHED single GeminiService instance")
     
     return gemini
 
@@ -250,8 +250,26 @@ def process_incoming_messages(value, full_webhook_data):
             logger.info("Ignoring empty text message.")
             return
 
-        user_lang = 'hi' if any(u'\u0900' <= char <= u'\u097f' for char in txt) else 'en'
+        # Detect language from text
+        def detect_language(text):
+            if any(u'\u0900' <= char <= u'\u097f' for char in text):
+                marathi_words = ['आहे', 'मला', 'तुम्हाला', 'पाहिजे', 'माझा']
+                if any(word in text.lower() for word in marathi_words):
+                    return 'mr'
+                return 'hi'
+            return 'en'
+
+        detected_lang = detect_language(txt)
+
+        # Save user's language preference
+        if whatsapp_user.preferred_language != detected_lang:
+            whatsapp_user.preferred_language = detected_lang
+            whatsapp_user.save()
+
+        user_lang = whatsapp_user.preferred_language
         user_name = whatsapp_user.name
+
+        logger.info(f"🗣️ User language: {user_lang}")
 
         # --- 7. Gather History ---
         history = []
@@ -343,7 +361,7 @@ def process_incoming_messages(value, full_webhook_data):
                 logger.info(f"↩️ First escalation - sent redirect message")
             
             # Second strike: Block
-            elif recent_redirects >= 1 or recent_escalations >= 1:
+            elif recent_redirects >= 100 or recent_escalations >= 100:
                 escalation_msg = (
                     "हमारी टीम जल्द ही आपसे संपर्क करेगी।" 
                     if user_lang == 'hi' else 

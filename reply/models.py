@@ -13,12 +13,14 @@ class WhatsAppUser(models.Model):
     last_message_at = models.DateTimeField(null=True, blank=True)
     is_blocked = models.BooleanField(default=False)
     blocked_until = models.DateTimeField(null=True, blank=True, default=None)
+    preferred_language = models.CharField(max_length=5, default='en') 
     class Meta:
         ordering = ['-last_message_at']
         db_table = 'whatsapp_whatsappuser'
 
     def __str__(self):
         return f"{self.name} ({self.phone_number})"
+    
     
 
 class Conversation(models.Model):
