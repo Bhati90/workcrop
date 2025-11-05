@@ -193,6 +193,21 @@ def process_incoming_messages(value, full_webhook_data):
             return
         
         if message_type == 'audio':
+            # ✅ FIX: Check for duplicate audio BEFORE processing
+            audio_data = msg_data.get('audio', {})
+            audio_id = audio_data.get('id')
+            
+            # Check if this audio was already processed
+            existing_audio = Message.objects.filter(
+                media_id=audio_id,
+                message_type='audio'
+            ).first()
+            
+            if existing_audio:
+                logger.warning(f"⚠️ Audio {audio_id} already processed (duplicate webhook). Skipping.")
+                return  # Exit immediately - don't process
+            
+            # Process audio only if it's new
             handle_audio_transcription(msg_data, conversation, whatsapp_user, from_number, timestamp)
             return
         
@@ -804,12 +819,21 @@ def handle_audio_transcription(msg_data, conversation, whatsapp_user, from_numbe
     try:
         audio_data = msg_data.get('audio', {})
         audio_id = audio_data.get('id')
+        mime_type = audio_data.get('mime_type', 'audio/ogg')
         
-        # Download audio from WhatsApp
-        existing_message = Message.objects.filter(media_id=audio_id).first()
-        if existing_message:
-            logger.warning(f"⚠️ Audio {audio_id} already processed. Skipping duplicate webhook.")
-            return
+        # ✅ CRITICAL: Save message to DB IMMEDIATELY to prevent duplicates
+        msg_obj = Message.objects.create(
+            conversation=conversation,
+            whatsapp_message_id=msg_data.get('id'),
+            message_type='audio',
+            direction='inbound',
+            media_id=audio_id,
+            mime_type=mime_type,
+            timestamp=timestamp,
+            status='delivered'
+        )
+        
+        logger.info(f"✅ Audio message saved to DB: {audio_id}")
         
         # Download audio from WhatsApp
         logger.info(f"🎤 Downloading audio {audio_id}...")
@@ -843,14 +867,8 @@ def handle_audio_transcription(msg_data, conversation, whatsapp_user, from_numbe
         logger.info(f"✅ Transcribed: {transcription[:100]}...")
         
         # Update message with transcription
-        msg_obj = Message.objects.filter(
-            conversation=conversation,
-            media_id=audio_id
-        ).first()
-        
-        if msg_obj:
-            msg_obj.text_content = f"[AUDIO] {transcription}"
-            msg_obj.save()
+        msg_obj.text_content = f"[AUDIO] {transcription}"
+        msg_obj.save()
         
         # Detect language
         user_lang = transcription_service.detect_language(transcription)
