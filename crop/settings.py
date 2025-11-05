@@ -315,13 +315,13 @@ GEMINI_API_KEY_2 = os.environ.get('GEMINI_API_KEY_2', 'AIzaSyDGCAaYBIoySFkgom_KH
 # Backward compatibility
 GEMINI_API_KEY = GEMINI_API_KEY_1
 
-AWS_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID')
-AWS_SECRET_ACCESS_KEY = config('AWS_SECRET_ACCESS_KEY')
-AWS_STORAGE_BUCKET_NAME = config('AWS_STORAGE_BUCKET_NAME')
-AWS_S3_REGION_NAME = config('AWS_S3_REGION_NAME', default='us-east-1')
-AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
-AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
-AWS_DEFAULT_ACL = 'public-read'
+# AWS_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID')
+# AWS_SECRET_ACCESS_KEY = config('AWS_SECRET_ACCESS_KEY')
+# AWS_STORAGE_BUCKET_NAME = config('AWS_STORAGE_BUCKET_NAME')
+# AWS_S3_REGION_NAME = config('AWS_S3_REGION_NAME', default='us-east-1')
+# AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
+# AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
+# AWS_DEFAULT_ACL = 'public-read'
 
 
 # Static files (CSS, JavaScript, Images)
@@ -446,7 +446,7 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = 'staticfiles/'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field

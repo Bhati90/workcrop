@@ -283,45 +283,92 @@ class MultiGeminiService:
     def analyze_image(self, image_bytes, mime_type, caption="", user_lang='hi', 
                     user_name='User', history=None, max_retries=3):
         """
-        Analyze image with Gemini Vision
-        Detects crops, diseases, pests, equipment, etc.
+        Smart image analysis with context awareness
         """
         history = history or []
         attempts = 0
         tried_instances = set()
         
-        # Create farming-specific vision prompt
+        # ✅ FIX 1: Check if user asked a specific question
+        has_recent_question = False
+        user_question = ""
+        
+        if history:
+            # Check last 2 messages for user questions
+            for msg in history[-2:]:
+                if msg.get('role') == 'user':
+                    content = msg.get('parts', [''])[0]
+                    # Check if it's a question or request
+                    question_indicators = [
+                        'क्या', 'कैसे', 'कौन', 'कब', 'क्यों', 'कितना',  # Hindi
+                        'what', 'how', 'when', 'why', 'which', 'can you', 'tell me',  # English
+                        'problem', 'issue', 'help', 'समस्या', 'मदद'
+                    ]
+                    if any(indicator in content.lower() for indicator in question_indicators):
+                        has_recent_question = True
+                        user_question = content
+                        break
+        
+        # ✅ FIX 2: Check if caption has context
+        has_caption_context = bool(caption and len(caption.strip()) > 5)
+        
+        # ✅ FIX 3: Create context-aware vision prompt
         if user_lang == 'hi':
-            vision_prompt = f"""तुम {user_name} के लिए एक खेती सलाहकार हो। 
+            if has_recent_question or has_caption_context:
+                # User asked something specific - analyze deeply
+                vision_prompt = f"""तुम {user_name} के लिए एक खेती सलाहकार हो।
 
-    इस फोटो को देखो और बताओ:
-    - क्या फसल है?
-    - कोई बीमारी या कीड़ा दिख रहा है?
-    - क्या समस्या है?
+    उपयोगकर्ता ने पूछा: "{user_question or caption}"
+
+    इस फोटो को देखो और उनके सवाल का जवाब दो:
+    - अगर फोटो खेती से related है (फसल, पत्ती, कीड़ा, खेत, उपकरण), तो detailed जवाब दो
+    - फसल की पहचान करो
+    - कोई बीमारी या समस्या दिख रही है?
     - क्या करना चाहिए?
 
-    अगर caption है: "{caption}"
-
     हिंदी में, छोटे और आसान शब्दों में जवाब दो।
-    अगर खेती से related नहीं है, तो कहो: [ESCALATE]
+    अगर फोटो सवाल से match नहीं करती, कहो: "यह फोटो आपके सवाल से related नहीं लग रही। कृपया खेती से related फोटो भेजें। 🌾"
+    """
+            else:
+                # No context - ask what they need
+                vision_prompt = f"""तुम {user_name} के लिए एक खेती सलाहकार हो।
+
+    इस फोटो को देखो:
+    - अगर यह खेती से related है (फसल, पत्ती, बीमारी, कीड़ा, खेत, मिट्टी, उपकरण), तो बस बताओ कि क्या दिख रहा है और पूछो: "इस बारे में आप क्या जानना चाहते हैं?"
+    - अगर यह कोई selfie, person, random object, या खेती से बिल्कुल अलग चीज है, तो कहो: "कृपया खेती से related फोटो भेजें जैसे फसल, पत्ती, या खेत। मैं खेती में मदद कर सकता हूँ। 🌾"
+    - अगर फोटो blurry या unclear है, कहो: "फोटो साफ नहीं दिख रही। कृपया clear फोटो भेजें। 📸"
+
+    बहुत छोटे में (2-3 lines) जवाब दो।
     """
         else:
-            vision_prompt = f"""You are a farming advisor for {user_name}.
+            if has_recent_question or has_caption_context:
+                # User asked something specific
+                vision_prompt = f"""You are a farming advisor for {user_name}.
 
-    Analyze this image and tell:
-    - What crop is this?
-    - Any disease or pest visible?
-    - What's the problem?
+    User asked: "{user_question or caption}"
+
+    Analyze this image and answer their question:
+    - If image is farm-related (crop, leaf, pest, field, equipment), give detailed answer
+    - Identify the crop
+    - Any disease or problem visible?
     - What should be done?
 
-    If caption provided: "{caption}"
-
     Respond in simple English.
-    If not farming-related, say: [ESCALATE]
+    If image doesn't match their question, say: "This image doesn't seem related to your question. Please send a farm-related image. 🌾"
+    """
+            else:
+                # No context - ask what they need
+                vision_prompt = f"""You are a farming advisor for {user_name}.
+
+    Look at this image:
+    - If it's farm-related (crop, leaf, disease, pest, field, soil, equipment), just tell what you see and ask: "What would you like to know about this?"
+    - If it's a selfie, person, random object, or completely unrelated to farming, say: "Please send farm-related images like crops, leaves, or fields. I can help with farming. 🌾"
+    - If image is blurry or unclear, say: "Image is not clear. Please send a clearer photo. 📸"
+
+    Keep response very short (2-3 lines).
     """
         
         while attempts < max_retries:
-            # Select best instance (prefer priority 1 for vision)
             instance = self.select_instance("general")
             
             if instance.name in tried_instances and len(tried_instances) < len(self.instances):
@@ -338,32 +385,23 @@ class MultiGeminiService:
             logger.info(f"🖼️ Vision Attempt {attempts}: {instance.name}")
             
             try:
-                # Configure API key
                 genai.configure(api_key=instance.api_key)
                 
-                # Create model with vision support
                 model = genai.GenerativeModel(
                     instance.model_id,
                     system_instruction=vision_prompt
                 )
                 
-                # Prepare image data
+                # Prepare image
                 import io
                 from PIL import Image
                 
-                # Convert bytes to PIL Image
                 image = Image.open(io.BytesIO(image_bytes))
                 
-                # Prepare message parts
-                parts = []
-                if caption:
-                    parts.append(f"User's caption: {caption}\n\nAnalyze this image:")
-                else:
-                    parts.append("Analyze this farming-related image:")
+                # Prepare message
+                parts = ["Analyze this image:", image]
                 
-                parts.append(image)
-                
-                # Generate response with history
+                # Generate response
                 if history:
                     chat = model.start_chat(history=history)
                     response = chat.send_message(parts)
@@ -372,7 +410,6 @@ class MultiGeminiService:
                 
                 reply = response.text.strip()
                 
-                # Record success
                 instance.record_request()
                 logger.info(f"✅ Vision success with {instance.name}")
                 
@@ -397,9 +434,9 @@ class MultiGeminiService:
                     time.sleep(0.5)
                     continue
         
-        # All instances failed
         logger.error(f"💥 All vision attempts failed!")
         return "[ESCALATE]"
+        
     def search_knowledge_base(self, query, top_k=3):
         """RAG search using first available instance for embedding"""
         if self.vector_db is None:
