@@ -44,6 +44,7 @@ class Message(models.Model):
         ('audio', 'Audio'),
         ('document', 'Document'),
         ('template', 'Template'),
+        ('location', 'Location'),  # ✅ ADD THIS LINE
         ('sticker', 'Sticker'),      # ✅ NEW
         ('reaction', 'Reaction'),
     ]

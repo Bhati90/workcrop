@@ -182,6 +182,10 @@ def process_incoming_messages(value, full_webhook_data):
             whatsapp_user.blocked_until = None
             whatsapp_user.save()
 
+
+        if message_type == 'image':
+            handle_image_with_ai(msg_data, conversation, whatsapp_user, from_number, timestamp, whatsapp_message_id)
+            return
         # --- 3. Save the Incoming Message to DB ---
         msg_obj = _save_incoming_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp)
         
@@ -209,9 +213,7 @@ def process_incoming_messages(value, full_webhook_data):
 
         # --- 7. Handle IMAGE/VIDEO/DOCUMENT (Polite decline) ---
         # --- 7. Handle IMAGE (AI Vision Analysis) ---
-        if message_type == 'image':
-            handle_image_with_ai(msg_data, conversation, whatsapp_user, from_number, timestamp, whatsapp_message_id)
-            return
+        
 
         # --- 8. Handle VIDEO/DOCUMENT (Polite decline) ---
         if message_type in ['video', 'document']:
