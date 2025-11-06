@@ -9,6 +9,7 @@ echo "Running database migrations..."
 # Collect static files
 echo "Collecting static files..."
 python manage.py collectstatic --noinput
+# python manage.py cache
 
 # Start gunicorn
 echo "Starting gunicorn on port ${PORT:-10000}..."
