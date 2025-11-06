@@ -14,11 +14,27 @@ class AudioTranscriptionService:
     """
     
     def __init__(self):
-        # Use first available API key from multi-gemini setup
-        self.api_key = settings.GEMINI_API_KEY
-        genai.configure(api_key=self.api_key)
-        self.model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        # ✅ FIX: Get all available API keys
+        self.api_keys = []
+        for i in range(1, 6):  # API keys 1-5
+            key_name = f'GEMINI_API_KEY_{i}'
+            if hasattr(settings, key_name):
+                self.api_keys.append(getattr(settings, key_name))
+        
+        if not self.api_keys:
+            # Fallback to single key
+            self.api_keys = [settings.GEMINI_API_KEY]
+        
+        self.model_id = 'gemini-2.0-flash-exp'
+        self.current_key_index = 0
+        
+        logger.info(f"🎤 AudioTranscriptionService initialized with {len(self.api_keys)} API keys")
     
+    def _get_next_api_key(self):
+        """Rotate through API keys for load balancing"""
+        key = self.api_keys[self.current_key_index]
+        self.current_key_index = (self.current_key_index + 1) % len(self.api_keys)
+        return key
     def transcribe_audio(self, audio_bytes, mime_type='audio/ogg'):
         """
         Transcribe WhatsApp audio to text using Gemini's native audio support

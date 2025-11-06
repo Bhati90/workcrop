@@ -12,6 +12,8 @@ import os
 import tempfile
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
+import re
+from dateutil import parser
 
 from .models import WhatsAppUser, Conversation, Message, MediaFile, WebhookLog, WhatsAppTemplate
 from .service import WhatsAppService
@@ -19,6 +21,8 @@ from .service import WhatsAppService
 logger = logging.getLogger(__name__)
 from .multi_gemini_service import get_multi_gemini_service
 from .gemini_service import SYSTEM_PROMPT
+
+from .location import extract_location_from_conversation
 
 @require_http_methods(["POST"])
 def add_contact_api(request):
@@ -597,51 +601,451 @@ def log_inquiry_details(user_message, bot_reply, whatsapp_user, conversation, la
         if any(kw in msg_lower for kw in keywords):
             detected_services.append(service)
     
-    # Only log if we detected something or it's an escalation
-    if not detected_services and '[escalate]' not in str(bot_reply).lower():
+    # ========== CHECK IF UNKNOWN QUERY ==========
+    is_escalated = '[escalate]' in str(bot_reply).lower()
+    is_unknown_service = not detected_services and is_escalated
+    
+    # If completely unknown, log to UnknownQuery table
+    if is_unknown_service:
+        log_unknown_query(user_message, bot_reply, whatsapp_user, service_lang)
         return
     
+    # ========== EXTRACT ALL FIELDS ==========
+    
+    # 1. CUSTOMER NAME EXTRACTION
+    customer_name = extract_customer_name(user_message, conversation)
+    
+    # 2. FARM SIZE EXTRACTION
+    farm_size = extract_farm_size(user_message)
+    
+    # 3. CROP TYPE & VARIETY
+    crop_type, crop_variety = extract_crop_info(user_message)
+    
+    # 4. QUANTITY EXTRACTION
+    quantity = extract_quantity(user_message)
+    
+    # 5. DATE EXTRACTION
+    requested_date = extract_date(user_message, service_lang)
+    
+    # 6. LOCATION EXTRACTION (your existing function)
+    detected_location = extract_location_from_conversation(user_message, conversation)
+    
+    # 7. URGENCY DETECTION
+    urgent_keywords = ['urgent', 'तुरंत', 'आज', 'today', 'अभी', 'now', 'जल्दी', 'emergency']
+    is_urgent = any(kw in msg_lower for kw in urgent_keywords)
+    
+    # 8. PRICE REQUEST DETECTION
+    asked_price = any(kw in msg_lower for kw in ['price', 'rate', 'किंमत', 'दर', 'रेट', 'cost', 'charges'])
+    
+    # 9. QUOTED PRICE (from bot reply)
+    customer_quoted_price = extract_customer_quoted_price(user_message, conversation)
+    
+    
     try:
-        # Extract numbers
-        numbers = re.findall(r'\d+', user_message)
-        quantity = numbers[0] if numbers else None
-        
-        # Detect urgency
-        urgent_keywords = ['urgent', 'तुरंत', 'आज', 'today', 'अभी', 'now', 'जल्दी', 'emergency']
-        is_urgent = any(kw in msg_lower for kw in urgent_keywords)
-        
-        # Detect location
-        locations = ['satara', 'सातारा', 'pune', 'पुणे', 'mumbai', 'मुंबई', 'nashik', 'नाशिक']
-        detected_location = next((loc for loc in locations if loc in msg_lower), None)
-        
-        # Check if price was requested
-        asked_price = any(kw in msg_lower for kw in ['price', 'rate', 'किंमत', 'दर', 'रेट', 'cost'])
-        
-        # Truncate long responses
         ai_response_truncated = str(bot_reply)[:500] if bot_reply else ''
         
-        # Create inquiry record
         ServiceInquiry.objects.create(
             whatsapp_user=whatsapp_user,
             conversation=conversation,
+            
+            # Customer details
+            customer_name_in_chat=customer_name,
+            
+            # Service details
             service_type=', '.join(detected_services) if detected_services else 'general',
-            service_description=user_message[:500],  # Truncate long messages
+            service_description=user_message[:500],
             service_language=service_lang,
-            quantity_needed=str(quantity) if quantity else None,
+            
+            # Quantity & specifications
+            quantity_needed=quantity,
+            farm_size=farm_size,
+            crop_type=crop_type,
+            crop_variety=crop_variety,
+            
+            # Location & timing
             location_mentioned=detected_location,
+            requested_date=requested_date,
+            
+            # Status & priority
             urgency='high' if is_urgent else 'medium',
-            original_query=user_message[:1000],  # Limit size
-            ai_response=ai_response_truncated,
+            status='new' if not is_escalated else 'reviewing',
+            
+            # Pricing
             requested_price_info=asked_price,
-            needs_human_review=('[escalate]' in str(bot_reply).lower() or not detected_services),
-            status='new' if '[escalate]' not in str(bot_reply).lower() else 'reviewing'
+            quoted_price=customer_quoted_price,
+            
+            # Tracking
+            original_query=user_message[:1000],
+            ai_response=ai_response_truncated,
+            needs_human_review=is_escalated,
         )
         
         logger.info(f"✅ Logged inquiry: {', '.join(detected_services) if detected_services else 'general'}")
-        
+         
     except Exception as e:
         logger.error(f"❌ Error logging ServiceInquiry: {str(e)}")
         # Don't crash the webhook if logging fails
+
+# ========== HELPER FUNCTIONS FOR EXTRACTION ==========
+
+def extract_customer_name(user_message, conversation):
+    """
+    Extract customer name from:
+    1. "My name is X" patterns
+    2. Conversation history
+    3. User profile
+    """
+    # Pattern 1: Direct name mentions
+    name_patterns = [
+        r'(?:my name is|i am|मेरा नाम|नाव|मी)\s+([A-Za-zऀ-ॿ]+)',
+        r'(?:call me|you can call me)\s+([A-Za-z]+)',
+    ]
+    
+    for pattern in name_patterns:
+        match = re.search(pattern, user_message, re.IGNORECASE)
+        if match:
+            return match.group(1).strip().title()
+    
+    # Pattern 2: Check conversation history
+    try:
+        name_msg = conversation.messages.filter(
+            direction='inbound',
+            message_type='text'
+        ).order_by('-timestamp')[:10]
+        
+        for msg in name_msg:
+            if msg.text_content:
+                for pattern in name_patterns:
+                    match = re.search(pattern, msg.text_content, re.IGNORECASE)
+                    if match:
+                        return match.group(1).strip().title()
+    except:
+        pass
+    
+    return None
+
+
+def extract_farm_size(text):
+    """
+    Extract farm size like "35 acre", "2 हेक्टर", "50 एकर"
+    """
+    if not text:
+        return None
+    
+    # Patterns for farm size
+    patterns = [
+        r'(\d+(?:\.\d+)?)\s*(?:acre|एकर|acres)',
+        r'(\d+(?:\.\d+)?)\s*(?:hectare|हेक्टर|hectares)',
+        r'(\d+(?:\.\d+)?)\s*(?:bigha|बीघा)',
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            size = match.group(1)
+            unit = match.group(0).split()[-1] if len(match.group(0).split()) > 1 else 'acre'
+            return f"{size} {unit}"
+    
+    return None
+
+
+def extract_crop_info(text):
+    """
+    Extract crop type and variety
+    Returns: (crop_type, crop_variety)
+    """
+    if not text:
+        return None, None
+    
+    text_lower = text.lower()
+    
+    # Common crops (multilingual)
+    crops = {
+        'grapes': ['grape', 'grapes', 'द्राक्ष', 'अंगूर', 'draksh'],
+        'pomegranate': ['pomegranate', 'dalimb', 'डाळिंब', 'अनार'],
+        'onion': ['onion', 'कांदा', 'pyaj'],
+        'tomato': ['tomato', 'टमाटर'],
+        'wheat': ['wheat', 'गहू', 'gehun'],
+        'rice': ['rice', 'तांदूळ', 'chawal'],
+        'sugarcane': ['sugarcane', 'ऊस', 'गन्ना'],
+    }
+    
+    crop_type = None
+    for crop_name, keywords in crops.items():
+        if any(kw in text_lower for kw in keywords):
+            crop_type = crop_name
+            break
+    
+    # Extract variety (usually capital letters or numbers)
+    variety_pattern = r'(?:variety|वॅरायटी)?\s*([A-Z]{2,}[-\s]?\d*|Thompson|Sonaka|ARD\s*\d+)'
+    variety_match = re.search(variety_pattern, text, re.IGNORECASE)
+    crop_variety = variety_match.group(1).strip() if variety_match else None
+    
+    return crop_type, crop_variety
+
+
+def extract_quantity(text):
+    """
+    Extract quantities like "35 workers", "50 tons", "10 acres"
+    """
+    if not text:
+        return None
+    
+    # Look for number + unit patterns
+    patterns = [
+        r'(\d+)\s*(?:worker|workers|majur|मजूर|मजदूर|people)',
+        r'(\d+)\s*(?:ton|tons|kg|quintals|क्विंटल)',
+        r'(\d+)\s*(?:acre|एकर|hectare|हेक्टर)',
+        r'(\d+)\s*(?:days|दिवस|week|आठवडा)',
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            return match.group(0).strip()
+    
+    # Fallback: just extract first number if present
+    numbers = re.findall(r'\d+', text)
+    if numbers:
+        return numbers[0]
+    
+    return None
+
+
+def extract_date(text, language='mixed'):
+    """
+    Extract dates from multilingual text using dateutil and patterns
+    """
+    if not text:
+        return None
+    
+    text_lower = text.lower()
+    
+    # Relative dates (Hindi/Marathi/English)
+    relative_dates = {
+        'today': ['today', 'आज', 'aaj'],
+        'tomorrow': ['tomorrow', 'कल', 'kal', 'उद्या'],
+        'day after tomorrow': ['परवा', 'parso'],
+        'next week': ['next week', 'पुढच्या आठवड्यात', 'अगले हफ्ते'],
+        'this month': ['this month', 'या महिन्यात', 'इस महीने'],
+        'day':['23th','2','2june']
+    }
+    
+    for date_type, keywords in relative_dates.items():
+        if any(kw in text_lower for kw in keywords):
+            return date_type
+    
+    # Try to parse specific dates using dateutil
+    try:
+        # Extract potential date strings
+        date_patterns = [
+            r'\d{1,2}[-/]\d{1,2}[-/]\d{2,4}',  # 05-12-2025
+            r'\d{1,2}\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{2,4}',  # 5 Dec 2025
+        ]
+        
+        for pattern in date_patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                date_str = match.group(0)
+                try:
+                    parsed_date = parser.parse(date_str, fuzzy=True)
+                    return parsed_date.strftime('%Y-%m-%d')
+                except:
+                    return date_str
+    except Exception as e:
+        logger.error(f"Date parsing error: {e}")
+    
+    return None
+
+def extract_customer_quoted_price(user_message, conversation):
+    """
+    Extract the price CUSTOMER is offering to pay from their messages
+    NOT from bot replies (since you never share prices)
+    
+    Examples:
+    - "I will pay 500 per labour per day"
+    - "मैं 600 रुपये दूंगा"
+    - "My rate is 10000"
+    - "₹450 per day"
+    """
+    if not user_message:
+        return None
+    
+    text_lower = user_message.lower()
+    
+    # Keywords indicating customer is stating their price
+    price_indicators = [
+        'i will pay', 'i can pay', 'मैं दूंगा', 'मैं देंगे',
+        'my rate', 'मेरा रेट', 'हम देंगे', 'हमारा रेट',
+        'i offer', 'मैं ऑफर', 'we pay', 'हम देते',
+        'my budget', 'मेरा बजट'
+    ]
+    
+    has_price_indicator = any(indicator in text_lower for indicator in price_indicators)
+    
+    # ========== EXTRACTION PATTERNS ==========
+    
+    # Pattern 1: Price with currency symbol
+    # "₹500 per labour", "₹600/day", "Rs. 450 per worker"
+    currency_patterns = [
+        r'₹\s*(\d+(?:,\d+)*(?:\.\d+)?)\s*(?:per|/|प्रति)?\s*(?:labour|labor|day|दिन|मजूर|worker|acre|एकर)?',
+        r'rs\.?\s*(\d+(?:,\d+)*(?:\.\d+)?)\s*(?:per|/|प्रति)?\s*(?:labour|labor|day|दिन|मजूर|worker|acre|एकर)?',
+        r'(\d+)\s*(?:rupees|रुपये|rupaiya)\s*(?:per|/|प्रति)?\s*(?:labour|labor|day|दिन|मजूर|worker|acre|एकर)?',
+    ]
+    
+    for pattern in currency_patterns:
+        match = re.search(pattern, user_message, re.IGNORECASE)
+        if match:
+            amount = match.group(1).replace(',', '')
+            
+            # Determine unit from context
+            unit = determine_price_unit(user_message)
+            
+            return f"₹{amount}{unit}"
+    
+    # Pattern 2: Direct number with context (only if price indicators present)
+    # "I will pay 500 per labour", "मैं 600 दूंगा per day"
+    if has_price_indicator:
+        number_pattern = r'(\d+)\s*(?:per|/|प्रति)\s*(labour|labor|day|दिन|मजूर|worker|acre|एकर|hour|घंटा)'
+        match = re.search(number_pattern, user_message, re.IGNORECASE)
+        if match:
+            amount = match.group(1)
+            unit_raw = match.group(2)
+            
+            # Standardize unit
+            unit_map = {
+                'labour': '/labour', 'labor': '/labour', 'मजूर': '/labour',
+                'worker': '/labour', 'day': '/day', 'दिन': '/day',
+                'acre': '/acre', 'एकर': '/acre', 'hour': '/hour', 'घंटा': '/hour'
+            }
+            unit = unit_map.get(unit_raw.lower(), f'/{unit_raw}')
+            
+            return f"₹{amount}{unit}"
+    
+    # Pattern 3: Range prices (e.g., "5000-6000", "500 से 600")
+    if has_price_indicator:
+        range_pattern = r'(\d+)\s*(?:to|-|से)\s*(\d+)'
+        match = re.search(range_pattern, user_message, re.IGNORECASE)
+        if match:
+            min_amount = match.group(1)
+            max_amount = match.group(2)
+            unit = determine_price_unit(user_message)
+            return f"₹{min_amount}-{max_amount}{unit}"
+    
+    # Pattern 4: Simple number after price indicator
+    # "My rate is 500"
+    if has_price_indicator:
+        simple_number = r'(?:rate|रेट|pay|दूंगा|देंगे)\s+(\d+)'
+        match = re.search(simple_number, user_message, re.IGNORECASE)
+        if match:
+            amount = match.group(1)
+            unit = determine_price_unit(user_message)
+            return f"₹{amount}{unit}"
+    
+    # ========== CHECK CONVERSATION HISTORY ==========
+    # Look back 3-5 messages for price mentions
+    try:
+        recent_msgs = conversation.messages.filter(
+            direction='inbound',
+            message_type='text'
+        ).order_by('-timestamp')[:5]
+        
+        for msg in recent_msgs:
+            if msg.text_content and msg.text_content != user_message:
+                price = extract_customer_quoted_price(msg.text_content, None)
+                if price:
+                    return price
+    except:
+        pass
+    
+    return None
+
+
+def determine_price_unit(text):
+    """
+    Determine the pricing unit from context
+    Returns: "/labour", "/day", "/acre", etc.
+    """
+    text_lower = text.lower()
+    
+    # Check for specific units
+    if any(word in text_lower for word in ['per labour', 'per worker', 'per majur', 'प्रति मजूर']):
+        return '/labour'
+    elif any(word in text_lower for word in ['per day', 'daily', 'per दिन', 'प्रति दिन', 'रोज']):
+        return '/day'
+    elif any(word in text_lower for word in ['per acre', 'per एकर', 'प्रति एकर']):
+        return '/acre'
+    elif any(word in text_lower for word in ['per hour', 'hourly', 'per घंटा', 'प्रति घंटा']):
+        return '/hour'
+    elif any(word in text_lower for word in ['total', 'overall', 'कुल']):
+        return ' total'
+    
+    # Default
+    return ''
+
+
+# ========== UNKNOWN QUERY LOGGER ==========
+
+def log_unknown_query(user_message, bot_reply, whatsapp_user, language):
+    """
+    Log queries we don't understand or can't serve
+    For future service expansion
+    """
+    from .models import UnknownQuery
+    
+    msg_lower = user_message.lower()
+    
+    # Determine reason
+    reason = 'unclear_request'
+    potential_service = None
+    
+    # Check if it's a language issue
+    if language in ['mixed', 'unknown']:
+        reason = 'language_issue'
+    
+    # Check if location not covered
+    elif 'not available' in str(bot_reply).lower() or 'don\'t operate' in str(bot_reply).lower():
+        reason = 'unknown_area'
+        
+    # Try to guess what service they might want
+    service_hints = {
+        'packaging': ['pack', 'packaging', 'पॅकिंग'],
+        'cold_storage': ['cold storage', 'थंड साठा'],
+        'insurance': ['insurance', 'विमा'],
+        'loan': ['loan', 'कर्ज'],
+        
+    }
+    
+    for service, keywords in service_hints.items():
+        if any(kw in msg_lower for kw in keywords):
+            potential_service = service
+            reason = 'unknown_service'
+            break
+    
+    # Check for duplicates (increment count if exists)
+    try:
+        existing = UnknownQuery.objects.filter(
+            whatsapp_user=whatsapp_user,
+            query_text__icontains=user_message[:50]
+        ).first()
+        
+        if existing:
+            existing.similar_queries_count += 1
+            existing.save()
+            logger.info(f"📊 Incremented unknown query count: {existing.similar_queries_count}")
+        else:
+            UnknownQuery.objects.create(
+                whatsapp_user=whatsapp_user,
+                query_text=user_message[:1000],
+                query_language=language,
+                reason=reason,
+                potential_service=potential_service,
+                similar_queries_count=1
+            )
+            logger.info(f"❓ Logged unknown query: {reason}")
+    
+    except Exception as e:
+        logger.error(f"❌ Error logging UnknownQuery: {str(e)}")
 
 def _save_incoming_message(msg_data, conversation, whatsapp_user, whatsapp_message_id, timestamp):
     """
@@ -781,7 +1185,7 @@ def handle_text_message(msg_data, conversation, whatsapp_user, whatsapp_message_
     )
     
     # Update conversation/user for preview
-    conversation.last_message_preview = text_content[:100]
+    conversation.last_message_preview = text_content[:]
     conversation.unread_count += 1
     conversation.save()
     
@@ -1337,7 +1741,7 @@ def handle_interactive_message(msg_data, conversation, whatsapp_user, whatsapp_m
         text_content, None, None, None, 'delivered', timestamp
     )
     
-    conversation.last_message_preview = text_content[:100]
+    conversation.last_message_preview = text_content[:]
     conversation.unread_count += 1
     conversation.save()
     
