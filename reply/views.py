@@ -378,10 +378,37 @@ def process_incoming_messages(value, full_webhook_data):
 
         # --- 11. Send the Gemini Reply ---
         # --- 11. Send the Gemini Reply ---
+        # --- 11. Send the Gemini Reply ---
         if reply:
-            sent_msg = WhatsAppService().send_text_message(from_number, reply, conversation)
+            # ✅ FIX: Remove any "Silent thinking process" or internal reasoning
+            clean_reply = reply
+            
+            # Remove silent thinking/reasoning patterns
+            patterns_to_remove = [
+                r"Silent thinking process:.*?(?=\n[^\*]|\n\n|$)",  # Remove thinking blocks
+                r"\*Initial thought.*?\*",  # Remove initial thoughts
+                r"\*Refinement.*?\*",  # Remove refinements
+                r"\*Final.*?\*",  # Remove final checks
+                r"^\d+\.\s+\*\*.*?\*\*.*?(?=\n\d+\.|\n\n|$)",  # Remove numbered thinking steps
+            ]
+            
+            import re
+            for pattern in patterns_to_remove:
+                clean_reply = re.sub(pattern, '', clean_reply, flags=re.DOTALL | re.MULTILINE)
+            
+            # Remove extra whitespace
+            clean_reply = '\n'.join(line.strip() for line in clean_reply.split('\n') if line.strip())
+            clean_reply = clean_reply.strip()
+            
+            if not clean_reply:
+                logger.error("Reply became empty after cleaning!")
+                clean_reply = "माफ करा, कृपया पुन्हा विचारा। 🙏" if user_lang in ['hi', 'mr'] else "Sorry, please ask again. 🙏"
+            
+            logger.info(f"📤 Sending cleaned reply: {clean_reply[:100]}...")
+            
+            sent_msg = WhatsAppService().send_text_message(from_number, clean_reply, conversation)
             if sent_msg:
-                sent_msg.is_ai_generated = True  # ✅ Mark as AI
+                sent_msg.is_ai_generated = True
                 sent_msg.save()
         else:
             logger.error("Gemini returned empty reply.")

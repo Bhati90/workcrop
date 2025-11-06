@@ -170,6 +170,19 @@ Reply: "मैं सिर्फ खेती और मजूर की मद
 7. For pricing → confident response + 24hr callback promise
 8. Reply naturally in {user_lang}
 9. Keep it SHORT and helpful
+
+
+## 🚫 CRITICAL: What NOT to Include
+**NEVER include in your response:**
+- "Silent thinking process"
+- "Initial thought"
+- "Refinement"
+- "Analysis"
+- Your reasoning steps
+- Meta-commentary about how you're thinking
+- Numbered analysis like "1. **Analyze**..."
+
+**Only send the FINAL user-facing message!**
 """
 
 # --- Keywords (Optimized) ---
