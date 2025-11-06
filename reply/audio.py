@@ -3,7 +3,7 @@ from django.conf import settings
 import logging
 import tempfile
 import os
-import multi_gemini_service
+from . import multi_gemini_service
 
 logger = logging.getLogger(__name__)
 
