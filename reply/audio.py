@@ -3,6 +3,7 @@ from django.conf import settings
 import logging
 import tempfile
 import os
+import multi_gemini_service
 
 logger = logging.getLogger(__name__)
 
@@ -14,27 +15,15 @@ class AudioTranscriptionService:
     """
     
     def __init__(self):
-        # ✅ FIX: Get all available API keys
-        self.api_keys = []
-        for i in range(1, 6):  # API keys 1-5
-            key_name = f'GEMINI_API_KEY_{i}'
-            if hasattr(settings, key_name):
-                self.api_keys.append(getattr(settings, key_name))
+        self.multi_gemini_service = multi_gemini_service
         
-        if not self.api_keys:
-            # Fallback to single key
-            self.api_keys = [settings.GEMINI_API_KEY]
-        
-        self.model_id = 'gemini-2.0-flash-exp'
-        self.current_key_index = 0
-        
-        logger.info(f"🎤 AudioTranscriptionService initialized with {len(self.api_keys)} API keys")
+    def _pick_instance(self):
+        # Select the best available GeminiModelConfig instance
+        for inst in sorted(self.multi_gemini_service.instances, key=lambda i: i.priority):
+            if inst.is_available():
+                return inst
+        raise Exception("❌ No Gemini instances available (all limits exceeded or failed)!")
     
-    def _get_next_api_key(self):
-        """Rotate through API keys for load balancing"""
-        key = self.api_keys[self.current_key_index]
-        self.current_key_index = (self.current_key_index + 1) % len(self.api_keys)
-        return key
     def transcribe_audio(self, audio_bytes, mime_type='audio/ogg'):
         """
         Transcribe WhatsApp audio to text using Gemini's native audio support
@@ -96,11 +85,21 @@ class AudioTranscriptionService:
 
     Return ONLY the transcription text, nothing else.
     """
-            
-            # Generate transcription
-            response = self.model.generate_content([prompt, audio_file])
-            transcription = response.text.strip()
-            
+            # ✅ Pick the best available Gemini instance for each transcription
+            instance = self._pick_instance()
+            # Initialize model with that instance's API KEY and model_id
+            genai.configure(api_key=instance.api_key)  # This sets API key globally (Gemini SDK)
+            model = genai.GenerativeModel(instance.model_id)
+
+            try:
+                response = model.generate_content([prompt, audio_file])
+                transcription = response.text.strip()
+                instance.record_request()
+                logger.info(f"✅ Transcribed: {transcription[:100]}...")
+            except Exception as e:
+                instance.record_failure()
+                logger.error(f"❌ Gemini model error: {str(e)}")
+                transcription = None
             # Cleanup
             os.unlink(temp_audio_path)
             genai.delete_file(audio_file.name)
