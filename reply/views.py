@@ -622,10 +622,10 @@ def log_inquiry_details(user_message, bot_reply, whatsapp_user, conversation, la
     crop_type, crop_variety = extract_crop_info(user_message)
     
     # 4. QUANTITY EXTRACTION
-    quantity = extract_quantity(user_message)
+    quantity = extract_quantity_only(user_message)
     
     # 5. DATE EXTRACTION
-    requested_date = extract_date(user_message, service_lang)
+    requested_date = extract_date(user_message)
     
     # 6. LOCATION EXTRACTION (your existing function)
     detected_location = extract_location_from_conversation(user_message, conversation)
@@ -638,7 +638,7 @@ def log_inquiry_details(user_message, bot_reply, whatsapp_user, conversation, la
     asked_price = any(kw in msg_lower for kw in ['price', 'rate', 'किंमत', 'दर', 'रेट', 'cost', 'charges'])
     
     # 9. QUOTED PRICE (from bot reply)
-    customer_quoted_price = extract_customer_quoted_price(user_message, conversation)
+    customer_quoted_price = extract_quoted_price_from_customer(user_message)
     
     
     try:
@@ -748,218 +748,100 @@ def extract_farm_size(text):
     
     return None
 
-
 def extract_crop_info(text):
-    """
-    Extract crop type and variety
-    Returns: (crop_type, crop_variety)
-    """
-    if not text:
-        return None, None
-    
     text_lower = text.lower()
-    
-    # Common crops (multilingual)
+    crop_type = None
+    crop_variety = None
+
+    # Crop types - add more as needed!
     crops = {
         'grapes': ['grape', 'grapes', 'द्राक्ष', 'अंगूर', 'draksh'],
         'pomegranate': ['pomegranate', 'dalimb', 'डाळिंब', 'अनार'],
-        'onion': ['onion', 'कांदा', 'pyaj'],
-        'tomato': ['tomato', 'टमाटर'],
-        'wheat': ['wheat', 'गहू', 'gehun'],
-        'rice': ['rice', 'तांदूळ', 'chawal'],
-        'sugarcane': ['sugarcane', 'ऊस', 'गन्ना'],
+        # Add other crops...
     }
-    
-    crop_type = None
+    # Extract crop type from any word in crops dict
     for crop_name, keywords in crops.items():
         if any(kw in text_lower for kw in keywords):
             crop_type = crop_name
             break
-    
-    # Extract variety (usually capital letters or numbers)
-    variety_pattern = r'(?:variety|वॅरायटी)?\s*([A-Z]{2,}[-\s]?\d*|Thompson|Sonaka|ARD\s*\d+)'
-    variety_match = re.search(variety_pattern, text, re.IGNORECASE)
-    crop_variety = variety_match.group(1).strip() if variety_match else None
-    
+
+    # Extract crop variety (look for known patterns, or after crop word)
+    variety_pattern = r'(sonaka|thompson|ard\s*\d+|kalipatti|sardar|sharad seedless)'
+    match = re.search(variety_pattern, text_lower)
+    if match:
+        crop_variety = match.group(1).title()
+    else:
+        # Try to extract word near crop mention e.g. 'grape farm sonaka'
+        for crop_word in sum(crops.values(), []):
+            if crop_word in text_lower:
+                after_crop = re.search(rf'{crop_word}\s+(\w+)', text_lower)
+                if after_crop:
+                    possible_variety = after_crop.group(1)
+                    if possible_variety not in crops.keys():
+                        crop_variety = possible_variety.title()
     return crop_type, crop_variety
+from dateutil import parser
 
-
-def extract_quantity(text):
-    """
-    Extract quantities like "35 workers", "50 tons", "10 acres"
-    """
-    if not text:
-        return None
-    
-    # Look for number + unit patterns
-    patterns = [
-        r'(\d+)\s*(?:worker|workers|majur|मजूर|मजदूर|people)',
-        r'(\d+)\s*(?:ton|tons|kg|quintals|क्विंटल)',
-        r'(\d+)\s*(?:acre|एकर|hectare|हेक्टर)',
-        r'(\d+)\s*(?:days|दिवस|week|आठवडा)',
-    ]
-    
-    for pattern in patterns:
-        match = re.search(pattern, text, re.IGNORECASE)
-        if match:
-            return match.group(0).strip()
-    
-    # Fallback: just extract first number if present
-    numbers = re.findall(r'\d+', text)
-    if numbers:
-        return numbers[0]
-    
-    return None
-
-
-def extract_date(text, language='mixed'):
-    """
-    Extract dates from multilingual text using dateutil and patterns
-    """
-    if not text:
-        return None
-    
+def extract_date(text):
     text_lower = text.lower()
-    
-    # Relative dates (Hindi/Marathi/English)
+    # Pattern: "on 5 dec", "5 dec", "need 5 dec", etc.
+    date_pattern = r'(\d{1,2}\s*[a-z]{3}\b(?:\s*\d{2,4})?)'
+    match = re.search(date_pattern, text_lower)
+    if match:
+        try:
+            dt = parser.parse(match.group(1), fuzzy=True, dayfirst=True)
+            return dt.strftime('%Y-%m-%d')
+        except:
+            return match.group(1)
+    # Also handle "today", "tomorrow", etc.
     relative_dates = {
-        'today': ['today', 'आज', 'aaj'],
-        'tomorrow': ['tomorrow', 'कल', 'kal', 'उद्या'],
-        'day after tomorrow': ['परवा', 'parso'],
-        'next week': ['next week', 'पुढच्या आठवड्यात', 'अगले हफ्ते'],
-        'this month': ['this month', 'या महिन्यात', 'इस महीने'],
-        'day':['23th','2','2june']
+        'today': '2025-11-06',  # System date!
+        'tomorrow': '2025-11-07',
     }
-    
-    for date_type, keywords in relative_dates.items():
-        if any(kw in text_lower for kw in keywords):
-            return date_type
-    
-    # Try to parse specific dates using dateutil
-    try:
-        # Extract potential date strings
-        date_patterns = [
-            r'\d{1,2}[-/]\d{1,2}[-/]\d{2,4}',  # 05-12-2025
-            r'\d{1,2}\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{2,4}',  # 5 Dec 2025
-        ]
-        
-        for pattern in date_patterns:
-            match = re.search(pattern, text, re.IGNORECASE)
-            if match:
-                date_str = match.group(0)
-                try:
-                    parsed_date = parser.parse(date_str, fuzzy=True)
-                    return parsed_date.strftime('%Y-%m-%d')
-                except:
-                    return date_str
-    except Exception as e:
-        logger.error(f"Date parsing error: {e}")
-    
+    for word, value in relative_dates.items():
+        if word in text_lower:
+            return value
     return None
 
-def extract_customer_quoted_price(user_message, conversation):
+def extract_quoted_price_from_customer(text):
     """
-    Extract the price CUSTOMER is offering to pay from their messages
-    NOT from bot replies (since you never share prices)
-    
-    Examples:
-    - "I will pay 500 per labour per day"
-    - "मैं 600 रुपये दूंगा"
-    - "My rate is 10000"
-    - "₹450 per day"
+    Extract customer-quoted price or budget from text messages.
+    Only for their offer/budget, not bot quote.
     """
-    if not user_message:
+    if not text:
         return None
-    
-    text_lower = user_message.lower()
-    
-    # Keywords indicating customer is stating their price
-    price_indicators = [
-        'i will pay', 'i can pay', 'मैं दूंगा', 'मैं देंगे',
-        'my rate', 'मेरा रेट', 'हम देंगे', 'हमारा रेट',
-        'i offer', 'मैं ऑफर', 'we pay', 'हम देते',
-        'my budget', 'मेरा बजट'
-    ]
-    
-    has_price_indicator = any(indicator in text_lower for indicator in price_indicators)
-    
-    # ========== EXTRACTION PATTERNS ==========
-    
-    # Pattern 1: Price with currency symbol
-    # "₹500 per labour", "₹600/day", "Rs. 450 per worker"
-    currency_patterns = [
-        r'₹\s*(\d+(?:,\d+)*(?:\.\d+)?)\s*(?:per|/|प्रति)?\s*(?:labour|labor|day|दिन|मजूर|worker|acre|एकर)?',
-        r'rs\.?\s*(\d+(?:,\d+)*(?:\.\d+)?)\s*(?:per|/|प्रति)?\s*(?:labour|labor|day|दिन|मजूर|worker|acre|एकर)?',
-        r'(\d+)\s*(?:rupees|रुपये|rupaiya)\s*(?:per|/|प्रति)?\s*(?:labour|labor|day|दिन|मजूर|worker|acre|एकर)?',
-    ]
-    
-    for pattern in currency_patterns:
-        match = re.search(pattern, user_message, re.IGNORECASE)
+
+    text_lower = text.lower()
+    price_keywords = ['i will give', 'i can pay', 'i pay', 'budget', 'मैं दूंगा', 'देंगे', 'हम देंगे']
+
+    if any(k in text_lower for k in price_keywords):
+        # Try direct ₹/Rs detection
+        match = re.search(r'(₹|rs\.?)\s*(\d{3,})', text_lower)
         if match:
-            amount = match.group(1).replace(',', '')
-            
-            # Determine unit from context
-            unit = determine_price_unit(user_message)
-            
-            return f"₹{amount}{unit}"
-    
-    # Pattern 2: Direct number with context (only if price indicators present)
-    # "I will pay 500 per labour", "मैं 600 दूंगा per day"
-    if has_price_indicator:
-        number_pattern = r'(\d+)\s*(?:per|/|प्रति)\s*(labour|labor|day|दिन|मजूर|worker|acre|एकर|hour|घंटा)'
-        match = re.search(number_pattern, user_message, re.IGNORECASE)
+            return f"₹{match.group(2).replace(',', '')}"
+        # Try direct number (if it seems to be standalone offer)
+        match = re.search(r'(\d{4,})', text_lower)
         if match:
-            amount = match.group(1)
-            unit_raw = match.group(2)
-            
-            # Standardize unit
-            unit_map = {
-                'labour': '/labour', 'labor': '/labour', 'मजूर': '/labour',
-                'worker': '/labour', 'day': '/day', 'दिन': '/day',
-                'acre': '/acre', 'एकर': '/acre', 'hour': '/hour', 'घंटा': '/hour'
-            }
-            unit = unit_map.get(unit_raw.lower(), f'/{unit_raw}')
-            
-            return f"₹{amount}{unit}"
-    
-    # Pattern 3: Range prices (e.g., "5000-6000", "500 से 600")
-    if has_price_indicator:
-        range_pattern = r'(\d+)\s*(?:to|-|से)\s*(\d+)'
-        match = re.search(range_pattern, user_message, re.IGNORECASE)
-        if match:
-            min_amount = match.group(1)
-            max_amount = match.group(2)
-            unit = determine_price_unit(user_message)
-            return f"₹{min_amount}-{max_amount}{unit}"
-    
-    # Pattern 4: Simple number after price indicator
-    # "My rate is 500"
-    if has_price_indicator:
-        simple_number = r'(?:rate|रेट|pay|दूंगा|देंगे)\s+(\d+)'
-        match = re.search(simple_number, user_message, re.IGNORECASE)
-        if match:
-            amount = match.group(1)
-            unit = determine_price_unit(user_message)
-            return f"₹{amount}{unit}"
-    
-    # ========== CHECK CONVERSATION HISTORY ==========
-    # Look back 3-5 messages for price mentions
-    try:
-        recent_msgs = conversation.messages.filter(
-            direction='inbound',
-            message_type='text'
-        ).order_by('-timestamp')[:5]
-        
-        for msg in recent_msgs:
-            if msg.text_content and msg.text_content != user_message:
-                price = extract_customer_quoted_price(msg.text_content, None)
-                if price:
-                    return price
-    except:
-        pass
-    
+            return f"₹{match.group(1).replace(',', '')}"
     return None
 
+def extract_quantity_only(text):
+    """
+    Extract quantity ONLY if it is 'workers', 'acres', 'tons', etc.
+    Avoid numbers that are clearly price/budget.
+    """
+    if not text:
+        return None
+
+    # patterns for workers, acres, tons
+    pat = [
+        r'(\d+)\s*(workers|मजूर|labour|tons|टन्स|acres|एकर)',  # 50 workers, 20 acres, 50 tons
+    ]
+    for p in pat:
+        m = re.search(p, text, re.IGNORECASE)
+        if m:
+            return m.group(0)
+    return None
 
 def determine_price_unit(text):
     """
