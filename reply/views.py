@@ -21,7 +21,9 @@ from .service import WhatsAppService
 logger = logging.getLogger(__name__)
 from .multi_gemini_service import get_multi_gemini_service
 from .gemini_service import SYSTEM_PROMPT
+from .multi_gemini_service import MultiGeminiService
 
+multi_gemini_instance = MultiGeminiService() 
 from .location import extract_location_from_conversation
 
 @require_http_methods(["POST"])
@@ -1182,7 +1184,7 @@ def handle_audio_transcription(msg_data, conversation, whatsapp_user, from_numbe
         
         # Transcribe audio
         logger.info(f"🎧 Transcribing audio...")
-        transcription_service = AudioTranscriptionService()
+        transcription_service = AudioTranscriptionService(multi_gemini_instance)
         transcription = transcription_service.transcribe_audio(audio_bytes, mime_type)
         
         if not transcription:

@@ -3,7 +3,7 @@ from django.conf import settings
 import logging
 import tempfile
 import os
-from . import multi_gemini_service
+
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +14,7 @@ class AudioTranscriptionService:
     Supports: Marathi, Hindi, English (auto-detect)
     """
     
-    def __init__(self):
+    def __init__(self,multi_gemini_service):
         self.multi_gemini_service = multi_gemini_service
         
     def _pick_instance(self):
