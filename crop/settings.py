@@ -242,7 +242,7 @@ SECRET_KEY = 'django-insecure-l6c$=vdsv7n-ng7cd_^6fvi7lig^+_a2!dzg5oy1^a6qklw$9t
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
-ALLOWED_HOSTS = ['127.0.0.1','workcrop.onrender.com','localhost','https://workcrop-dc8o.vercel.app/']
+ALLOWED_HOSTS = ['127.0.0.1','workcrop.onrender.com','localhost','https://workcrop-dc8o.vercel.app/','workw-mu.vercel.app']
 
 
 # Add this for Render
@@ -354,8 +354,8 @@ GEMINI_API_KEY = GEMINI_API_KEY_1
 
 DATABASES = {
     'default': dj_database_url.config(
-        default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a.oregon-postgres.render.com/registerdb_od8n',
-        # default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a/registerdb_od8n',
+        # default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a.oregon-postgres.render.com/registerdb_od8n',
+        default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a/registerdb_od8n',
         conn_max_age=600,
         conn_health_checks=True,
     )
@@ -490,7 +490,9 @@ CSRF_TRUSTED_ORIGINS = [
     "http://localhost:8080",
     "http://127.0.0.1:5173",
     "https://workcrop-dc8o.vercel.app/",
-    "https://workcrop.onrender.com"
+    "https://workcrop.onrender.com",
+    "https://workw-mu.vercel.app/",
+    "https://workw-mu.vercel.app"
 ]
 
 # Logging configuration
