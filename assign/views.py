@@ -4,7 +4,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from datetime import timedelta
+from datetime import timedelta, datetime
 from .models import *
 from .serializers import *
 import requests
@@ -45,7 +45,10 @@ class MukadamActivityRateViewSet(viewsets.ModelViewSet):
             "message": f"Created/updated {len(created_rates)} activity rates",
             "count": len(created_rates)
         })
-
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
+from django.shortcuts import get_object_or_404
 class JobViewSet(viewsets.ModelViewSet):
     queryset = Job.objects.all()
     serializer_class = JobSerializer
@@ -901,40 +904,107 @@ class MukadamBidViewSet(viewsets.ModelViewSet):
     #             }
     #         )
 
+    # Update your submit_bid function in views.py
     @action(detail=False, methods=['post'])
-    def submit_bid(self, request):
-        """
-        Endpoint for mukadams to submit their bids
-        POST /api/bids/submit_bid/
-        """
-        serializer = MukadamBidCreateSerializer(data=request.data)
-        if serializer.is_valid():
-            bid = serializer.save()
+    def submit_bid(self,request):
+        try:
+            bid_data = request.data
             
-            # Check if all mukadams have responded
-            job = bid.job
-            total_assignments = job.assignments.count()
-            responded_bids = job.bids.exclude(status='pending').count()
+            # Validate required fields
+            required_fields = ['job', 'mukadam', 'bid_price_per_acre']
+            missing_fields = [field for field in required_fields if not bid_data.get(field)]
             
-            response_data = MukadamBidSerializer(bid).data
-            response_data['bidding_status'] = {
-                'total_mukadams': total_assignments,
-                'responses_received': responded_bids,
-                'pending_responses': total_assignments - responded_bids
+            if missing_fields:
+                return Response({
+                    "error": f"Missing required fields: {', '.join(missing_fields)}"
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Get job and mukadam
+            try:
+                job = get_object_or_404(Job, id=bid_data['job'])
+                mukadam = get_object_or_404(Mukadam, id=bid_data['mukadam'])
+            except Exception as e:
+                return Response({
+                    "error": f"Job or Mukadam not found: {str(e)}"
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            # Check job status
+            if job.status not in ['bidding', 'assigned']:
+                return Response({
+                    "error": f"Job not accepting bids. Current status: {job.status}"
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # ✅ Check if bid already exists
+            existing_bid = MukadamBid.objects.filter(job=job, mukadam=mukadam).first()
+            
+            if existing_bid:
+                # Update existing bid
+                existing_bid.status = 'interested'
+                existing_bid.bid_price_per_acre = bid_data['bid_price_per_acre']
+                existing_bid.estimated_duration_hours = bid_data.get('estimated_duration_hours')
+                existing_bid.comments = bid_data.get('comments', '')
+                existing_bid.responded_at = timezone.now()
+                existing_bid.save()
+                
+                bid = existing_bid
+                action = "updated"
+                
+                print(f"✅ Updated existing bid for {mukadam.name}")
+                
+            else:
+                # Create new bid
+                bid = MukadamBid.objects.create(
+                    job=job,
+                    mukadam=mukadam,
+                    status='interested',
+                    bid_price_per_acre=bid_data['bid_price_per_acre'],
+                    estimated_duration_hours=bid_data.get('estimated_duration_hours'),
+                    comments=bid_data.get('comments', ''),
+                    responded_at=timezone.now()
+                )
+                
+                action = "created"
+                
+                print(f"✅ Created new bid for {mukadam.name}")
+            
+            # Get bid summary
+            all_bids = MukadamBid.objects.filter(job=job)
+            interested_bids = all_bids.filter(status='interested').order_by('bid_price_per_acre')
+            
+            response_data = {
+                "status": "success",
+                "message": f"Bid {action} successfully",
+                "action": action,  # ✅ Tell them if it was created or updated
+                "bid": {
+                    "id": str(bid.id),
+                    "job_id": str(job.id),
+                    "mukadam_name": mukadam.name,
+                    "bid_price_per_acre": float(bid.bid_price_per_acre),
+                    "estimated_duration_hours": bid.estimated_duration_hours,
+                    "comments": bid.comments,
+                    "submitted_at": bid.responded_at,
+                    "status": bid.status
+                },
+                "job_info": {
+                    "farmer_name": job.farmer.name,
+                    "activity": job.activity.name,
+                    "farm_size_acres": float(job.farm_size_acres),
+                    "location": job.location
+                },
+                "bidding_summary": {
+                    "total_bids": all_bids.count(),
+                    "interested_bids": interested_bids.count(),
+                    "your_rank": list(interested_bids.values_list('id', flat=True)).index(bid.id) + 1 if interested_bids else 1,
+                    "lowest_bid": float(interested_bids.first().bid_price_per_acre) if interested_bids else None
+                }
             }
-            # self._send_websocket_update('new_bid', {
-            #     'job_id': str(bid.job.id),
-            #     'message': f'{bid.mukadam.name} submitted bid',
-            #     'bid_id': str(bid.id)
-            # })
             
-            # ✅ FIXED: Single return statement
-            return Response(response_data, status=status.HTTP_201_CREATED)
+            return Response(response_data, status=status.HTTP_200_OK)
             
-            
-            
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
+        except Exception as e:
+            return Response({
+                "error": f"Bid submission failed: {str(e)}"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     @action(detail=True, methods=['post'])
     def cancel_bid(self, request, pk=None):
         """
@@ -957,130 +1027,109 @@ class MukadamBidViewSet(viewsets.ModelViewSet):
 # Add this to your views.py
 # Add this to your views.py in Django
 
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
-from rest_framework import status
-from django.shortcuts import get_object_or_404
 
-@api_view(['POST'])
-def submit_bid(request):
-    """
-    API endpoint for mukadams to submit bids
-    POST /api/bids/submit_bid/
-    """
-    try:
-        print(f"\n{'='*60}")
-        print(f"💰 BID SUBMISSION RECEIVED")
-        print(f"{'='*60}")
+
+# Update your submit_bid function in views.py
+# @api_view(['POST'])
+# def submit_bid(self,request):
+#     try:
+#         bid_data = request.data
         
-        # Log the incoming request
-        bid_data = request.data
-        print(f"📋 Raw Bid Data:")
-        print(json.dumps(dict(bid_data), indent=2))
+#         # Validate required fields
+#         required_fields = ['job', 'mukadam', 'bid_price_per_acre']
+#         missing_fields = [field for field in required_fields if not bid_data.get(field)]
         
-        # Validate required fields
-        required_fields = ['job', 'mukadam', 'bid_price_per_acre']
-        missing_fields = [field for field in required_fields if not bid_data.get(field)]
+#         if missing_fields:
+#             return Response({
+#                 "error": f"Missing required fields: {', '.join(missing_fields)}"
+#             }, status=status.HTTP_400_BAD_REQUEST)
         
-        if missing_fields:
-            error_msg = f"Missing required fields: {', '.join(missing_fields)}"
-            print(f"❌ Validation Error: {error_msg}")
-            return Response({
-                "error": error_msg,
-                "required_fields": required_fields
-            }, status=status.HTTP_400_BAD_REQUEST)
+#         # Get job and mukadam
+#         try:
+#             job = get_object_or_404(Job, id=bid_data['job'])
+#             mukadam = get_object_or_404(Mukadam, id=bid_data['mukadam'])
+#         except Exception as e:
+#             return Response({
+#                 "error": f"Job or Mukadam not found: {str(e)}"
+#             }, status=status.HTTP_404_NOT_FOUND)
         
-        # Get job and mukadam
-        try:
-            job = get_object_or_404(Job, id=bid_data['job'])
-            mukadam = get_object_or_404(Mukadam, id=bid_data['mukadam'])
+#         # Check job status
+#         if job.status not in ['bidding', 'assigned']:
+#             return Response({
+#                 "error": f"Job not accepting bids. Current status: {job.status}"
+#             }, status=status.HTTP_400_BAD_REQUEST)
+        
+#         # ✅ Check if bid already exists
+#         existing_bid = MukadamBid.objects.filter(job=job, mukadam=mukadam).first()
+        
+#         if existing_bid:
+#             # Update existing bid
+#             existing_bid.status = 'interested'
+#             existing_bid.bid_price_per_acre = bid_data['bid_price_per_acre']
+#             existing_bid.estimated_duration_hours = bid_data.get('estimated_duration_hours')
+#             existing_bid.comments = bid_data.get('comments', '')
+#             existing_bid.responded_at = timezone.now()
+#             existing_bid.save()
             
-            print(f"✅ Job Found: {job.farmer.name} - {job.activity.name}")
-            print(f"✅ Mukadam Found: {mukadam.name}")
+#             bid = existing_bid
+#             action = "updated"
             
-        except Exception as e:
-            print(f"❌ Lookup Error: {str(e)}")
-            return Response({
-                "error": f"Job or Mukadam not found: {str(e)}"
-            }, status=status.HTTP_404_NOT_FOUND)
+#             print(f"✅ Updated existing bid for {mukadam.name}")
+            
+#         else:
+#             # Create new bid
+#             bid = MukadamBid.objects.create(
+#                 job=job,
+#                 mukadam=mukadam,
+#                 status='interested',
+#                 bid_price_per_acre=bid_data['bid_price_per_acre'],
+#                 estimated_duration_hours=bid_data.get('estimated_duration_hours'),
+#                 comments=bid_data.get('comments', ''),
+#                 responded_at=timezone.now()
+#             )
+            
+#             action = "created"
+            
+#             print(f"✅ Created new bid for {mukadam.name}")
         
-        # Check if job is in correct status
-        if job.status not in ['bidding', 'assigned']:
-            error_msg = f"Job not accepting bids. Current status: {job.status}"
-            print(f"❌ Status Error: {error_msg}")
-            return Response({
-                "error": error_msg
-            }, status=status.HTTP_400_BAD_REQUEST)
+#         # Get bid summary
+#         all_bids = MukadamBid.objects.filter(job=job)
+#         interested_bids = all_bids.filter(status='interested').order_by('bid_price_per_acre')
         
-        # Create or update bid
-        bid, created = MukadamBid.objects.update_or_create(
-            job=job,
-            mukadam=mukadam,
-            defaults={
-                'status': 'interested',
-                'bid_price_per_acre': bid_data['bid_price_per_acre'],
-                'estimated_duration_hours': bid_data.get('estimated_duration_hours'),
-                'comments': bid_data.get('comments', ''),
-                'responded_at': timezone.now()
-            }
-        )
+#         response_data = {
+#             "status": "success",
+#             "message": f"Bid {action} successfully",
+#             "action": action,  # ✅ Tell them if it was created or updated
+#             "bid": {
+#                 "id": str(bid.id),
+#                 "job_id": str(job.id),
+#                 "mukadam_name": mukadam.name,
+#                 "bid_price_per_acre": float(bid.bid_price_per_acre),
+#                 "estimated_duration_hours": bid.estimated_duration_hours,
+#                 "comments": bid.comments,
+#                 "submitted_at": bid.responded_at,
+#                 "status": bid.status
+#             },
+#             "job_info": {
+#                 "farmer_name": job.farmer.name,
+#                 "activity": job.activity.name,
+#                 "farm_size_acres": float(job.farm_size_acres),
+#                 "location": job.location
+#             },
+#             "bidding_summary": {
+#                 "total_bids": all_bids.count(),
+#                 "interested_bids": interested_bids.count(),
+#                 "your_rank": list(interested_bids.values_list('id', flat=True)).index(bid.id) + 1 if interested_bids else 1,
+#                 "lowest_bid": float(interested_bids.first().bid_price_per_acre) if interested_bids else None
+#             }
+#         }
         
-        action = "created" if created else "updated"
-        print(f"✅ Bid {action} successfully")
-        print(f"💰 Price: ₹{bid.bid_price_per_acre}/acre")
-        print(f"⏰ Duration: {bid.estimated_duration_hours}h")
-        print(f"💬 Comments: {bid.comments}")
+#         return Response(response_data, status=status.HTTP_200_OK)
         
-        # Get bid summary for this job
-        all_bids = MukadamBid.objects.filter(job=job)
-        interested_bids = all_bids.filter(status='interested').order_by('bid_price_per_acre')
-        
-        bid_summary = {
-            "total_bids": all_bids.count(),
-            "interested_bids": interested_bids.count(),
-            "declined_bids": all_bids.filter(status='declined').count(),
-            "lowest_bid": float(interested_bids.first().bid_price_per_acre) if interested_bids else None,
-            "highest_bid": float(interested_bids.last().bid_price_per_acre) if interested_bids else None,
-            "your_rank": list(interested_bids.values_list('id', flat=True)).index(bid.id) + 1 if interested_bids else 1
-        }
-        
-        response_data = {
-            "status": "success",
-            "message": f"Bid {action} successfully",
-            "bid": {
-                "id": str(bid.id),
-                "job_id": str(job.id),
-                "mukadam_name": mukadam.name,
-                "bid_price_per_acre": float(bid.bid_price_per_acre),
-                "estimated_duration_hours": bid.estimated_duration_hours,
-                "comments": bid.comments,
-                "submitted_at": bid.responded_at,
-                "status": bid.status
-            },
-            "job_info": {
-                "farmer_name": job.farmer.name,
-                "activity": job.activity.name,
-                "farm_size_acres": float(job.farm_size_acres),
-                "location": job.location,
-                "requested_date": str(job.requested_date)
-            },
-            "bidding_summary": bid_summary
-        }
-        
-        print(f"📤 Response Data:")
-        print(json.dumps(response_data, indent=2, default=str))
-        print(f"{'='*60}")
-        
-        return Response(response_data, status=status.HTTP_200_OK)
-        
-    except Exception as e:
-        print(f"❌ Unexpected Error: {str(e)}")
-        print(f"{'='*60}")
-        return Response({
-            "error": f"Bid submission failed: {str(e)}"
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
+#     except Exception as e:
+#         return Response({
+#             "error": f"Bid submission failed: {str(e)}"
+#         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 # Update views.py to support the enhanced features
 class MukadamViewSet(viewsets.ModelViewSet):
     queryset = Mukadam.objects.all()
