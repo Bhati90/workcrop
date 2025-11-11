@@ -88,31 +88,39 @@ class JobAssignment(models.Model):
     assigned_at = models.DateTimeField(auto_now_add=True)
     notified_at = models.DateTimeField(null=True, blank=True)
 
+# Update your MukadamBid model in models.py:
 class MukadamBid(models.Model):
+    PENDING = 'pending'
+    INTERESTED = 'interested' 
+    DECLINED = 'declined'
+    SELECTED = 'selected'      # ✅ Add this
+    REJECTED = 'rejected'      # ✅ Add this too for rejected bids
+    
     STATUS_CHOICES = [
-        ('pending', 'Pending Response'),
-        ('interested', 'Interested - Price Submitted'),
-        ('declined', 'Declined'),
-        ('cancelled', 'Cancelled by Mukadam'),
+        (PENDING, 'Pending'),
+        (INTERESTED, 'Interested'),
+        (DECLINED, 'Declined'), 
+        (SELECTED, 'Selected'),     # ✅ Add this
+        (REJECTED, 'Rejected'),     # ✅ Add this
     ]
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name='bids')
     mukadam = models.ForeignKey(Mukadam, on_delete=models.CASCADE)
-    
-    # Bid Details
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=PENDING)
     bid_price_per_acre = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    final_price_per_acre = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)  # ✅ Add if missing
     estimated_duration_hours = models.IntegerField(null=True, blank=True)
     comments = models.TextField(blank=True)
-    
-    # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     responded_at = models.DateTimeField(null=True, blank=True)
     
     class Meta:
         unique_together = ['job', 'mukadam']
-        ordering = ['bid_price_per_acre']
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.mukadam.name} - {self.job.farmer.name} ({self.status})"
 
 # models.py
 class JobStatusHistory(models.Model):

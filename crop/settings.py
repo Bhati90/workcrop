@@ -354,8 +354,8 @@ GEMINI_API_KEY = GEMINI_API_KEY_1
 
 DATABASES = {
     'default': dj_database_url.config(
-        # default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a.oregon-postgres.render.com/registerdb_od8n',
-        default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a/registerdb_od8n',
+        default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a.oregon-postgres.render.com/registerdb_od8n',
+        # default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a/registerdb_od8n',
         conn_max_age=600,
         conn_health_checks=True,
     )
@@ -363,6 +363,13 @@ DATABASES = {
 # At the end of settings.py
 APPEND_SLASH = False  # Prevent automatic slash redirects
 
+
+# In settings.py - MUCH SIMPLER!
+MUKADAM_WEBHOOK_URLS = {
+    'default': 'http://localhost:5000/api/webhooks/job-notification'
+}
+
+BASE_URL = 'https://workcrop.onrender.com'
 # CORS_ALLOWED_ORIGINS = config(
 #     'CORS_ALLOWED_ORIGINS',
 #     default='https://workcrop.onrender.com,http://localhost:3000,http://127.0.0.1:3000,http://127.0.0.1:8000,https://workcrop-dc8o.vercel.app,http://localhost:5173/',
@@ -492,7 +499,8 @@ CSRF_TRUSTED_ORIGINS = [
     "https://workcrop-dc8o.vercel.app/",
     "https://workcrop.onrender.com",
     "https://workw-mu.vercel.app/",
-    "https://workw-mu.vercel.app"
+    "https://workw-mu.vercel.app",
+    "http://localhost:5000",
 ]
 
 # Logging configuration

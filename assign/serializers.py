@@ -155,7 +155,62 @@ class JobStatusHistorySerializer(serializers.ModelSerializer):
     class Meta:
         model = JobStatusHistory
         fields = '__all__'
+# Update serializers.py
+class MukadamBidDetailSerializer(serializers.ModelSerializer):
+    mukadam_name = serializers.CharField(source='mukadam.name', read_only=True)
+    mukadam_phone = serializers.CharField(source='mukadam.phone', read_only=True)
+    mukadam_location = serializers.CharField(source='mukadam.location', read_only=True)
+    mukadam_labourers = serializers.IntegerField(source='mukadam.number_of_labourers', read_only=True)
+    
+    # Add performance data
+    mukadam_total_bids = serializers.SerializerMethodField()
+    mukadam_won_bids = serializers.SerializerMethodField()
+    mukadam_avg_bid_price = serializers.SerializerMethodField()
+    mukadam_success_rate = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = MukadamBid
+        fields = [
+            'id', 'status', 'bid_price_per_acre', 'final_price_per_acre',
+            'estimated_duration_hours', 'comments', 'created_at', 'responded_at',
+            'mukadam_name', 'mukadam_phone', 'mukadam_location', 'mukadam_labourers',
+            'mukadam_total_bids', 'mukadam_won_bids', 'mukadam_avg_bid_price', 'mukadam_success_rate'
+        ]
+    
+    def get_mukadam_total_bids(self, obj):
+        return MukadamBid.objects.filter(mukadam=obj.mukadam, status__in=['interested', 'selected', 'rejected']).count()
+    
+    def get_mukadam_won_bids(self, obj):
+        return MukadamBid.objects.filter(mukadam=obj.mukadam, status='selected').count()
+    
+    def get_mukadam_avg_bid_price(self, obj):
+        from django.db.models import Avg
+        avg = MukadamBid.objects.filter(
+            mukadam=obj.mukadam, 
+            status__in=['interested', 'selected', 'rejected'],
+            bid_price_per_acre__isnull=False
+        ).aggregate(avg_price=Avg('bid_price_per_acre'))['avg_price']
+        return round(float(avg), 2) if avg else 0
+    
+    def get_mukadam_success_rate(self, obj):
+        total = self.get_mukadam_total_bids(obj)
+        won = self.get_mukadam_won_bids(obj)
+        return round((won / total * 100), 1) if total > 0 else 0
 
+class JobDetailSerializer(serializers.ModelSerializer):
+    farmer = FarmerSerializer(read_only=True)
+    activity = ActivitySerializer(read_only=True)
+    finalized_mukadam = MukadamSerializer(read_only=True)
+    all_bids = MukadamBidDetailSerializer(source='bids', many=True, read_only=True)  # ✅ All bids
+    
+    class Meta:
+        model = Job
+        fields = [
+            'id', 'farmer', 'activity', 'farm_size_acres', 'location',
+            'requested_date', 'requested_time', 'farmer_price_per_acre',
+            'status', 'notes', 'finalized_mukadam', 'finalized_price',
+            'confirmed_at', 'finalized_at', 'all_bids'  # ✅ Include all bids
+        ]
 # Add this to your serializers.py
 
 class MukadamSerializer(serializers.ModelSerializer):
