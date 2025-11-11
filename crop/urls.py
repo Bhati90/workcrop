@@ -22,9 +22,11 @@ from django.conf.urls.static import static
 
 urlpatterns = [
   
-    path('register/whatsapp/', include('flow.urls')),
-   
-    path('what/', include('reply.urls')),
+    
+   path('api/', include('assign.urls')),  # Make sure this matches
+    # Add WebSocket routing if needed
+
+    
     path('admin/', admin.site.urls),
 ]
 

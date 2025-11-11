@@ -266,8 +266,9 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     "corsheaders",
-    'reply',
-    'flow',
+    'channels',
+    'assign',
+    
     'storages',
     'rest_framework',
     
@@ -353,8 +354,8 @@ GEMINI_API_KEY = GEMINI_API_KEY_1
 
 DATABASES = {
     'default': dj_database_url.config(
-        # default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a.oregon-postgres.render.com/registerdb_od8n',
-        default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a/registerdb_od8n',
+        default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a.oregon-postgres.render.com/registerdb_od8n',
+        # default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a/registerdb_od8n',
         conn_max_age=600,
         conn_health_checks=True,
     )
@@ -430,6 +431,39 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+from celery.schedules import crontab
+# Redis Configuration
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        'LOCATION': 'redis://127.0.0.1:6379/1',
+    }
+}
+
+# Celery Configuration
+CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+
+# WebSocket Configuration
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            'hosts': [('127.0.0.1', 6379)],
+        },
+    },
+}
+# settings.py
+CELERY_BEAT_SCHEDULE = {
+    'send-daily-notifications': {
+        'task': 'farmops.tasks.send_daily_job_notifications',
+        'schedule': crontab(hour=6, minute=0),  # 6 AM daily
+    },
+    'send-reminder-notifications': {
+        'task': 'farmops.tasks.send_job_reminder_notifications',
+        'schedule': crontab(hour=9, minute=0),  # 9 AM daily
+    },
+}
 
 # Internationalization
 # https://docs.djangoproject.com/en/4.2/topics/i18n/
@@ -453,6 +487,7 @@ USE_TZ = True
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
+    "http://localhost:8080",
     "http://127.0.0.1:5173",
     "https://workcrop-dc8o.vercel.app/",
     "https://workcrop.onrender.com"
