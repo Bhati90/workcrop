@@ -869,6 +869,145 @@ class JobViewSet(viewsets.ModelViewSet):
                 {"error": f"Failed to re-assign job: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+        
+
+    @action(detail=True, methods=['post'])
+    def notify_mukadams(self, request, pk=None):
+        """Send simple Yes/No job notifications to selected mukadams"""
+        try:
+            job = self.get_object()
+            mukadam_ids = request.data.get('mukadam_ids', [])
+            
+            if job.status != 'priced':
+                return Response(
+                    {"error": "Job must be priced first"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            notifications_sent = []
+            
+            for mukadam_id in mukadam_ids:
+                mukadam = get_object_or_404(Mukadam, id=mukadam_id)
+                
+                # Create interest record
+                interest, created = MukadamInterest.objects.get_or_create(
+                    job=job,
+                    mukadam=mukadam
+                )
+                
+                # Send simple notification
+                notification_data = {
+                    "notification_type": "simple_job_offer",
+                    "job_id": str(job.id),
+                    "mukadam_id": str(mukadam.id),
+                    "mukadam_name": mukadam.name,
+                    
+                    "job_details": {
+                        "farmer_name": job.farmer.name,
+                        "activity": job.activity.name,
+                        "farm_size_acres": float(job.farm_size_acres),
+                        "location": job.location,
+                        "date": str(job.requested_date),
+                        "your_price": float(job.your_price_per_acre),
+                        "total_amount": float(job.your_price_per_acre * job.farm_size_acres)
+                    },
+                    
+                    "response_required": {
+                        "question": f"Are you interested in this {job.activity.name} job for ₹{job.your_price_per_acre}/acre?",
+                        "options": ["YES", "NO"],
+                        "respond_url": f"{settings.BASE_URL}/api/jobs/{job.id}/respond/"
+                    }
+                }
+                
+                # Send webhook
+                try:
+                    self._send_simple_notification(notification_data)
+                    notifications_sent.append(mukadam.name)
+                except Exception as e:
+                    print(f"Failed to notify {mukadam.name}: {e}")
+            
+            job.status = 'notified'
+            job.save()
+            
+            return Response({
+                "message": f"Notified {len(notifications_sent)} mukadams",
+                "notified": notifications_sent,
+                "job_price": float(job.your_price_per_acre)
+            })
+            
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+
+    def _send_simple_notification(self, data):
+        """Send simple notification to mukadam app"""
+        webhook_url = settings.MUKADAM_WEBHOOK_URLS.get('default')
+        
+        print(f"\n📱 SIMPLE JOB NOTIFICATION")
+        print(f"🎯 To: {data['mukadam_name']}")
+        print(f"💰 Price: ₹{data['job_details']['your_price']}/acre")
+        print(f"📋 Total: ₹{data['job_details']['total_amount']}")
+        
+        if webhook_url:
+            response = requests.post(webhook_url, json=data, timeout=30)
+            return response.json()
+        
+        return {"status": "logged"}
+    
+    # Collect mukadam responses
+    @action(detail=True, methods=['post'])
+    def respond(self, request, pk=None):
+        """Mukadam responds YES/NO to job"""
+        
+        job = self.get_object()
+        mukadam_id = request.data.get('mukadam_id')
+        interested = request.data.get('interested')
+        
+        mukadam = get_object_or_404(Mukadam, id=mukadam_id)
+        
+        # Update interest record
+        interest = MukadamInterest.objects.get(job=job, mukadam=mukadam)
+        interest.is_interested = interested
+        interest.responded_at = timezone.now()
+        interest.save()
+        
+        print(f"📝 {mukadam.name} responded: {'YES' if interested else 'NO'}")
+        
+        return Response({
+            "message": f"Response recorded: {'Interested' if interested else 'Not interested'}",
+            "mukadam": mukadam.name,
+            "interested": interested
+        })
+
+    # Assign to one mukadam
+    @action(detail=True, methods=['post'])
+    def assign_final(self, request, pk=None):
+        """Assign job to selected mukadam (from interested ones)"""
+        
+        job = self.get_object()
+        mukadam_id = request.data.get('mukadam_id')
+        
+        mukadam = get_object_or_404(Mukadam, id=mukadam_id)
+        
+        # Check if they were interested
+        interest = MukadamInterest.objects.get(job=job, mukadam=mukadam)
+        if not interest.is_interested:
+            return Response({"error": "This mukadam was not interested"}, status=400)
+        
+        # Assign job
+        job.assigned_mukadam = mukadam
+        job.status = 'assigned'
+        job.assigned_at = timezone.now()
+        job.save()
+        
+        # Notify assigned mukadam
+        self._notify_assignment(job, mukadam)
+        
+        return Response({
+            "message": f"Job assigned to {mukadam.name}",
+            "mukadam": mukadam.name,
+            "price": float(job.your_price_per_acre),
+            "total": float(job.your_price_per_acre * job.farm_size_acres)
+        })
 
     def _notify_mukadam_about_job(self, job, mukadam):
         """Send notification to mukadam about new job assignment"""
@@ -888,6 +1027,48 @@ class JobViewSet(viewsets.ModelViewSet):
         
         # This would call the mukadam app webhook
         print(f"🔔 Would notify {mukadam.name}: New job assignment - {notification_data}")
+
+
+# Add to views.py
+@api_view(['POST'])
+def confirm_job_and_set_price(request):
+    """Confirm job from team and set your price for mukadams"""
+    try:
+        job_id = request.data.get('job_id')
+        our_price = request.data.get('our_price_per_acre')
+        
+        if not job_id or not our_price:
+            return Response(
+                {"error": "job_id and your_price_per_acre are required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        job = get_object_or_404(Job, id=job_id)
+        
+        # Update job with your price
+        job.our_price_per_acre = our_price  # Add this field to model
+        job.status = 'priced'  # New status
+        job.confirmed_at = timezone.now()
+        job.save()
+        
+        print(f"✅ Job confirmed with price: {job.farmer.name} - ₹{our_price}/acre")
+        
+        return Response({
+            "message": "Job confirmed and priced successfully",
+            "job_id": str(job.id),
+            "farmer_name": job.farmer.name,
+            "our_price": float(our_price),
+            "farmer_original_price": float(job.farmer_price_per_acre),
+            "margin_per_acre": float(job.farmer_price_per_acre) - float(our_price),
+            "status": job.status
+        })
+        
+    except Exception as e:
+        return Response(
+            {"error": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
 
 class MukadamBidViewSet(viewsets.ModelViewSet):
     queryset = MukadamBid.objects.all()

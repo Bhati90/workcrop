@@ -41,6 +41,10 @@ class MukadamActivityRate(models.Model):
     def __str__(self):
         return f"{self.mukadam.name} - {self.activity.name} - ₹{self.rate_per_acre}/acre"
 
+
+
+
+
 class Job(models.Model):
     STATUS_CHOICES = [
         ('confirmed', 'Confirmed'),
@@ -48,9 +52,15 @@ class Job(models.Model):
         ('bidding', 'Receiving Bids'),
         ('finalized', 'Mukadam Finalized'),
         ('in_progress', 'Work in Progress'),
+        ('priced', 'Priced'),      # New status
+        ('notified', 'Notified'),  # New status  
         ('completed', 'Completed'),
         ('cancelled', 'Cancelled'),
+
     ]
+    assigned_mukadam = models.ForeignKey(Mukadam, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_jobs')
+    assigned_at = models.DateTimeField(null=True, blank=True)
+    our_price_per_acre = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     farmer = models.ForeignKey(Farmer, on_delete=models.CASCADE)
@@ -79,6 +89,17 @@ class Job(models.Model):
     
     class Meta:
         ordering = ['-confirmed_at']
+
+
+class MukadamInterest(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name='interests')
+    mukadam = models.ForeignKey(Mukadam, on_delete=models.CASCADE)
+    is_interested = models.BooleanField(default=False)  # True = Yes, False = No
+    responded_at = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        unique_together = ['job', 'mukadam']
 
 class JobAssignment(models.Model):
     """Track which mukadams were assigned to bid on a job"""

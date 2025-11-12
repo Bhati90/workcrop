@@ -12,6 +12,8 @@ router.register(r'mukadam-activity-rates', views.MukadamActivityRateViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),
+    path('api/jobs/confirm_and_price/', views.confirm_job_and_set_price, name='confirm_job_and_price'),  # ADD
+
     # path('api/bids/submit_bid/', views.submit_bid, name='submit_bid'),
 
     # Additional custom endpoints can be added here
