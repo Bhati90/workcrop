@@ -1002,22 +1002,39 @@ class JobViewSet(viewsets.ModelViewSet):
         job = self.get_object()
         mukadam_id = request.data.get('mukadam_id')
         interested = request.data.get('interested')
-        
+        if mukadam_id is None or interested is None:
+            return Response(
+                {"error": "Both 'mukadam_id' and 'interested' are required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         mukadam = get_object_or_404(Mukadam, id=mukadam_id)
         
-        # Update interest record
-        interest = MukadamInterest.objects.get(job=job, mukadam=mukadam)
-        interest.is_interested = interested
-        interest.responded_at = timezone.now()
-        interest.save()
-        
+        interest, created = MukadamInterest.objects.get_or_create(
+            job=job,
+            mukadam=mukadam,
+            defaults={
+                "is_interested": interested,
+                "responded_at": timezone.now(),
+                "response_status": "interested" if interested else "declined",
+            }
+        )
+
+        # ✅ If it already existed, update it
+        if not created:
+            interest.is_interested = interested
+            interest.responded_at = timezone.now()
+            interest.response_status = "interested" if interested else "declined"
+            interest.save()
+
         print(f"📝 {mukadam.name} responded: {'YES' if interested else 'NO'}")
-        
+
         return Response({
             "message": f"Response recorded: {'Interested' if interested else 'Not interested'}",
             "mukadam": mukadam.name,
-            "interested": interested
-        })
+            "interested": interested,
+            "new_record_created": created
+        },
+        status=status.HTTP_201_CREATED)
 
         # In views.py - UPDATE this method
     
