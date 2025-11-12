@@ -1020,6 +1020,7 @@ class JobViewSet(viewsets.ModelViewSet):
         })
 
         # In views.py - UPDATE this method
+    
     @action(detail=True, methods=['post'])
     def assign_final(self, request, pk=None):
         """Assign job to selected mukadam (from interested ones)"""
@@ -1177,7 +1178,8 @@ class JobViewSet(viewsets.ModelViewSet):
                         'id': str(interest.mukadam.id),
                         'name': interest.mukadam.name,
                         'phone': interest.mukadam.phone,
-                        'location': interest.mukadam.location
+                        'location': interest.mukadam.location,
+                        'team_size': interest.mukadam.number_of_labourers
                     },
                     'is_interested': interest.is_interested,
                     'responded_at': interest.responded_at.isoformat() if interest.responded_at else None,
@@ -1202,10 +1204,12 @@ class JobViewSet(viewsets.ModelViewSet):
                 'requested_date': str(job.requested_date),
                 'farmer_price_per_acre': float(job.farmer_price_per_acre),
                 'your_price_per_acre': float(job.your_price_per_acre) if job.your_price_per_acre else None,
+                'workers_needed': job.workers_needed,
                 'status': job.status,
                 'assigned_mukadam': {
                     'id': str(job.assigned_mukadam.id),
-                    'name': job.assigned_mukadam.name
+                    'name': job.assigned_mukadam.name,
+                    'team_size': job.assigned_mukadam.number_of_labourers
                 } if job.assigned_mukadam else None,
                 'interests': interests_data,
             'response_summary': {
@@ -1213,7 +1217,12 @@ class JobViewSet(viewsets.ModelViewSet):
                 'interested_count': len([i for i in interests_data if i['response_status'] == 'interested']),
                 'declined_count': len([i for i in interests_data if i['response_status'] == 'declined']),
                 'assigned_count': len([i for i in interests_data if i['response_status'] == 'assigned']),
-           }
+           },# ✅ ADD team size analysis
+            'team_analysis': {
+                'workers_needed': job.workers_needed,
+                'suitable_mukadams': len([i for i in interests_data if i['mukadam']['team_size'] >= job.workers_needed]),
+                'team_coverage': f"{job.workers_needed} workers needed"
+            }
             }
             job_data.append(job_info)
         
@@ -1564,10 +1573,12 @@ class MukadamJobViewSet(viewsets.ReadOnlyModelViewSet):
                     'work': {
                         'activity': job.activity.name,
                         'farm_size_acres': farm_size,
+                        'workers_needed': job.workers_needed,
                         'scheduled_date': str(job.requested_date),
                         'scheduled_time': str(job.requested_time) if job.requested_time else "Morning",
                         'location': job.location,
-                        'special_notes': job.notes or ""
+                        'special_notes': job.notes or "",
+                        'team_requirements': f"{job.workers_needed} workers required" 
                     },
                     'pricing': {
                         'rate_per_acre': rate_per_acre,
@@ -1876,6 +1887,7 @@ class MukadamProfileViewSet(viewsets.ReadOnlyModelViewSet):
         except Mukadam.DoesNotExist:
             return Response({'error': 'Mukadam not found'}, status=404)
     
+
     def _calculate_pending_payments(self, mukadam):
         """Calculate pending payments for completed but unpaid jobs"""
         # Assuming you track payment status

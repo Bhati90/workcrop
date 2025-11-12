@@ -72,6 +72,7 @@ class Job(models.Model):
     requested_date = models.DateField()
     requested_time = models.TimeField()
     farmer_price_per_acre = models.DecimalField(max_digits=10, decimal_places=2)
+    workers_needed = models.IntegerField(default=5, help_text="Number of workers required for this job")  # ✅ ADD this
     
     # Status & Assignment
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='confirmed')
@@ -99,7 +100,7 @@ class MukadamInterest(models.Model):
     is_interested = models.BooleanField(default=False)
     responded_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True) 
-    
+
     # ✅ ADD this field
     RESPONSE_STATUS_CHOICES = [
         ('pending', 'Pending'),

@@ -86,9 +86,10 @@ class JobSerializer(serializers.ModelSerializer):
     class Meta:
         model = Job
         fields = [
+            'finalized_mukadam', 
             'id', 'farmer', 'activity', 'farm_size_acres', 'location', 
             'requested_date', 'requested_time', 'farmer_price_per_acre',
-            'your_price_per_acre', 'status', 'interests'  # ADD interests here
+            'your_price_per_acre', 'status', 'interests' ,'workers_needed' # ADD interests here
         ]
 
 
@@ -105,30 +106,34 @@ class JobCreateSerializer(serializers.ModelSerializer):
             'farmer_name', 'farmer_phone', 'farmer_village',
             'activity_name', 'farm_size_acres', 'location',
             'requested_date', 'requested_time', 'farmer_price_per_acre',
-            'notes'
+            'notes','workers_needed'
         ]
     
     def create(self, validated_data):
         # Get or create farmer
-        farmer, _ = Farmer.objects.get_or_create(
-            phone=validated_data.pop('farmer_phone'),
-            defaults={
-                'name': validated_data.pop('farmer_name'),
-                'village': validated_data.pop('farmer_village')
-            }
+        farmer_data = {
+            'name': validated_data.pop('farmer_name'),
+            'phone': validated_data.pop('farmer_phone'),
+            'village': validated_data.pop('farmer_village')
+        }
+        
+        # Get or create farmer
+        farmer, created = Farmer.objects.get_or_create(
+            phone=farmer_data['phone'],
+            defaults=farmer_data
         )
         
         # Get or create activity
-        activity, _ = Activity.objects.get_or_create(
-            name=validated_data.pop('activity_name'),
-            defaults={'description': ''}
+        activity_name = validated_data.pop('activity_name')
+        activity, created = Activity.objects.get_or_create(
+            name=activity_name
         )
         
-        # Create job
+        # Create job with workers_needed
         job = Job.objects.create(
             farmer=farmer,
             activity=activity,
-            **validated_data
+            **validated_data  # This now includes workers_needed
         )
         
         return job
