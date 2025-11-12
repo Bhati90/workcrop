@@ -1759,7 +1759,366 @@ class MukadamJobViewSet(viewsets.ReadOnlyModelViewSet):
         
         return timeline
     
+# In views.py - ADD new ViewSet for individual mukadam details
+class MukadamProfileViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    API for individual Mukadam profile, statistics, and performance
+    """
     
+    @action(detail=True, methods=['get'])
+    def profile(self, request, pk=None):
+        """
+        GET /api/mukadamprofile/{mukadam_id}/profile/
+        Get complete mukadam profile with performance statistics
+        """
+        try:
+            mukadam = Mukadam.objects.get(id=pk)
+            
+            # Get all job interests/assignments for this mukadam
+            all_interests = MukadamInterest.objects.filter(mukadam=mukadam)
+            
+            # Calculate statistics
+            total_notified = all_interests.count()
+            total_responded = all_interests.filter(responded_at__isnull=False).count()
+            total_interested = all_interests.filter(is_interested=True).count()
+            total_declined = all_interests.filter(is_interested=False).count()
+            total_assigned = Job.objects.filter(assigned_mukadam=mukadam).count()
+            total_completed = Job.objects.filter(assigned_mukadam=mukadam, status='completed').count()
+            
+            # Calculate earnings
+            completed_jobs = Job.objects.filter(assigned_mukadam=mukadam, status='completed')
+            total_earnings = sum(
+                float(job.your_price_per_acre) * float(job.farm_size_acres) 
+                for job in completed_jobs if job.your_price_per_acre
+            )
+            
+            # Get recent activity (last 30 days)
+            from datetime import datetime, timedelta
+            thirty_days_ago = timezone.now() - timedelta(days=30)
+            recent_interests = all_interests.filter(created_at__gte=thirty_days_ago)
+            recent_assignments = Job.objects.filter(
+                assigned_mukadam=mukadam, 
+                assigned_at__gte=thirty_days_ago
+            )
+            
+            # Performance metrics
+            response_rate = (total_responded / total_notified * 100) if total_notified > 0 else 0
+            success_rate = (total_assigned / total_interested * 100) if total_interested > 0 else 0
+            completion_rate = (total_completed / total_assigned * 100) if total_assigned > 0 else 0
+            
+            # Average job value
+            avg_job_value = total_earnings / total_completed if total_completed > 0 else 0
+            
+            profile_data = {
+                # Basic Info
+                'mukadam_info': {
+                    'id': str(mukadam.id),
+                    'name': mukadam.name,
+                    'phone': mukadam.phone,
+                    'location': mukadam.location,
+                    'team_size': mukadam.number_of_labourers,
+                    'is_active': mukadam.is_active,
+                    'joined_date': mukadam.created_at.isoformat() if hasattr(mukadam, 'created_at') else None
+                },
+                
+                # Job Statistics
+                'job_statistics': {
+                    'total_notified': total_notified,
+                    'total_responded': total_responded,
+                    'total_interested': total_interested,
+                    'total_declined': total_declined,
+                    'total_assigned': total_assigned,
+                    'total_completed': total_completed,
+                    'jobs_in_progress': total_assigned - total_completed
+                },
+                
+                # Financial Summary
+                'earnings': {
+                    'total_earnings': round(total_earnings, 2),
+                    'average_job_value': round(avg_job_value, 2),
+                    'completed_jobs_count': total_completed,
+                    'pending_payments': self._calculate_pending_payments(mukadam),
+                    'currency': 'INR'
+                },
+                
+                # Performance Metrics
+                'performance': {
+                    'response_rate': round(response_rate, 1),
+                    'success_rate': round(success_rate, 1),
+                    'completion_rate': round(completion_rate, 1),
+                    'reliability_score': self._calculate_reliability_score(mukadam),
+                    'performance_grade': self._get_performance_grade(response_rate, success_rate, completion_rate)
+                },
+                
+                # Recent Activity (Last 30 days)
+                'recent_activity': {
+                    'jobs_notified': recent_interests.count(),
+                    'jobs_assigned': recent_assignments.count(),
+                    'recent_earnings': sum(
+                        float(job.your_price_per_acre) * float(job.farm_size_acres) 
+                        for job in recent_assignments.filter(status='completed') 
+                        if job.your_price_per_acre
+                    )
+                },
+                
+                # Activity Breakdown
+                'activity_breakdown': self._get_activity_breakdown(mukadam),
+                
+                # Monthly Performance
+                'monthly_summary': self._get_monthly_summary(mukadam),
+                
+                # Current Status
+                'current_status': self._get_current_status(mukadam)
+            }
+            
+            return Response(profile_data)
+            
+        except Mukadam.DoesNotExist:
+            return Response({'error': 'Mukadam not found'}, status=404)
+    
+    def _calculate_pending_payments(self, mukadam):
+        """Calculate pending payments for completed but unpaid jobs"""
+        # Assuming you track payment status
+        completed_unpaid = Job.objects.filter(
+            assigned_mukadam=mukadam, 
+            status='completed'
+            # Add payment_status='pending' when you implement payment tracking
+        )
+        
+        pending_amount = sum(
+            float(job.your_price_per_acre) * float(job.farm_size_acres) 
+            for job in completed_unpaid if job.your_price_per_acre
+        )
+        
+        return {
+            'amount': round(pending_amount, 2),
+            'jobs_count': completed_unpaid.count()
+        }
+    
+    def _calculate_reliability_score(self, mukadam):
+        """Calculate reliability score based on various factors"""
+        # You can customize this based on your criteria
+        recent_jobs = Job.objects.filter(
+            assigned_mukadam=mukadam,
+            assigned_at__gte=timezone.now() - timedelta(days=90)
+        )
+        
+        if not recent_jobs.exists():
+            return 0
+        
+        completed = recent_jobs.filter(status='completed').count()
+        total = recent_jobs.count()
+        
+        base_score = (completed / total) * 100 if total > 0 else 0
+        
+        # Bonus for quick responses
+        quick_responses = MukadamInterest.objects.filter(
+            mukadam=mukadam,
+            responded_at__isnull=False,
+            created_at__gte=timezone.now() - timedelta(days=90)
+        ).filter(
+            responded_at__lte=models.F('created_at') + timedelta(hours=24)
+        ).count()
+        
+        total_opportunities = MukadamInterest.objects.filter(
+            mukadam=mukadam,
+            created_at__gte=timezone.now() - timedelta(days=90)
+        ).count()
+        
+        response_bonus = (quick_responses / total_opportunities * 10) if total_opportunities > 0 else 0
+        
+        return round(min(100, base_score + response_bonus), 1)
+    
+    def _get_performance_grade(self, response_rate, success_rate, completion_rate):
+        """Get letter grade based on performance"""
+        avg_score = (response_rate + success_rate + completion_rate) / 3
+        
+        if avg_score >= 90:
+            return 'A+'
+        elif avg_score >= 80:
+            return 'A'
+        elif avg_score >= 70:
+            return 'B'
+        elif avg_score >= 60:
+            return 'C'
+        else:
+            return 'D'
+    
+    def _get_activity_breakdown(self, mukadam):
+        """Get breakdown by activity type"""
+        from django.db.models import Count
+        
+        activity_stats = Job.objects.filter(
+            assigned_mukadam=mukadam
+        ).values(
+            'activity__name'
+        ).annotate(
+            count=Count('id')
+        )
+        
+        breakdown = []
+        for stat in activity_stats:
+            # Calculate earnings for this activity
+            activity_jobs = Job.objects.filter(
+                assigned_mukadam=mukadam,
+                activity__name=stat['activity__name'],
+                status='completed'
+            )
+            
+            earnings = sum(
+                float(job.your_price_per_acre) * float(job.farm_size_acres) 
+                for job in activity_jobs if job.your_price_per_acre
+            )
+            
+            breakdown.append({
+                'activity': stat['activity__name'],
+                'jobs_assigned': stat['count'],
+                'jobs_completed': activity_jobs.count(),
+                'total_earnings': round(earnings, 2)
+            })
+        
+        return breakdown
+    
+    def _get_monthly_summary(self, mukadam):
+        """Get last 6 months performance summary"""
+        monthly_data = []
+        
+        for i in range(6):
+            month_start = timezone.now().replace(day=1) - timedelta(days=30*i)
+            month_end = month_start + timedelta(days=30)
+            
+            month_interests = MukadamInterest.objects.filter(
+                mukadam=mukadam,
+                created_at__gte=month_start,
+                created_at__lt=month_end
+            )
+            
+            month_assignments = Job.objects.filter(
+                assigned_mukadam=mukadam,
+                assigned_at__gte=month_start,
+                assigned_at__lt=month_end
+            )
+            
+            month_completed = month_assignments.filter(status='completed')
+            
+            month_earnings = sum(
+                float(job.your_price_per_acre) * float(job.farm_size_acres) 
+                for job in month_completed if job.your_price_per_acre
+            )
+            
+            monthly_data.append({
+                'month': month_start.strftime('%B %Y'),
+                'notified': month_interests.count(),
+                'assigned': month_assignments.count(),
+                'completed': month_completed.count(),
+                'earnings': round(month_earnings, 2)
+            })
+        
+        return monthly_data[:6]  # Return last 6 months
+    
+    def _get_current_status(self, mukadam):
+        """Get current job status"""
+        active_jobs = Job.objects.filter(
+            assigned_mukadam=mukadam,
+            status__in=['assigned']
+        )
+        
+        pending_responses = MukadamInterest.objects.filter(
+            mukadam=mukadam,
+            responded_at__isnull=True,
+            job__status='notified'
+        )
+        
+        return {
+            'active_jobs': active_jobs.count(),
+            'pending_responses': pending_responses.count(),
+            'is_available': mukadam.is_active and active_jobs.count() < 3,  # Customize availability logic
+            'last_activity': self._get_last_activity(mukadam)
+        }
+    
+    def _get_last_activity(self, mukadam):
+        """Get last activity timestamp"""
+        last_response = MukadamInterest.objects.filter(
+            mukadam=mukadam,
+            responded_at__isnull=False
+        ).order_by('-responded_at').first()
+        
+        if last_response:
+            return {
+                'type': 'response',
+                'timestamp': last_response.responded_at.isoformat(),
+                'description': f"Responded to job opportunity"
+            }
+        
+        return None
+    
+    @action(detail=True, methods=['get'])
+    def job_history(self, request, pk=None):
+        """
+        GET /api/mukadams/{mukadam_id}/job_history/
+        Get detailed job history for mukadam
+        """
+        try:
+            mukadam = Mukadam.objects.get(id=pk)
+            
+            # Get all job interactions
+            all_interests = MukadamInterest.objects.filter(
+                mukadam=mukadam
+            ).select_related('job__farmer', 'job__activity').order_by('-created_at')
+            
+            job_history = []
+            
+            for interest in all_interests:
+                job = interest.job
+                
+                # Determine final status
+                if job.assigned_mukadam == mukadam:
+                    if job.status == 'completed':
+                        final_status = 'completed'
+                        earnings = float(job.your_price_per_acre) * float(job.farm_size_acres) if job.your_price_per_acre else 0
+                    else:
+                        final_status = 'assigned'
+                        earnings = 0
+                elif interest.is_interested:
+                    final_status = 'interested_not_selected'
+                    earnings = 0
+                elif interest.responded_at:
+                    final_status = 'declined'
+                    earnings = 0
+                else:
+                    final_status = 'no_response'
+                    earnings = 0
+                
+                history_item = {
+                    'job_id': str(job.id),
+                    'job_reference': f"JOB-{str(job.id)[:8].upper()}",
+                    'farmer_name': job.farmer.name,
+                    'activity': job.activity.name,
+                    'location': job.location,
+                    'farm_size': float(job.farm_size_acres),
+                    'rate_offered': float(job.your_price_per_acre) if job.your_price_per_acre else None,
+                    'total_value': float(job.your_price_per_acre) * float(job.farm_size_acres) if job.your_price_per_acre else None,
+                    'scheduled_date': str(job.requested_date),
+                    'notified_at': interest.created_at.isoformat() if hasattr(interest, 'created_at') else None,
+                    'responded_at': interest.responded_at.isoformat() if interest.responded_at else None,
+                    'was_interested': interest.is_interested,
+                    'final_status': final_status,
+                    'earnings': round(earnings, 2) if earnings > 0 else 0,
+                    'assigned_date': job.assigned_at.isoformat() if job.assigned_at else None
+                }
+                
+                job_history.append(history_item)
+            
+            return Response({
+                'mukadam_id': str(mukadam.id),
+                'mukadam_name': mukadam.name,
+                'total_jobs': len(job_history),
+                'job_history': job_history
+            })
+            
+        except Mukadam.DoesNotExist:
+            return Response({'error': 'Mukadam not found'}, status=404)
+        
 class WhatsAppNotificationViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = WhatsAppNotification.objects.all()
     serializer_class = WhatsAppNotificationSerializer

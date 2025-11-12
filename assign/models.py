@@ -98,6 +98,7 @@ class MukadamInterest(models.Model):
     mukadam = models.ForeignKey(Mukadam, on_delete=models.CASCADE)
     is_interested = models.BooleanField(default=False)
     responded_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True) 
     
     # ✅ ADD this field
     RESPONSE_STATUS_CHOICES = [
@@ -121,7 +122,7 @@ class MukadamInterest(models.Model):
             self.response_status = 'interested' if self.is_interested else 'declined'
         super().save(*args, **kwargs)
 
-        
+
 class JobAssignment(models.Model):
     """Track which mukadams were assigned to bid on a job"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
