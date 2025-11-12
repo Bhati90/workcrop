@@ -1035,9 +1035,9 @@ def confirm_job_and_set_price(request):
     """Confirm job from team and set your price for mukadams"""
     try:
         job_id = request.data.get('job_id')
-        our_price = request.data.get('our_price_per_acre')
+        your_price = request.data.get('your_price_per_acre')
         
-        if not job_id or not our_price:
+        if not job_id or not your_price:
             return Response(
                 {"error": "job_id and your_price_per_acre are required"},
                 status=status.HTTP_400_BAD_REQUEST
@@ -1046,20 +1046,20 @@ def confirm_job_and_set_price(request):
         job = get_object_or_404(Job, id=job_id)
         
         # Update job with your price
-        job.our_price_per_acre = our_price  # Add this field to model
+        job.your_price_per_acre = your_price  # Add this field to model
         job.status = 'priced'  # New status
         job.confirmed_at = timezone.now()
         job.save()
         
-        print(f"✅ Job confirmed with price: {job.farmer.name} - ₹{our_price}/acre")
+        print(f"✅ Job confirmed with price: {job.farmer.name} - ₹{your_price}/acre")
         
         return Response({
             "message": "Job confirmed and priced successfully",
             "job_id": str(job.id),
             "farmer_name": job.farmer.name,
-            "our_price": float(our_price),
+            "your_price": float(your_price),
             "farmer_original_price": float(job.farmer_price_per_acre),
-            "margin_per_acre": float(job.farmer_price_per_acre) - float(our_price),
+            "margin_per_acre": float(job.farmer_price_per_acre) - float(your_price),
             "status": job.status
         })
         

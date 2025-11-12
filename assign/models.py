@@ -60,7 +60,7 @@ class Job(models.Model):
     ]
     assigned_mukadam = models.ForeignKey(Mukadam, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_jobs')
     assigned_at = models.DateTimeField(null=True, blank=True)
-    our_price_per_acre = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    your_price_per_acre = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     farmer = models.ForeignKey(Farmer, on_delete=models.CASCADE)
