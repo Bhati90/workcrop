@@ -49,6 +49,47 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
 from django.shortcuts import get_object_or_404
+
+
+@api_view(['POST'])
+def confirm_job_and_set_price(request):
+    """Confirm job from team and set your price for mukadams"""
+    try:
+        job_id = request.data.get('job_id')
+        your_price = request.data.get('your_price_per_acre')
+        
+        if not job_id or not your_price:
+            return Response(
+                {"error": "job_id and your_price_per_acre are required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        job = get_object_or_404(Job, id=job_id)
+        
+        # Update job with your price
+        job.your_price_per_acre = your_price
+        job.status = 'priced'
+        job.confirmed_at = timezone.now()
+        job.save()
+        
+        print(f"✅ Job confirmed with price: {job.farmer.name} - ₹{your_price}/acre")
+        
+        return Response({
+            "message": "Job confirmed and priced successfully",
+            "job_id": str(job.id),
+            "farmer_name": job.farmer.name,
+            "your_price": float(your_price),
+            "farmer_original_price": float(job.farmer_price_per_acre),
+            "margin_per_acre": float(job.farmer_price_per_acre) - float(your_price),
+            "status": job.status
+        })
+        
+    except Exception as e:
+        return Response(
+            {"error": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
 class JobViewSet(viewsets.ModelViewSet):
     queryset = Job.objects.all()
     serializer_class = JobSerializer
@@ -978,7 +1019,7 @@ class JobViewSet(viewsets.ModelViewSet):
             "interested": interested
         })
 
-    # Assign to one mukadam
+        # In views.py - UPDATE this method
     @action(detail=True, methods=['post'])
     def assign_final(self, request, pk=None):
         """Assign job to selected mukadam (from interested ones)"""
@@ -989,9 +1030,12 @@ class JobViewSet(viewsets.ModelViewSet):
         mukadam = get_object_or_404(Mukadam, id=mukadam_id)
         
         # Check if they were interested
-        interest = MukadamInterest.objects.get(job=job, mukadam=mukadam)
-        if not interest.is_interested:
-            return Response({"error": "This mukadam was not interested"}, status=400)
+        try:
+            interest = MukadamInterest.objects.get(job=job, mukadam=mukadam)
+            if not interest.is_interested:
+                return Response({"error": "This mukadam was not interested"}, status=400)
+        except MukadamInterest.DoesNotExist:
+            return Response({"error": "No response found from this mukadam"}, status=400)
         
         # Assign job
         job.assigned_mukadam = mukadam
@@ -999,16 +1043,34 @@ class JobViewSet(viewsets.ModelViewSet):
         job.assigned_at = timezone.now()
         job.save()
         
+        # ✅ DON'T change other mukadams' status - keep them as they responded
+        # Only mark the selected one as 'assigned'
+        interest.response_status = 'assigned'  # Add this field to track assignment
+        interest.save()
+        
+        # Create status history
+        JobStatusHistory.objects.create(
+            job=job,
+            from_status='notified',
+            to_status='assigned',
+            changed_by=request.user if request.user.is_authenticated else None,
+            notes=f'Assigned to {mukadam.name}'
+        )
+        
         # Notify assigned mukadam
         self._notify_assignment(job, mukadam)
+        
+        print(f"✅ Job {job.id} assigned to {mukadam.name}")
         
         return Response({
             "message": f"Job assigned to {mukadam.name}",
             "mukadam": mukadam.name,
             "price": float(job.your_price_per_acre),
-            "total": float(job.your_price_per_acre * job.farm_size_acres)
+            "total": float(job.your_price_per_acre * job.farm_size_acres),
+            "job_status": job.status
         })
-
+    
+    
     def _notify_mukadam_about_job(self, job, mukadam):
         """Send notification to mukadam about new job assignment"""
         notification_data = {
@@ -1029,46 +1091,133 @@ class JobViewSet(viewsets.ModelViewSet):
         print(f"🔔 Would notify {mukadam.name}: New job assignment - {notification_data}")
 
 
-# Add to views.py
-@api_view(['POST'])
-def confirm_job_and_set_price(request):
-    """Confirm job from team and set your price for mukadams"""
-    try:
-        job_id = request.data.get('job_id')
-        your_price = request.data.get('your_price_per_acre')
+    # In views.py - ADD this method to JobViewSet
+    def _notify_assignment(self, job, mukadam):
+        """Send notification to assigned mukadam"""
         
-        if not job_id or not your_price:
-            return Response(
-                {"error": "job_id and your_price_per_acre are required"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        job = get_object_or_404(Job, id=job_id)
-        
-        # Update job with your price
-        job.your_price_per_acre = your_price  # Add this field to model
-        job.status = 'priced'  # New status
-        job.confirmed_at = timezone.now()
-        job.save()
-        
-        print(f"✅ Job confirmed with price: {job.farmer.name} - ₹{your_price}/acre")
-        
-        return Response({
-            "message": "Job confirmed and priced successfully",
+        notification_data = {
+            "notification_type": "job_assigned",
             "job_id": str(job.id),
-            "farmer_name": job.farmer.name,
-            "your_price": float(your_price),
-            "farmer_original_price": float(job.farmer_price_per_acre),
-            "margin_per_acre": float(job.farmer_price_per_acre) - float(your_price),
-            "status": job.status
-        })
+            "timestamp": timezone.now().isoformat(),
+            
+            "target_mukadam": {
+                "mukadam_id": str(mukadam.id),
+                "mukadam_name": mukadam.name,
+                "mukadam_phone": mukadam.phone
+            },
+            
+            "assignment_details": {
+                "status": "assigned",
+                "message": "🎉 Job assigned to you!",
+                "price_per_acre": float(job.your_price_per_acre),
+                "total_amount": float(job.your_price_per_acre * job.farm_size_acres)
+            },
+            
+            "job_details": {
+                "farmer_name": job.farmer.name,
+                "farmer_phone": job.farmer.phone,
+                "activity": job.activity.name,
+                "farm_size_acres": float(job.farm_size_acres),
+                "location": job.location,
+                "scheduled_date": str(job.requested_date),
+                "special_notes": job.notes or ""
+            },
+            
+            "next_steps": [
+                "Contact farmer to confirm details",
+                "Prepare your team for the scheduled date",
+                "Complete the work as agreed",
+                "Job status will be marked as completed"
+            ]
+        }
         
-    except Exception as e:
-        return Response(
-            {"error": str(e)},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        webhook_url = settings.MUKADAM_WEBHOOK_URLS.get('default')
+        
+        print(f"\n🎯 NOTIFYING ASSIGNED MUKADAM")
+        print(f"👤 {mukadam.name} - Job Assigned!")
+        print(f"💰 ₹{job.your_price_per_acre}/acre")
+        
+        if webhook_url:
+            try:
+                response = requests.post(webhook_url, json=notification_data, timeout=30)
+                print(f"✅ Assignment notification sent")
+                return response.json()
+            except Exception as e:
+                print(f"⚠️ Failed to send assignment notification: {e}")
+        
+        return {"status": "logged"}
 
+    # In views.py - ADD this method to JobViewSet
+    # Update your simple_list method to show different response statuses
+    @action(detail=False, methods=['get'])
+    def simple_list(self, request):
+        """Get jobs with enhanced interest data"""
+        
+        jobs = Job.objects.select_related('farmer', 'activity').prefetch_related(
+            'interests__mukadam'
+        ).all()
+        
+        job_data = []
+        for job in jobs:
+            
+            interests_data = []
+            for interest in job.interests.all():
+                
+                # ✅ Determine correct status
+                if interest.response_status == 'assigned':
+                    status = 'assigned'
+                elif interest.responded_at:
+                    status = 'interested' if interest.is_interested else 'declined'
+                else:
+                    status = 'pending'  # ✅ No response yet
+                
+                interests_data.append({
+                    'id': str(interest.id),
+                    'mukadam': {
+                        'id': str(interest.mukadam.id),
+                        'name': interest.mukadam.name,
+                        'phone': interest.mukadam.phone,
+                        'location': interest.mukadam.location
+                    },
+                    'is_interested': interest.is_interested,
+                    'responded_at': interest.responded_at.isoformat() if interest.responded_at else None,
+                    'response_status': status  # ✅ Use correct status
+                })
+            
+            # Add "no_response" entries for notified but not responded mukadams
+            # This would require tracking assignments - for now we'll show what we have
+            
+            job_info = {
+                'id': str(job.id),
+                'farmer': {
+                    'name': job.farmer.name,
+                    'phone': job.farmer.phone,
+                    'village': getattr(job.farmer, 'village', '')
+                },
+                'activity': {
+                    'name': job.activity.name
+                },
+                'farm_size_acres': float(job.farm_size_acres),
+                'location': job.location,
+                'requested_date': str(job.requested_date),
+                'farmer_price_per_acre': float(job.farmer_price_per_acre),
+                'your_price_per_acre': float(job.your_price_per_acre) if job.your_price_per_acre else None,
+                'status': job.status,
+                'assigned_mukadam': {
+                    'id': str(job.assigned_mukadam.id),
+                    'name': job.assigned_mukadam.name
+                } if job.assigned_mukadam else None,
+                'interests': interests_data,
+            'response_summary': {
+                'pending_count': len([i for i in interests_data if i['response_status'] == 'pending']),
+                'interested_count': len([i for i in interests_data if i['response_status'] == 'interested']),
+                'declined_count': len([i for i in interests_data if i['response_status'] == 'declined']),
+                'assigned_count': len([i for i in interests_data if i['response_status'] == 'assigned']),
+           }
+            }
+            job_data.append(job_info)
+        
+        return Response(job_data)
 
 class MukadamBidViewSet(viewsets.ModelViewSet):
     queryset = MukadamBid.objects.all()
@@ -1205,113 +1354,6 @@ class MukadamBidViewSet(viewsets.ModelViewSet):
         
         return Response({"message": "Bid cancelled successfully"})
 
-# Add this to your views.py
-# Add this to your views.py in Django
-
-
-
-# Update your submit_bid function in views.py
-# @api_view(['POST'])
-# def submit_bid(self,request):
-#     try:
-#         bid_data = request.data
-        
-#         # Validate required fields
-#         required_fields = ['job', 'mukadam', 'bid_price_per_acre']
-#         missing_fields = [field for field in required_fields if not bid_data.get(field)]
-        
-#         if missing_fields:
-#             return Response({
-#                 "error": f"Missing required fields: {', '.join(missing_fields)}"
-#             }, status=status.HTTP_400_BAD_REQUEST)
-        
-#         # Get job and mukadam
-#         try:
-#             job = get_object_or_404(Job, id=bid_data['job'])
-#             mukadam = get_object_or_404(Mukadam, id=bid_data['mukadam'])
-#         except Exception as e:
-#             return Response({
-#                 "error": f"Job or Mukadam not found: {str(e)}"
-#             }, status=status.HTTP_404_NOT_FOUND)
-        
-#         # Check job status
-#         if job.status not in ['bidding', 'assigned']:
-#             return Response({
-#                 "error": f"Job not accepting bids. Current status: {job.status}"
-#             }, status=status.HTTP_400_BAD_REQUEST)
-        
-#         # ✅ Check if bid already exists
-#         existing_bid = MukadamBid.objects.filter(job=job, mukadam=mukadam).first()
-        
-#         if existing_bid:
-#             # Update existing bid
-#             existing_bid.status = 'interested'
-#             existing_bid.bid_price_per_acre = bid_data['bid_price_per_acre']
-#             existing_bid.estimated_duration_hours = bid_data.get('estimated_duration_hours')
-#             existing_bid.comments = bid_data.get('comments', '')
-#             existing_bid.responded_at = timezone.now()
-#             existing_bid.save()
-            
-#             bid = existing_bid
-#             action = "updated"
-            
-#             print(f"✅ Updated existing bid for {mukadam.name}")
-            
-#         else:
-#             # Create new bid
-#             bid = MukadamBid.objects.create(
-#                 job=job,
-#                 mukadam=mukadam,
-#                 status='interested',
-#                 bid_price_per_acre=bid_data['bid_price_per_acre'],
-#                 estimated_duration_hours=bid_data.get('estimated_duration_hours'),
-#                 comments=bid_data.get('comments', ''),
-#                 responded_at=timezone.now()
-#             )
-            
-#             action = "created"
-            
-#             print(f"✅ Created new bid for {mukadam.name}")
-        
-#         # Get bid summary
-#         all_bids = MukadamBid.objects.filter(job=job)
-#         interested_bids = all_bids.filter(status='interested').order_by('bid_price_per_acre')
-        
-#         response_data = {
-#             "status": "success",
-#             "message": f"Bid {action} successfully",
-#             "action": action,  # ✅ Tell them if it was created or updated
-#             "bid": {
-#                 "id": str(bid.id),
-#                 "job_id": str(job.id),
-#                 "mukadam_name": mukadam.name,
-#                 "bid_price_per_acre": float(bid.bid_price_per_acre),
-#                 "estimated_duration_hours": bid.estimated_duration_hours,
-#                 "comments": bid.comments,
-#                 "submitted_at": bid.responded_at,
-#                 "status": bid.status
-#             },
-#             "job_info": {
-#                 "farmer_name": job.farmer.name,
-#                 "activity": job.activity.name,
-#                 "farm_size_acres": float(job.farm_size_acres),
-#                 "location": job.location
-#             },
-#             "bidding_summary": {
-#                 "total_bids": all_bids.count(),
-#                 "interested_bids": interested_bids.count(),
-#                 "your_rank": list(interested_bids.values_list('id', flat=True)).index(bid.id) + 1 if interested_bids else 1,
-#                 "lowest_bid": float(interested_bids.first().bid_price_per_acre) if interested_bids else None
-#             }
-#         }
-        
-#         return Response(response_data, status=status.HTTP_200_OK)
-        
-#     except Exception as e:
-#         return Response({
-#             "error": f"Bid submission failed: {str(e)}"
-#         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-# Update views.py to support the enhanced features
 class MukadamViewSet(viewsets.ModelViewSet):
     queryset = Mukadam.objects.all()
     
@@ -1449,6 +1491,274 @@ class MukadamViewSet(viewsets.ModelViewSet):
             'available_mukadams': serializer.data,
             'total_available': len(serializer.data)
         })
+    
+# views.py (replace your MukadamJobViewSet implementation with this)
+from rest_framework import viewsets
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from django.utils import timezone
+from django.shortcuts import get_object_or_404
+from .models import Job, Mukadam, MukadamInterest
+import json
+
+class MukadamJobViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    API specifically for Mukadam App Team
+    Shows jobs with company pricing, assignment status, and history
+    """
+
+    @action(detail=False, methods=['get'])
+    def opportunities(self, request):
+        """
+        GET /api/mukadam-jobs/opportunities/
+        Get job opportunities for mukadams with company pricing
+        """
+        # Use fields that exist on your model. Use confirmed_at for ordering (exists).
+        jobs = Job.objects.filter(
+            status__in=['priced', 'notified', 'assigned', 'completed']
+        ).select_related(
+            'farmer', 'activity', 'assigned_mukadam', 'finalized_mukadam'
+        ).prefetch_related(
+            'interests__mukadam'
+        ).order_by('-confirmed_at')
+
+        job_opportunities = []
+
+        for job in jobs:
+            try:
+                # Safe access to interests
+                all_interests = job.interests.all()
+                interested_count = all_interests.filter(is_interested=True).count()
+                declined_count = all_interests.filter(is_interested=False).count()
+                pending_count = all_interests.filter(responded_at__isnull=True).count()
+
+                # Prefer assigned_mukadam if present, else finalized_mukadam
+                assigned_muk = job.assigned_mukadam or job.finalized_mukadam
+
+                assigned_info = None
+                if assigned_muk:
+                    assigned_info = {
+                        'mukadam_id': str(assigned_muk.id),
+                        'mukadam_name': assigned_muk.name,
+                        'mukadam_phone': assigned_muk.phone,
+                        'assigned_at': job.assigned_at.isoformat() if getattr(job, 'assigned_at', None) else None
+                    }
+
+                # Safe numeric conversions (avoid TypeError on None)
+                rate_per_acre = float(job.your_price_per_acre or 0)
+                farm_size = float(job.farm_size_acres or 0)
+                total_amount = rate_per_acre * farm_size
+
+                # created_at fallback: Job model doesn't have created_at; use confirmed_at
+                created_ts = getattr(job, 'created_at', None) or getattr(job, 'confirmed_at', None)
+                updated_ts = getattr(job, 'updated_at', None)
+
+                opportunity = {
+                    'job_id': str(job.id),
+                    'job_reference': f"JOB-{str(job.id)[:8].upper()}",
+                    'farmer': {
+                        'name': job.farmer.name,
+                        'location': job.location,
+                        'village': getattr(job.farmer, 'village', job.location)
+                    },
+                    'work': {
+                        'activity': job.activity.name,
+                        'farm_size_acres': farm_size,
+                        'scheduled_date': str(job.requested_date),
+                        'scheduled_time': str(job.requested_time) if job.requested_time else "Morning",
+                        'location': job.location,
+                        'special_notes': job.notes or ""
+                    },
+                    'pricing': {
+                        'rate_per_acre': rate_per_acre,
+                        'total_amount': total_amount,
+                        'currency': 'INR'
+                    },
+                    'status': {
+                        'current_status': job.status,
+                        'is_available': job.status in ['priced', 'notified'],
+                        'is_assigned': job.status == 'assigned',
+                        'is_completed': job.status == 'completed',
+                        'status_display': self._get_status_display(job.status)
+                    },
+                    'assignment': assigned_info,
+                    'responses': {
+                        'total_notified': all_interests.count(),
+                        'interested': interested_count,
+                        'declined': declined_count,
+                        'pending': pending_count,
+                        'competition_level': self._get_competition_level_simple(interested_count)
+                    },
+                    'actions': {
+                        'respond_url': f"/api/jobs/{job.id}/respond/",
+                        'details_url': f"/api/mukadam-jobs/{job.id}/details/"
+                    },
+                    'created_at': created_ts.isoformat() if created_ts else None,
+                    'updated_at': updated_ts.isoformat() if updated_ts else None
+                }
+
+                job_opportunities.append(opportunity)
+
+            except Exception as e:
+                # Log per-job errors and continue (avoid full 500)
+                print(f"❌ Error building opportunity for job {job.id}: {e}")
+                continue
+
+        summary = {
+            'total_jobs': len(job_opportunities),
+            'available_jobs': len([j for j in job_opportunities if j['status']['is_available']]),
+            'assigned_jobs': len([j for j in job_opportunities if j['status']['is_assigned']]),
+            'completed_jobs': len([j for j in job_opportunities if j['status']['is_completed']]),
+        }
+
+        return Response({
+            'summary': summary,
+            'opportunities': job_opportunities,
+            'last_updated': timezone.now().isoformat()
+        })
+
+    def _get_status_display(self, status):
+        status_map = {
+            'priced': 'Available for Bidding',
+            'notified': 'Awaiting Responses',
+            'assigned': 'Assigned to Mukadam',
+            'completed': 'Job Completed'
+        }
+        return status_map.get(status, status.title())
+
+    def _get_competition_level_simple(self, interested_count):
+        if interested_count >= 5:
+            return 'High'
+        elif interested_count >= 2:
+            return 'Medium'
+        elif interested_count >= 1:
+            return 'Low'
+        else:
+            return 'No Interest Yet'
+
+    @action(detail=True, methods=['get'])
+    def details(self, request, pk=None):
+        try:
+            job = Job.objects.select_related(
+                'farmer', 'activity', 'assigned_mukadam', 'finalized_mukadam'
+            ).prefetch_related(
+                'interests__mukadam'
+            ).get(id=pk)
+
+            response_details = []
+            for interest in job.interests.all():
+                response_details.append({
+                    'mukadam': {
+                        'id': str(interest.mukadam.id),
+                        'name': interest.mukadam.name,
+                        'phone': interest.mukadam.phone,
+                        'location': interest.mukadam.location,
+                        'team_size': interest.mukadam.number_of_labourers
+                    },
+                    'response': {
+                        'is_interested': interest.is_interested,
+                        'responded_at': interest.responded_at.isoformat() if interest.responded_at else None,
+                        'status': 'assigned' if job.assigned_mukadam and job.assigned_mukadam.id == interest.mukadam.id else ('interested' if interest.is_interested else 'declined')
+                    }
+                })
+
+            job_details = {
+                'job_id': str(job.id),
+                'job_reference': f"JOB-{str(job.id)[:8].upper()}",
+                'farmer': {
+                    'name': job.farmer.name,
+                    'phone': job.farmer.phone,
+                    'location': job.location,
+                    'village': getattr(job.farmer, 'village', job.location)
+                },
+                'work_details': {
+                    'activity': job.activity.name,
+                    'farm_size_acres': float(job.farm_size_acres),
+                    'scheduled_date': str(job.requested_date),
+                    'scheduled_time': str(job.requested_time) if job.requested_time else "Morning",
+                    'location': job.location,
+                    'special_instructions': job.notes or "",
+                    'estimated_duration': self._estimate_duration(job)
+                },
+                'pricing': {
+                    'rate_per_acre': float(job.your_price_per_acre or 0),
+                    'total_amount': float((job.your_price_per_acre or 0) * job.farm_size_acres),
+                    'currency': 'INR',
+                    'payment_terms': 'Payment upon completion verification'
+                },
+                'status': {
+                    'current_status': job.status,
+                    'is_available': job.status in ['priced', 'notified'],
+                    'is_assigned': job.status == 'assigned',
+                    'assigned_mukadam': {
+                        'name': job.assigned_mukadam.name,
+                        'phone': job.assigned_mukadam.phone
+                    } if job.assigned_mukadam else None
+                },
+                'responses': response_details,
+                'timeline': self._get_job_timeline(job)
+            }
+
+            return Response(job_details)
+        except Job.DoesNotExist:
+            return Response({'error': 'Job not found'}, status=404)
+        except Exception as e:
+            print(f"❌ Error in details(): {e}")
+            return Response({'error': str(e)}, status=500)
+
+    # keep your helper methods (_estimate_duration, _get_job_timeline) as before...
+ 
+    def _estimate_duration(self, job):
+        """Estimate job duration"""
+        activity_hours = {
+            'pruning': 3,
+            'harvesting': 4,
+            'spraying': 1.5,
+            'tying': 2
+        }
+        
+        base_hours = activity_hours.get(job.activity.name.lower(), 2.5)
+        total_hours = base_hours * float(job.farm_size_acres)
+        
+        return {
+            'estimated_hours': round(total_hours, 1),
+            'estimated_days': max(1, round(total_hours / 8))
+        }
+    
+    def _get_job_timeline(self, job):
+        """Get job status timeline"""
+        timeline = []
+        
+        # if job.created_at:
+        #     timeline.append({
+        #         'status': 'Job Created',
+                
+        #         'description': 'Job confirmed by team'
+        #     })
+        
+        if job.confirmed_at:
+            timeline.append({
+                'status': 'Price Set',
+                'timestamp': job.confirmed_at.isoformat(),
+                'description': f'Company set rate: ₹{job.your_price_per_acre}/acre'
+            })
+        
+        if job.status == 'notified':
+            timeline.append({
+                'status': 'Mukadams Notified',
+                'timestamp': timezone.now().isoformat(),  # You might want to track this
+                'description': 'Job opportunity sent to mukadams'
+            })
+        
+        if job.assigned_at:
+            timeline.append({
+                'status': 'Job Assigned',
+                'timestamp': job.assigned_at.isoformat(),
+                'description': f'Assigned to {job.assigned_mukadam.name}'
+            })
+        
+        return timeline
+    
     
 class WhatsAppNotificationViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = WhatsAppNotification.objects.all()

@@ -91,16 +91,37 @@ class Job(models.Model):
         ordering = ['-confirmed_at']
 
 
+# In models.py - UPDATE MukadamInterest model
 class MukadamInterest(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name='interests')
     mukadam = models.ForeignKey(Mukadam, on_delete=models.CASCADE)
-    is_interested = models.BooleanField(default=False)  # True = Yes, False = No
+    is_interested = models.BooleanField(default=False)
     responded_at = models.DateTimeField(null=True, blank=True)
+    
+    # ✅ ADD this field
+    RESPONSE_STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('interested', 'Interested'), 
+        ('declined', 'Declined'),
+        ('assigned', 'Assigned'),
+    ]
+    response_status = models.CharField(
+        max_length=20, 
+        choices=RESPONSE_STATUS_CHOICES, 
+        default='pending'
+    )
     
     class Meta:
         unique_together = ['job', 'mukadam']
+        
+    def save(self, *args, **kwargs):
+        # ✅ Auto-update response_status based on is_interested
+        if self.responded_at and self.response_status == 'pending':
+            self.response_status = 'interested' if self.is_interested else 'declined'
+        super().save(*args, **kwargs)
 
+        
 class JobAssignment(models.Model):
     """Track which mukadams were assigned to bid on a job"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

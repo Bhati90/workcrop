@@ -60,15 +60,36 @@ class MukadamSerializer(serializers.ModelSerializer):
             'is_active', 'created_at', 'activity_rates'
         ]
 
+# class JobSerializer(serializers.ModelSerializer):
+#     farmer = FarmerSerializer(read_only=True)
+#     activity = ActivitySerializer(read_only=True)
+#     finalized_mukadam = MukadamSerializer(read_only=True)
+    
+#     class Meta:
+#         model = Job
+#         fields = '__all__'
+# In serializers.py - ADD this
+class MukadamInterestSerializer(serializers.ModelSerializer):
+    mukadam = MukadamSerializer(read_only=True)
+    
+    class Meta:
+        model = MukadamInterest
+        fields = ['id', 'mukadam', 'is_interested','response_status', 'responded_at']
+
+# Update JobSerializer 
 class JobSerializer(serializers.ModelSerializer):
     farmer = FarmerSerializer(read_only=True)
     activity = ActivitySerializer(read_only=True)
+    interests = MukadamInterestSerializer(many=True, read_only=True)  # ADD this line
     finalized_mukadam = MukadamSerializer(read_only=True)
     
     class Meta:
         model = Job
-        fields = '__all__'
-
+        fields = [
+            'id', 'farmer', 'activity', 'farm_size_acres', 'location', 
+            'requested_date', 'requested_time', 'farmer_price_per_acre',
+            'your_price_per_acre', 'status', 'interests'  # ADD interests here
+        ]
 
 
 

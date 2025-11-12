@@ -9,10 +9,12 @@ router.register(r'mukadams', views.MukadamViewSet)
 router.register(r'whatsapp', views.WhatsAppNotificationViewSet)
 router.register(r'activities', views.ActivityViewSet)
 router.register(r'mukadam-activity-rates', views.MukadamActivityRateViewSet)
+router.register(r'mukadam-jobs', views.MukadamJobViewSet, basename='mukadam-jobs')  # ADD this
+
 
 urlpatterns = [
     path('', include(router.urls)),
-    path('api/jobs/confirm_and_price/', views.confirm_job_and_set_price, name='confirm_job_and_price'),  # ADD
+    path('job/confirm_and_price/', views.confirm_job_and_set_price, name='confirm_job_and_price'),  # ADD
 
     # path('api/bids/submit_bid/', views.submit_bid, name='submit_bid'),
 
