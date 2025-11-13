@@ -1539,7 +1539,6 @@ class MukadamJobViewSet(viewsets.ReadOnlyModelViewSet):
         GET /api/mukadam-jobs/opportunities/
         Get job opportunities for mukadams with company pricing
         """
-        # Use fields that exist on your model. Use confirmed_at for ordering (exists).
         jobs = Job.objects.filter(
             status__in=['priced', 'notified', 'assigned', 'completed']
         ).select_related(
@@ -1552,13 +1551,12 @@ class MukadamJobViewSet(viewsets.ReadOnlyModelViewSet):
 
         for job in jobs:
             try:
-                # Safe access to interests
+                # ✅ Use response_status instead of is_interested
                 all_interests = job.interests.all()
-                interested_count = all_interests.filter(is_interested=True).count()
-                declined_count = all_interests.filter(is_interested=False).count()
-                pending_count = all_interests.filter(responded_at__isnull=True).count()
+                interested_count = all_interests.filter(response_status='interested').count()
+                declined_count = all_interests.filter(response_status='declined').count()
+                pending_count = all_interests.filter(response_status='pending').count()
 
-                # Prefer assigned_mukadam if present, else finalized_mukadam
                 assigned_muk = job.assigned_mukadam or job.finalized_mukadam
 
                 assigned_info = None
@@ -1570,12 +1568,10 @@ class MukadamJobViewSet(viewsets.ReadOnlyModelViewSet):
                         'assigned_at': job.assigned_at.isoformat() if getattr(job, 'assigned_at', None) else None
                     }
 
-                # Safe numeric conversions (avoid TypeError on None)
                 rate_per_acre = float(job.your_price_per_acre or 0)
                 farm_size = float(job.farm_size_acres or 0)
                 total_amount = rate_per_acre * farm_size
 
-                # created_at fallback: Job model doesn't have created_at; use confirmed_at
                 created_ts = getattr(job, 'created_at', None) or getattr(job, 'confirmed_at', None)
                 updated_ts = getattr(job, 'updated_at', None)
 
@@ -1628,7 +1624,6 @@ class MukadamJobViewSet(viewsets.ReadOnlyModelViewSet):
                 job_opportunities.append(opportunity)
 
             except Exception as e:
-                # Log per-job errors and continue (avoid full 500)
                 print(f"❌ Error building opportunity for job {job.id}: {e}")
                 continue
 
@@ -1675,6 +1670,7 @@ class MukadamJobViewSet(viewsets.ReadOnlyModelViewSet):
 
             response_details = []
             for interest in job.interests.all():
+                # ✅ Use response_status directly
                 response_details.append({
                     'mukadam': {
                         'id': str(interest.mukadam.id),
@@ -1686,7 +1682,7 @@ class MukadamJobViewSet(viewsets.ReadOnlyModelViewSet):
                     'response': {
                         'is_interested': interest.is_interested,
                         'responded_at': interest.responded_at.isoformat() if interest.responded_at else None,
-                        'status': 'assigned' if job.assigned_mukadam and job.assigned_mukadam.id == interest.mukadam.id else ('interested' if interest.is_interested else 'declined')
+                        'status': interest.response_status  # ✅ Use the field directly
                     }
                 })
 
@@ -1733,8 +1729,6 @@ class MukadamJobViewSet(viewsets.ReadOnlyModelViewSet):
         except Exception as e:
             print(f"❌ Error in details(): {e}")
             return Response({'error': str(e)}, status=500)
-
-    # keep your helper methods (_estimate_duration, _get_job_timeline) as before...
  
     def _estimate_duration(self, job):
         """Estimate job duration"""
@@ -1757,13 +1751,6 @@ class MukadamJobViewSet(viewsets.ReadOnlyModelViewSet):
         """Get job status timeline"""
         timeline = []
         
-        # if job.created_at:
-        #     timeline.append({
-        #         'status': 'Job Created',
-                
-        #         'description': 'Job confirmed by team'
-        #     })
-        
         if job.confirmed_at:
             timeline.append({
                 'status': 'Price Set',
@@ -1774,7 +1761,7 @@ class MukadamJobViewSet(viewsets.ReadOnlyModelViewSet):
         if job.status == 'notified':
             timeline.append({
                 'status': 'Mukadams Notified',
-                'timestamp': timezone.now().isoformat(),  # You might want to track this
+                'timestamp': timezone.now().isoformat(),
                 'description': 'Job opportunity sent to mukadams'
             })
         
@@ -1786,7 +1773,6 @@ class MukadamJobViewSet(viewsets.ReadOnlyModelViewSet):
             })
         
         return timeline
-    
 # In views.py - ADD new ViewSet for individual mukadam details
 class MukadamProfileViewSet(viewsets.ReadOnlyModelViewSet):
     """
