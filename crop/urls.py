@@ -25,7 +25,7 @@ urlpatterns = [
     
    path('api/', include('assign.urls')),  # Make sure this matches
     # Add WebSocket routing if needed
-
+   path('', include('calender.urls')),
     
     path('admin/', admin.site.urls),
 ]

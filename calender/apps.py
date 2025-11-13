@@ -1,6 +1,6 @@
 from django.apps import AppConfig
 
 
-class ReplyConfig(AppConfig):
+class CalenderConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'reply'
+    name = 'calender'

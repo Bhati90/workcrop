@@ -242,7 +242,7 @@ SECRET_KEY = 'django-insecure-l6c$=vdsv7n-ng7cd_^6fvi7lig^+_a2!dzg5oy1^a6qklw$9t
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
-ALLOWED_HOSTS = ['127.0.0.1','workcrop.onrender.com','localhost','https://workcrop-dc8o.vercel.app/','workw-mu.vercel.app']
+ALLOWED_HOSTS = ['*']
 
 
 # Add this for Render
@@ -268,7 +268,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'channels',
     'assign',
-    
+    'calender',
     'storages',
     'rest_framework',
     
@@ -316,50 +316,48 @@ GEMINI_API_KEY_2 = os.environ.get('GEMINI_API_KEY_2', 'AIzaSyDGCAaYBIoySFkgom_KH
 # Backward compatibility
 GEMINI_API_KEY = GEMINI_API_KEY_1
 
-# AWS_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID')
-# AWS_SECRET_ACCESS_KEY = config('AWS_SECRET_ACCESS_KEY')
-# AWS_STORAGE_BUCKET_NAME = config('AWS_STORAGE_BUCKET_NAME')
-# AWS_S3_REGION_NAME = config('AWS_S3_REGION_NAME', default='us-east-1')
-# AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
-# AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
-# AWS_DEFAULT_ACL = 'public-read'
+AWS_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID')
+AWS_SECRET_ACCESS_KEY = config('AWS_SECRET_ACCESS_KEY')
+AWS_STORAGE_BUCKET_NAME = config('AWS_STORAGE_BUCKET_NAME')
+AWS_S3_REGION_NAME = config('AWS_S3_REGION_NAME', default='us-east-1')
+AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
+AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
+AWS_DEFAULT_ACL = 'public-read'
 
 
 
-# STATICFILES_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
-# STATIC_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/static/'
+STATICFILES_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+STATIC_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/static/'
     
-#     # Media files
-# DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
-# MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/media/'
-# Database
-# https://docs.djangoproject.com/en/4.2/ref/settings/#databases
+    # Media files
+DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/media/'
 
-# # # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.postgresql',  # use this for normal Postgres
-#         'NAME': 'registration_db',
-#         'USER': 'postgres',
-#         'PASSWORD': 'new_password',
-#         'HOST': 'localhost',
-#         'PORT': '5432',
-#         'OPTIONS': {
-#             'client_encoding': 'UTF8',
-#         },
-#     }
-# }
+# # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',  # use this for normal Postgres
+        'NAME': 'registration_db',
+        'USER': 'postgres',
+        'PASSWORD': 'new_password',
+        'HOST': 'localhost',
+        'PORT': '5432',
+        'OPTIONS': {
+            'client_encoding': 'UTF8',
+        },
+    }
+}
 
 #postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a/registerdb_od8n
 
-DATABASES = {
-    'default': dj_database_url.config(
-        # default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a.oregon-postgres.render.com/registerdb_od8n',
-        default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a/registerdb_od8n',
-        conn_max_age=600,
-        conn_health_checks=True,
-    )
-}
+# DATABASES = {
+#     'default': dj_database_url.config(
+#         default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a.oregon-postgres.render.com/registerdb_od8n',
+#         # default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a/registerdb_od8n',
+#         conn_max_age=600,
+#         conn_health_checks=True,
+#     )
+# }
 # At the end of settings.py
 APPEND_SLASH = False  # Prevent automatic slash redirects
 
@@ -370,11 +368,11 @@ MUKADAM_WEBHOOK_URLS = {
 }
 
 BASE_URL = 'https://workcrop.onrender.com'
-# CORS_ALLOWED_ORIGINS = config(
-#     'CORS_ALLOWED_ORIGINS',
-#     default='https://workcrop.onrender.com,http://localhost:3000,http://127.0.0.1:3000,http://127.0.0.1:8000,https://workcrop-dc8o.vercel.app,http://localhost:5173/',
-#     cast=Csv()
-# )
+CORS_ALLOWED_ORIGINS = config(
+    'CORS_ALLOWED_ORIGINS',
+    default='https://workcrop.onrender.com,http://localhost:3000,http://127.0.0.1:3000,http://127.0.0.1:8000,https://workcrop-dc8o.vercel.app,http://localhost:5173/,http://65.0.238.67/',
+    cast=Csv()
+)
 
 
 
