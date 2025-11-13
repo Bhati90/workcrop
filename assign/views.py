@@ -111,36 +111,173 @@ class JobViewSet(viewsets.ModelViewSet):
     #         print(f"WebSocket update failed: {e}")
     #         pass 
 
+    # @action(detail=False, methods=['post'])
+    # def confirm_job(self, request):
+    #     """
+    #     Endpoint for team members to confirm a job
+    #     POST /api/jobs/confirm_job/
+    #     """
+    #     serializer = JobCreateSerializer(data=request.data)
+    #     if serializer.is_valid():
+    #         job = serializer.save()
+            
+    #         changed_by_user = None
+    #         if request.user.is_authenticated:
+    #             changed_by_user = request.user
+    #         # Log status change
+    #         JobStatusHistory.objects.create(
+    #             job=job,
+    #             from_status='',
+    #             to_status='confirmed',
+    #             changed_by=changed_by_user,
+    #             notes='Job confirmed by team member'
+    #         )
+    #         # self._send_websocket_update('job_status_changed', {
+    #         #     'job_id': str(job.id),
+    #         #     'message': 'New job confirmed',
+    #         #     'status': job.status
+    #         # })
+            
+    #         return Response(JobSerializer(job).data, status=status.HTTP_201_CREATED)
+    #     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
     @action(detail=False, methods=['post'])
     def confirm_job(self, request):
         """
-        Endpoint for team members to confirm a job
+        Endpoint for team members to confirm a job from labour need data
         POST /api/jobs/confirm_job/
+        
+        Expected payload:
+        {
+            "farmer_name": "Ramesh Kumar",
+            "phone_number": "9876543210",
+            "date_needed": "2025-11-15",
+            "special_requirements": "Need experienced workers",
+            "activity_briefs": [
+                {
+                    "activity_name": "Pruning",
+                    "acres": 5.5,
+                    "date_needed": "2025-11-15"
+                },
+                {
+                    "activity_name": "Harvesting", 
+                    "acres": 3.0,
+                    "date_needed": "2025-11-16"
+                }
+            ],
+            "location": "Nashik",
+            "farmer_village": "Pimpalgaon",
+            "requested_time": "08:00:00",
+            "farmer_price_per_acre": 1500,
+            "notes": "Additional notes here",
+            "workers_needed": 10
+        }
         """
         serializer = JobCreateSerializer(data=request.data)
+        
         if serializer.is_valid():
             job = serializer.save()
             
-            changed_by_user = None
-            if request.user.is_authenticated:
-                changed_by_user = request.user
+            # Get user for logging
+            changed_by_user = request.user if request.user.is_authenticated else None
+            
             # Log status change
             JobStatusHistory.objects.create(
                 job=job,
                 from_status='',
                 to_status='confirmed',
                 changed_by=changed_by_user,
-                notes='Job confirmed by team member'
+                notes='Job confirmed by team member from labour need'
             )
-            # self._send_websocket_update('job_status_changed', {
-            #     'job_id': str(job.id),
-            #     'message': 'New job confirmed',
-            #     'status': job.status
-            # })
             
-            return Response(JobSerializer(job).data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            # Return the created job
+            return Response({
+                'success': True,
+                'message': 'Job confirmed successfully',
+                'job': JobSerializer(job).data
+            }, status=status.HTTP_201_CREATED)
+        
+        return Response({
+            'success': False,
+            'errors': serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
     
+    @action(detail=False, methods=['post'])
+    def confirm_multiple_jobs(self, request):
+        """
+        Endpoint to create multiple jobs from activity briefs
+        Returns all created jobs
+        POST /api/jobs/confirm_multiple_jobs/
+        """
+        serializer = JobCreateSerializer(data=request.data)
+        
+        if serializer.is_valid():
+            # Get validated data
+            validated_data = serializer.validated_data
+            phone_number = validated_data['phone_number']
+            farmer_name = validated_data.get('farmer_name', 'Unknown Farmer')
+            farmer_village = validated_data.get('farmer_village', validated_data.get('location', ''))
+            activity_briefs = validated_data.get('activity_briefs', [])
+            
+            # Get or create farmer
+            farmer, _ = Farmer.objects.get_or_create(
+                phone=phone_number,
+                defaults={
+                    'name': farmer_name or f"Farmer {phone_number}",
+                    'village': farmer_village
+                }
+            )
+            
+            jobs_created = []
+            changed_by_user = request.user if request.user.is_authenticated else None
+            
+            # Create a job for each activity brief
+            for brief in activity_briefs:
+                activity_name = brief['activity_name']
+                acres = brief['acres']
+                brief_date = brief.get('date_needed') or validated_data.get('date_needed')
+                
+                # Get or create activity
+                activity, _ = Activity.objects.get_or_create(
+                    name=activity_name,
+                    defaults={'name': activity_name}
+                )
+                
+                # Create job
+                job = Job.objects.create(
+                    farmer=farmer,
+                    activity=activity,
+                    farm_size_acres=acres,
+                    location=validated_data.get('location', farmer_village),
+                    requested_date=brief_date or timezone.now().date(),
+                    requested_time=validated_data.get('requested_time') or timezone.now().time(),
+                    farmer_price_per_acre=validated_data.get('farmer_price_per_acre', 0),
+                    notes=f"{validated_data.get('special_requirements', '')}\n{validated_data.get('notes', '')}".strip(),
+                    workers_needed=validated_data.get('workers_needed', 5),
+                    status='confirmed'
+                )
+                
+                # Log status change
+                JobStatusHistory.objects.create(
+                    job=job,
+                    from_status='',
+                    to_status='confirmed',
+                    changed_by=changed_by_user,
+                    notes=f'Job confirmed from labour need - Activity: {activity_name}'
+                )
+                
+                jobs_created.append(job)
+            
+            return Response({
+                'success': True,
+                'message': f'{len(jobs_created)} job(s) confirmed successfully',
+                'jobs': JobSerializer(jobs_created, many=True).data
+            }, status=status.HTTP_201_CREATED)
+        
+        return Response({
+            'success': False,
+            'errors': serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
     
     @action(detail=True, methods=['post'])
     def assign_to_mukadams(self, request, pk=None):

@@ -92,52 +92,124 @@ class JobSerializer(serializers.ModelSerializer):
             'your_price_per_acre', 'status', 'interests' ,'workers_needed' # ADD interests here
         ]
 
+class ActivityBriefSerializer(serializers.Serializer):
+    """Serializer for individual activity briefs"""
+    activity_name = serializers.CharField()
+    acres = serializers.DecimalField(max_digits=10, decimal_places=2)
+    date_needed = serializers.DateField(required=False, allow_null=True)
 
 
-class JobCreateSerializer(serializers.ModelSerializer):
-    farmer_name = serializers.CharField(write_only=True)
-    farmer_phone = serializers.CharField(write_only=True)
-    farmer_village = serializers.CharField(write_only=True)
-    activity_name = serializers.CharField(write_only=True)
+class JobCreateSerializer(serializers.Serializer):
+    """
+    Serializer for creating a job from labour need data
+    Handles the payload from the chatbot API with activity_briefs
+    """
+    # Labour need fields
+    farmer_name = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    phone_number = serializers.CharField()
+    date_needed = serializers.DateField(required=False, allow_null=True)
+    special_requirements = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     
-    class Meta:
-        model = Job
-        fields = [
-            'farmer_name', 'farmer_phone', 'farmer_village',
-            'activity_name', 'farm_size_acres', 'location',
-            'requested_date', 'requested_time', 'farmer_price_per_acre',
-            'notes','workers_needed'
-        ]
+    # Activity briefs (list of activities)
+    activity_briefs = serializers.ListField(
+        child=ActivityBriefSerializer(),
+        required=False,
+        allow_empty=True
+    )
+    
+    # Job-specific fields
+    location = serializers.CharField(required=False, allow_blank=True, default='')
+    farmer_village = serializers.CharField(required=False, allow_blank=True, default='')
+    requested_time = serializers.TimeField(required=False, allow_null=True)
+    farmer_price_per_acre = serializers.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        required=False, 
+        allow_null=True,
+        default=0
+    )
+    notes = serializers.CharField(required=False, allow_blank=True, default='')
+    workers_needed = serializers.IntegerField(required=False, default=5)
+    
+    def validate(self, data):
+        """Validate the incoming data"""
+        # Check if we have activity briefs
+        if not data.get('activity_briefs'):
+            raise serializers.ValidationError({
+                'activity_briefs': 'At least one activity brief is required'
+            })
+        
+        # Validate phone number
+        if not data.get('phone_number'):
+            raise serializers.ValidationError({
+                'phone_number': 'Phone number is required'
+            })
+        
+        return data
     
     def create(self, validated_data):
-        # Get or create farmer
-        farmer_data = {
-            'name': validated_data.pop('farmer_name'),
-            'phone': validated_data.pop('farmer_phone'),
-            'village': validated_data.pop('farmer_village')
-        }
+        """
+        Create job(s) from the activity briefs
+        If multiple activity briefs exist, create a job for the first one
+        or combine them based on your business logic
+        """
+        # Extract data
+        phone_number = validated_data['phone_number']
+        farmer_name = validated_data.get('farmer_name', 'Unknown Farmer')
+        farmer_village = validated_data.get('farmer_village', validated_data.get('location', ''))
+        activity_briefs = validated_data.pop('activity_briefs', [])
+        special_requirements = validated_data.get('special_requirements', '')
         
         # Get or create farmer
         farmer, created = Farmer.objects.get_or_create(
-            phone=farmer_data['phone'],
-            defaults=farmer_data
+            phone=phone_number,
+            defaults={
+                'name': farmer_name or f"Farmer {phone_number}",
+                'village': farmer_village
+            }
         )
         
-        # Get or create activity
-        activity_name = validated_data.pop('activity_name')
-        activity, created = Activity.objects.get_or_create(
-            name=activity_name
-        )
+        # If farmer exists but name was missing, update it
+        if not created and farmer_name and farmer_name != 'Unknown Farmer':
+            farmer.name = farmer_name
+            farmer.save(update_fields=['name'])
         
-        # Create job with workers_needed
-        job = Job.objects.create(
-            farmer=farmer,
-            activity=activity,
-            **validated_data  # This now includes workers_needed
-        )
+        jobs_created = []
         
-        return job
-
+        # Create a job for each activity brief
+        for brief in activity_briefs:
+            activity_name = brief['activity_name']
+            acres = brief['acres']
+            brief_date = brief.get('date_needed') or validated_data.get('date_needed')
+            
+            # Get or create activity
+            activity, _ = Activity.objects.get_or_create(
+                name=activity_name,
+                defaults={'name': activity_name}
+            )
+            
+            # Prepare job data
+            job_data = {
+                'farmer': farmer,
+                'activity': activity,
+                'farm_size_acres': acres,
+                'location': validated_data.get('location', farmer_village),
+                'requested_date': brief_date or timezone.now().date(),
+                'requested_time': validated_data.get('requested_time') or timezone.now().time(),
+                'farmer_price_per_acre': validated_data.get('farmer_price_per_acre', 0),
+                'notes': f"{special_requirements}\n{validated_data.get('notes', '')}".strip(),
+                'workers_needed': validated_data.get('workers_needed', 5),
+                'status': 'confirmed'
+            }
+            
+            # Create job
+            job = Job.objects.create(**job_data)
+            jobs_created.append(job)
+        
+        # Return the first job (or you could return all jobs)
+        return jobs_created[0] if jobs_created else None
+    
+    
 class MukadamBidSerializer(serializers.ModelSerializer):
     mukadam = MukadamSerializer(read_only=True)
     
