@@ -60,15 +60,6 @@ class MukadamSerializer(serializers.ModelSerializer):
             'is_active', 'created_at', 'activity_rates'
         ]
 
-# class JobSerializer(serializers.ModelSerializer):
-#     farmer = FarmerSerializer(read_only=True)
-#     activity = ActivitySerializer(read_only=True)
-#     finalized_mukadam = MukadamSerializer(read_only=True)
-    
-#     class Meta:
-#         model = Job
-#         fields = '__all__'
-# In serializers.py - ADD this
 class MukadamInterestSerializer(serializers.ModelSerializer):
     mukadam = MukadamSerializer(read_only=True)
     
@@ -91,6 +82,25 @@ class JobSerializer(serializers.ModelSerializer):
             'requested_date', 'requested_time', 'farmer_price_per_acre',
             'your_price_per_acre', 'status', 'interests' ,'workers_needed' # ADD interests here
         ]
+
+    def update(self, instance, validated_data):
+        """Override update to track changes"""
+        changed_by = self.context.get('request').user.username if self.context.get('request') and self.context.get('request').user.is_authenticated else 'System'
+        edit_reason = validated_data.pop('edit_reason', '')
+        
+        for field, new_value in validated_data.items():
+            old_value = getattr(instance, field)
+            if old_value != new_value:
+                JobEditHistory.objects.create(
+                    job=instance,
+                    field_changed=field.replace('_', ' ').title(),
+                    old_value=str(old_value),
+                    new_value=str(new_value),
+                    changed_by=changed_by,
+                    reason=edit_reason
+                )
+        
+        return super().update(instance, validated_data)
 
 class ActivityBriefSerializer(serializers.Serializer):
     """Serializer for individual activity briefs"""
@@ -209,7 +219,7 @@ class JobCreateSerializer(serializers.Serializer):
         # Return the first job (or you could return all jobs)
         return jobs_created[0] if jobs_created else None
     
-    
+
 class MukadamBidSerializer(serializers.ModelSerializer):
     mukadam = MukadamSerializer(read_only=True)
     
@@ -311,6 +321,62 @@ class JobDetailSerializer(serializers.ModelSerializer):
         ]
 # Add this to your serializers.py
 
+
+
+from rest_framework import serializers
+from .models import Farmer, FarmerPlot, FarmerEditHistory
+
+class FarmerPlotSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FarmerPlot
+        fields = ['id', 'acres', 'location', 'activity_name', 'pruning_date', 'notes', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class FarmerEditHistorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FarmerEditHistory
+        fields = ['id', 'field_changed', 'old_value', 'new_value', 'changed_by', 
+                  'changed_at', 'reason', 'model_name', 'object_id']
+
+
+class FarmerSerializer(serializers.ModelSerializer):
+    plots = FarmerPlotSerializer(many=True, read_only=True)
+    total_acres = serializers.ReadOnlyField()
+    jobs_count = serializers.ReadOnlyField()
+    
+    class Meta:
+        model = Farmer
+        fields = ['id', 'name', 'phone', 'village', 'plots', 'total_acres', 
+                  'jobs_count', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    def update(self, instance, validated_data):
+        """Override update to track changes"""
+        changed_by = self.context.get('request').user.username if self.context.get('request') and self.context.get('request').user.is_authenticated else 'System'
+        
+        for field, new_value in validated_data.items():
+            old_value = getattr(instance, field)
+            if old_value != new_value:
+                FarmerEditHistory.objects.create(
+                    farmer=instance,
+                    field_changed=field.replace('_', ' ').title(),
+                    old_value=str(old_value),
+                    new_value=str(new_value),
+                    changed_by=changed_by,
+                    model_name='Farmer',
+                    object_id=instance.id
+                )
+        
+        return super().update(instance, validated_data)
+
+
+class JobEditHistorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = JobEditHistory
+        fields = ['id', 'field_changed', 'old_value', 'new_value', 'changed_by', 'changed_at', 'reason']
+
+
 class MukadamSerializer(serializers.ModelSerializer):
     # Add calculated fields
     total_jobs = serializers.SerializerMethodField()
@@ -340,6 +406,9 @@ class MukadamSerializer(serializers.ModelSerializer):
         ).count()
 
 class MukadamCreateSerializer(serializers.ModelSerializer):
+
+
+
     """Serializer for creating new mukadams"""
     class Meta:
         model = Mukadam

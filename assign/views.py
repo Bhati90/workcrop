@@ -51,6 +51,111 @@ from rest_framework import status
 from django.shortcuts import get_object_or_404
 
 
+from .models import Farmer, FarmerPlot, FarmerEditHistory
+from .serializers import FarmerSerializer, FarmerPlotSerializer, FarmerEditHistorySerializer
+
+
+class FarmerViewSet(viewsets.ModelViewSet):
+    queryset = Farmer.objects.all().prefetch_related('plots')
+    serializer_class = FarmerSerializer
+    
+    @action(detail=True, methods=['get'])
+    def edit_history(self, request, pk=None):
+        """Get edit history for a farmer"""
+        farmer = self.get_object()
+        history = farmer.edit_history.all()
+        serializer = FarmerEditHistorySerializer(history, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['get', 'post'])
+    def plots(self, request, pk=None):
+        """List or create plots for a farmer"""
+        farmer = self.get_object()
+        
+        if request.method == 'GET':
+            plots = farmer.plots.all()
+            serializer = FarmerPlotSerializer(plots, many=True)
+            return Response(serializer.data)
+        
+        elif request.method == 'POST':
+            serializer = FarmerPlotSerializer(data=request.data)
+            if serializer.is_valid():
+                plot = serializer.save(farmer=farmer)
+                
+                # Log the creation
+                changed_by = request.user.username if request.user.is_authenticated else 'System'
+                FarmerEditHistory.objects.create(
+                    farmer=farmer,
+                    field_changed='Plot Added',
+                    old_value='',
+                    new_value=f"{plot.acres} acres - {plot.activity_name or 'No activity'}",
+                    changed_by=changed_by,
+                    model_name='FarmerPlot',
+                    object_id=plot.id
+                )
+                
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['patch', 'delete'], url_path='plots/(?P<plot_id>[^/.]+)')
+    def plot_detail(self, request, pk=None, plot_id=None):
+        """Update or delete a specific plot"""
+        farmer = self.get_object()
+        
+        try:
+            plot = farmer.plots.get(id=plot_id)
+        except FarmerPlot.DoesNotExist:
+            return Response({'error': 'Plot not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        if request.method == 'PATCH':
+            old_data = {
+                'acres': plot.acres,
+                'location': plot.location,
+                'activity_name': plot.activity_name,
+                'pruning_date': plot.pruning_date,
+                'notes': plot.notes
+            }
+            
+            serializer = FarmerPlotSerializer(plot, data=request.data, partial=True)
+            if serializer.is_valid():
+                plot = serializer.save()
+                
+                # Log changes
+                changed_by = request.user.username if request.user.is_authenticated else 'System'
+                for field, new_value in request.data.items():
+                    old_value = old_data.get(field)
+                    if str(old_value) != str(new_value):
+                        FarmerEditHistory.objects.create(
+                            farmer=farmer,
+                            field_changed=f"Plot {field.replace('_', ' ').title()}",
+                            old_value=str(old_value),
+                            new_value=str(new_value),
+                            changed_by=changed_by,
+                            model_name='FarmerPlot',
+                            object_id=plot.id
+                        )
+                
+                return Response(serializer.data)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        elif request.method == 'DELETE':
+            changed_by = request.user.username if request.user.is_authenticated else 'System'
+            
+            # Log deletion
+            FarmerEditHistory.objects.create(
+                farmer=farmer,
+                field_changed='Plot Deleted',
+                old_value=f"{plot.acres} acres - {plot.activity_name or 'No activity'}",
+                new_value='',
+                changed_by=changed_by,
+                model_name='FarmerPlot',
+                object_id=plot.id
+            )
+            
+            plot.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 @api_view(['POST'])
 def confirm_job_and_set_price(request):
     """Confirm job from team and set your price for mukadams"""
@@ -1381,6 +1486,14 @@ class JobViewSet(viewsets.ModelViewSet):
             job_data.append(job_info)
         
         return Response(job_data)
+    
+    @action(detail=True, methods=['get'])
+    def edit_history(self, request, pk=None):
+        """Get edit history for a job"""
+        job = self.get_object()
+        history = job.edit_history.all()
+        serializer = JobEditHistorySerializer(history, many=True)
+        return Response(serializer.data)
 
 class MukadamBidViewSet(viewsets.ModelViewSet):
     queryset = MukadamBid.objects.all()

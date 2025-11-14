@@ -11,6 +11,7 @@ router.register(r'whatsapp', views.WhatsAppNotificationViewSet)
 router.register(r'activities', views.ActivityViewSet)
 router.register(r'mukadam-activity-rates', views.MukadamActivityRateViewSet)
 router.register(r'mukadam-jobs', views.MukadamJobViewSet, basename='mukadam-jobs')  # ADD this
+router.register(r'farmers', views.FarmerViewSet, basename='farmer')
 
 
 urlpatterns = [

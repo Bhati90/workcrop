@@ -2,12 +2,6 @@ from django.db import models
 from django.contrib.auth.models import User
 import uuid
 
-class Farmer(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(max_length=100)
-    phone = models.CharField(max_length=15)
-    village = models.CharField(max_length=100)
-    created_at = models.DateTimeField(auto_now_add=True)
 
 class Activity(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -42,7 +36,66 @@ class MukadamActivityRate(models.Model):
         return f"{self.mukadam.name} - {self.activity.name} - ₹{self.rate_per_acre}/acre"
 
 
+from django.db import models
+from django.contrib.auth.models import User
+import uuid
 
+class Farmer(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=200)
+    phone = models.CharField(max_length=15, unique=True)
+    village = models.CharField(max_length=200)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.name} - {self.phone}"
+    
+    @property
+    def total_acres(self):
+        """Calculate total acres from all plots"""
+        return self.plots.aggregate(total=models.Sum('acres'))['total'] or 0
+    
+    @property
+    def jobs_count(self):
+        """Count total jobs for this farmer"""
+        return self.job_set.count()
+
+class FarmerPlot(models.Model):
+    """Individual plots for each farmer"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    farmer = models.ForeignKey(Farmer, on_delete=models.CASCADE, related_name='plots')
+    acres = models.DecimalField(max_digits=10, decimal_places=2)
+    location = models.CharField(max_length=300, blank=True)
+    activity_name = models.CharField(max_length=200, blank=True, help_text="e.g., SSN, Anushka")
+    pruning_date = models.DateField()
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-pruning_date']
+    
+    def __str__(self):
+        return f"{self.farmer.name} - {self.acres} acres"
+
+
+# Farmer Edit History Model (add this)
+class FarmerEditHistory(models.Model):
+    """Track all edits made to farmer and plot data"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    farmer = models.ForeignKey(Farmer, on_delete=models.CASCADE, related_name='edit_history')
+    field_changed = models.CharField(max_length=100)
+    old_value = models.TextField()
+    new_value = models.TextField()
+    changed_by = models.CharField(max_length=200)
+    changed_at = models.DateTimeField(auto_now_add=True)
+    reason = models.TextField(blank=True)
+    model_name = models.CharField(max_length=50, default='Farmer')
+    object_id = models.UUIDField(null=True, blank=True)
+    
+    class Meta:
+        ordering = ['-changed_at']
 
 
 class Job(models.Model):
@@ -90,6 +143,25 @@ class Job(models.Model):
     
     class Meta:
         ordering = ['-confirmed_at']
+
+
+# Job Edit History Model (add this)
+class JobEditHistory(models.Model):
+    """Track all edits made to job data"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name='edit_history')
+    field_changed = models.CharField(max_length=100)
+    old_value = models.TextField()
+    new_value = models.TextField()
+    changed_by = models.CharField(max_length=200)
+    changed_at = models.DateTimeField(auto_now_add=True)
+    reason = models.TextField(blank=True)
+    
+    class Meta:
+        ordering = ['-changed_at']
+    
+    def __str__(self):
+        return f"Job {self.job.id} - {self.field_changed} changed"
 
 
 # In models.py - UPDATE MukadamInterest model
