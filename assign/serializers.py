@@ -92,7 +92,7 @@ class JobSerializer(serializers.ModelSerializer):
             old_value = getattr(instance, field)
             if old_value != new_value:
                 JobEditHistory.objects.create(
-                    job=instance,
+                    assign_job=instance,
                     field_changed=field.replace('_', ' ').title(),
                     old_value=str(old_value),
                     new_value=str(new_value),

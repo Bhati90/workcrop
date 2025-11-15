@@ -27,7 +27,7 @@ class Mukadam(models.Model):
         null=True, 
         blank=True
     )
-    
+
 class MukadamActivityRate(models.Model):
     """Track what activities each mukadam can do and their rates"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -200,7 +200,7 @@ class Job(models.Model):
 class JobEditHistory(models.Model):
     """Track all edits made to job data"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name='edit_history')
+    assign_job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name='edit_history')
     field_changed = models.CharField(max_length=100)
     old_value = models.TextField()
     new_value = models.TextField()

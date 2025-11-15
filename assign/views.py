@@ -21,15 +21,15 @@ import firebase_admin
 from firebase_admin import credentials
 import os
 
-# Initialize Firebase if not already done
-if not firebase_admin._apps:
-    try:
-        cred_path = 'firebase-service-account.json'
-        cred = credentials.Certificate(cred_path)
-        firebase_admin.initialize_app(cred)
-        print("✅ Firebase initialized in views.py")
-    except Exception as e:
-        print(f"❌ Firebase init failed: {e}")
+# # Initialize Firebase if not already done
+# if not firebase_admin._apps:
+#     try:
+#         cred_path = 'firebase-service-account.json'
+#         cred = credentials.Certificate(cred_path)
+#         firebase_admin.initialize_app(cred)
+#         print("✅ Firebase initialized in views.py")
+#     except Exception as e:
+#         print(f"❌ Firebase init failed: {e}")
 
 
 class ActivityViewSet(viewsets.ReadOnlyModelViewSet):
@@ -1315,6 +1315,7 @@ class JobViewSet(viewsets.ModelViewSet):
             
             return Response({
                 "message": f"Notified {len(notifications_sent)} mukadams",
+                "notified": notifications_sent,  # ✅ ADD THIS
                 "push_notifications_sent": push_sent_count
             })
             
