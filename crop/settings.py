@@ -468,31 +468,59 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': crontab(hour=9, minute=0),  # 9 AM daily
     },
 }
-# ========================================
-# FIREBASE CONFIGURATION
-# ========================================
+# settings.py
+
+# all your Django settings...
+
+# File: workcrop/settings.py (at the end)
+
+import os
+import json
+import base64
 import firebase_admin
 from firebase_admin import credentials
-import os
+from dotenv import load_dotenv
+load_dotenv()
 
-FIREBASE_CREDENTIALS_PATH = os.path.join(
-    BASE_DIR, 
-    'config', 
-    'firebase-service-account.json'
-)
-
-if not firebase_admin._apps:
+# Debug: Check if env var exists
+firebase_test = os.environ.get('FIREBASE_CREDENTIALS_BASE64')
+if firebase_test:
+    print(f"✅ Env var loaded! Length: {len(firebase_test)} characters")
+else:
+    print("❌ Env var NOT loaded!")
+    print(f"📁 Looking for .env at: {os.path.join(BASE_DIR, '.env')}")
+    print(f"📁 File exists: {os.path.exists(os.path.join(BASE_DIR, '.env'))}")
+def initialize_firebase():
+    if firebase_admin._apps:
+        return
+    
     try:
-        cred = credentials.Certificate(FIREBASE_CREDENTIALS_PATH)
-        firebase_admin.initialize_app(cred)
-        print("✅ Firebase initialized successfully")
-    except FileNotFoundError:
-        print(f"❌ Firebase key not found at: {FIREBASE_CREDENTIALS_PATH}")
+        # Try environment variable (for Render/production)
+        firebase_base64 = os.environ.get('FIREBASE_CREDENTIALS_BASE64')
+        
+        if firebase_base64:
+            firebase_json = base64.b64decode(firebase_base64).decode('utf-8')
+            firebase_dict = json.loads(firebase_json)
+            cred = credentials.Certificate(firebase_dict)
+            firebase_admin.initialize_app(cred)
+            print("✅ Firebase initialized from ENV VAR")
+            return
+        
+        # Fallback to file (for local dev)
+        firebase_path = os.path.join(BASE_DIR, 'firebase-service-account.json')
+        if os.path.exists(firebase_path):
+            cred = credentials.Certificate(firebase_path)
+            firebase_admin.initialize_app(cred)
+            print("✅ Firebase initialized from FILE")
+            return
+        
+        print("⚠️ No Firebase credentials")
+        
     except Exception as e:
-        print(f"❌ Firebase initialization error: {e}")
-# Internationalization
-# https://docs.djangoproject.com/en/4.2/topics/i18n/
+        print(f"❌ Firebase error: {e}")
 
+# Initialize
+initialize_firebase()
 LANGUAGE_CODE = 'en-us'
 
 TIME_ZONE = 'UTC'
