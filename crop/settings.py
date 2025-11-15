@@ -468,7 +468,28 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': crontab(hour=9, minute=0),  # 9 AM daily
     },
 }
+# ========================================
+# FIREBASE CONFIGURATION
+# ========================================
+import firebase_admin
+from firebase_admin import credentials
+import os
 
+FIREBASE_CREDENTIALS_PATH = os.path.join(
+    BASE_DIR, 
+    'config', 
+    'firebase-service-account.json'
+)
+
+if not firebase_admin._apps:
+    try:
+        cred = credentials.Certificate(FIREBASE_CREDENTIALS_PATH)
+        firebase_admin.initialize_app(cred)
+        print("✅ Firebase initialized successfully")
+    except FileNotFoundError:
+        print(f"❌ Firebase key not found at: {FIREBASE_CREDENTIALS_PATH}")
+    except Exception as e:
+        print(f"❌ Firebase initialization error: {e}")
 # Internationalization
 # https://docs.djangoproject.com/en/4.2/topics/i18n/
 

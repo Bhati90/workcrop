@@ -17,7 +17,17 @@ class Mukadam(models.Model):
     number_of_labourers = models.IntegerField()
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
-
+    fcm_token = models.CharField(
+        max_length=255, 
+        null=True, 
+        blank=True,
+        help_text="Firebase token for push notifications"
+    )
+    fcm_token_updated_at = models.DateTimeField(
+        null=True, 
+        blank=True
+    )
+    
 class MukadamActivityRate(models.Model):
     """Track what activities each mukadam can do and their rates"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -143,6 +153,47 @@ class Job(models.Model):
     
     class Meta:
         ordering = ['-confirmed_at']
+
+
+    def save(self, *args, **kwargs):
+        """Override save to automatically create plot when job is created"""
+        is_new = self.pk is None
+        super().save(*args, **kwargs)
+        
+        # ✅ Create plot automatically when new job is created
+        if is_new and self.farmer and self.activity:
+            # Check if a plot already exists for this activity
+            plot, created = FarmerPlot.objects.get_or_create(
+                farmer=self.farmer,
+                activity_name=self.activity.name,
+                defaults={
+                    'acres': self.farm_size_acres,
+                    'location': self.location,
+                    'pruning_date': self.requested_date,
+                    'notes': f"Created from job {self.id}"
+                }
+            )
+            
+            # If plot exists, update the acres if this job has more
+            if not created and self.farm_size_acres > plot.acres:
+                old_acres = plot.acres
+                plot.acres = self.farm_size_acres
+                plot.location = self.location
+                plot.pruning_date = self.requested_date
+                plot.save()
+                
+                # Log the update
+                FarmerEditHistory.objects.create(
+                    farmer=self.farmer,
+                    field_changed='Plot Acres Updated',
+                    old_value=str(old_acres),
+                    new_value=str(self.farm_size_acres),
+                    changed_by='System (from job)',
+                    model_name='FarmerPlot',
+                    object_id=plot.id,
+                    reason=f'Updated from job {self.id}'
+                )
+
 
 
 # Job Edit History Model (add this)

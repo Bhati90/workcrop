@@ -321,19 +321,40 @@ class JobDetailSerializer(serializers.ModelSerializer):
         ]
 # Add this to your serializers.py
 
-
+class SaveFCMTokenSerializer(serializers.Serializer):
+    fcm_token = serializers.CharField(required=True, max_length=255)
+    platform = serializers.CharField(required=False, default='android')
+    
+    def validate_fcm_token(self, value):
+        if not value or len(value) < 10:
+            raise serializers.ValidationError("Invalid FCM token")
+        return value
 
 from rest_framework import serializers
 from .models import Farmer, FarmerPlot, FarmerEditHistory
 
+
 class FarmerPlotSerializer(serializers.ModelSerializer):
+    """Enhanced plot serializer with job information"""
+    related_jobs = serializers.SerializerMethodField()
+    
     class Meta:
         model = FarmerPlot
-        fields = ['id', 'acres', 'location', 'activity_name', 'pruning_date', 'notes', 'created_at', 'updated_at']
+        fields = ['id', 'acres', 'location', 'activity_name', 'pruning_date', 
+                  'notes', 'related_jobs', 'created_at', 'updated_at']
         read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    def get_related_jobs(self, obj):
+        """Get all jobs related to this plot's activity"""
+        jobs = Job.objects.filter(
+            farmer=obj.farmer,
+            activity__name=obj.activity_name
+        ).values('id', 'status', 'requested_date', 'farm_size_acres')
+        return list(jobs)
 
 
 class FarmerEditHistorySerializer(serializers.ModelSerializer):
+    """Enhanced history showing job-related changes"""
     class Meta:
         model = FarmerEditHistory
         fields = ['id', 'field_changed', 'old_value', 'new_value', 'changed_by', 
@@ -341,35 +362,33 @@ class FarmerEditHistorySerializer(serializers.ModelSerializer):
 
 
 class FarmerSerializer(serializers.ModelSerializer):
+    """Enhanced farmer serializer with plots and jobs"""
     plots = FarmerPlotSerializer(many=True, read_only=True)
-    total_acres = serializers.ReadOnlyField()
+    total_acres = serializers.SerializerMethodField()
     jobs_count = serializers.ReadOnlyField()
+    recent_jobs = serializers.SerializerMethodField()
     
     class Meta:
         model = Farmer
         fields = ['id', 'name', 'phone', 'village', 'plots', 'total_acres', 
-                  'jobs_count', 'created_at', 'updated_at']
+                  'jobs_count', 'recent_jobs', 'created_at', 'updated_at']
         read_only_fields = ['id', 'created_at', 'updated_at']
     
-    def update(self, instance, validated_data):
-        """Override update to track changes"""
-        changed_by = self.context.get('request').user.username if self.context.get('request') and self.context.get('request').user.is_authenticated else 'System'
-        
-        for field, new_value in validated_data.items():
-            old_value = getattr(instance, field)
-            if old_value != new_value:
-                FarmerEditHistory.objects.create(
-                    farmer=instance,
-                    field_changed=field.replace('_', ' ').title(),
-                    old_value=str(old_value),
-                    new_value=str(new_value),
-                    changed_by=changed_by,
-                    model_name='Farmer',
-                    object_id=instance.id
-                )
-        
-        return super().update(instance, validated_data)
-
+    def get_total_acres(self, obj):
+        """Calculate total unique acres from plots"""
+        total = obj.plots.aggregate(total=models.Sum('acres'))['total']
+        return float(total) if total else 0.0
+    
+    def get_recent_jobs(self, obj):
+        """Get recent jobs for this farmer"""
+        jobs = Job.objects.filter(farmer=obj).select_related('activity').order_by('-requested_date')[:5]
+        return [{
+            'id': str(job.id),
+            'activity': job.activity.name,
+            'acres': float(job.farm_size_acres),
+            'status': job.status,
+            'date': str(job.requested_date)
+        } for job in jobs]
 
 class JobEditHistorySerializer(serializers.ModelSerializer):
     class Meta:

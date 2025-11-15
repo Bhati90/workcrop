@@ -12,6 +12,25 @@ import json
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from django.conf import settings
+from .utils.fcm_helper import send_push_notification
+from .serializers import SaveFCMTokenSerializer
+
+
+
+import firebase_admin
+from firebase_admin import credentials
+import os
+
+# Initialize Firebase if not already done
+if not firebase_admin._apps:
+    try:
+        cred_path = 'firebase-service-account.json'
+        cred = credentials.Certificate(cred_path)
+        firebase_admin.initialize_app(cred)
+        print("✅ Firebase initialized in views.py")
+    except Exception as e:
+        print(f"❌ Firebase init failed: {e}")
+
 
 class ActivityViewSet(viewsets.ReadOnlyModelViewSet):
     """API for activities (read-only for now)"""
@@ -56,46 +75,146 @@ from .serializers import FarmerSerializer, FarmerPlotSerializer, FarmerEditHisto
 
 
 class FarmerViewSet(viewsets.ModelViewSet):
-    queryset = Farmer.objects.all().prefetch_related('plots')
+    queryset = Farmer.objects.all().prefetch_related('plots', 'job_set')
     serializer_class = FarmerSerializer
+    
+    def list(self, request, *args, **kwargs):
+        """Enhanced list with plot auto-creation check"""
+        # ✅ Auto-create missing plots for existing jobs
+        self._sync_plots_from_jobs()
+        return super().list(request, *args, **kwargs)
+    
+    def retrieve(self, request, *args, **kwargs):
+        """Enhanced retrieve with plot sync"""
+        # ✅ Auto-create missing plots for this farmer
+        farmer = self.get_object()
+        self._sync_farmer_plots(farmer)
+        return super().retrieve(request, *args, **kwargs)
+    
+    def _sync_plots_from_jobs(self):
+        """Create missing plots from jobs for all farmers"""
+        jobs_without_plots = Job.objects.select_related('farmer', 'activity').all()
+        
+        for job in jobs_without_plots:
+            if job.farmer and job.activity:
+                plot, created = FarmerPlot.objects.get_or_create(
+                    farmer=job.farmer,
+                    activity_name=job.activity.name,
+                    defaults={
+                        'acres': job.farm_size_acres,
+                        'location': job.location or job.farmer.village,
+                        'pruning_date': job.requested_date,
+                        'notes': f"Auto-created from job history"
+                    }
+                )
+                
+                # Update if job has more acres
+                if not created and job.farm_size_acres > plot.acres:
+                    plot.acres = job.farm_size_acres
+                    plot.location = job.location or plot.location
+                    plot.save()
+    
+    def _sync_farmer_plots(self, farmer):
+        """Create missing plots for specific farmer from their jobs"""
+        jobs = Job.objects.filter(farmer=farmer).select_related('activity')
+        
+        for job in jobs:
+            if job.activity:
+                plot, created = FarmerPlot.objects.get_or_create(
+                    farmer=farmer,
+                    activity_name=job.activity.name,
+                    defaults={
+                        'acres': job.farm_size_acres,
+                        'location': job.location or farmer.village,
+                        'pruning_date': job.requested_date,
+                        'notes': f"From job: {job.activity.name}"
+                    }
+                )
+                
+                # Update if this job has more acres
+                if not created and job.farm_size_acres > plot.acres:
+                    plot.acres = job.farm_size_acres
+                    plot.save()
     
     @action(detail=True, methods=['get'])
     def edit_history(self, request, pk=None):
-        """Get edit history for a farmer"""
+        """Get edit history including job-related changes"""
         farmer = self.get_object()
-        history = farmer.edit_history.all()
-        serializer = FarmerEditHistorySerializer(history, many=True)
+        
+        # Get farmer edit history
+        farmer_history = farmer.edit_history.all()
+        
+        # Get job history for this farmer
+        jobs = Job.objects.filter(farmer=farmer).select_related('activity')
+        job_history = []
+        
+        for job in jobs:
+            job_history.append({
+                'id': str(job.id),
+                'field_changed': 'Job Created',
+                'old_value': '',
+                'new_value': f"{job.activity.name} - {job.farm_size_acres} acres",
+                'changed_by': 'System',
+                'changed_at': job.confirmed_at.isoformat() if job.confirmed_at else job.created_at.isoformat(),
+                'reason': f'Job for {job.activity.name}'
+            })
+        
+        # Combine both histories
+        serializer = FarmerEditHistorySerializer(farmer_history, many=True)
+        combined_history = list(serializer.data) + job_history
+        
+        # Sort by date
+        combined_history.sort(key=lambda x: x['changed_at'], reverse=True)
+        
+        return Response(combined_history)
+    
+    @action(detail=True, methods=['post'])
+    def sync_plots(self, request, pk=None):
+        """Manually trigger plot sync from jobs"""
+        farmer = self.get_object()
+        self._sync_farmer_plots(farmer)
+        
+        return Response({
+            'message': 'Plots synced successfully',
+            'total_plots': farmer.plots.count(),
+            'total_acres': farmer.total_acres
+        })
+    
+    @action(detail=True, methods=['get'])
+    def plots(self, request, pk=None):
+        """List plots for a farmer (with auto-sync)"""
+        farmer = self.get_object()
+        
+        # Auto-sync plots from jobs
+        self._sync_farmer_plots(farmer)
+        
+        plots = farmer.plots.all()
+        serializer = FarmerPlotSerializer(plots, many=True)
         return Response(serializer.data)
     
-    @action(detail=True, methods=['get', 'post'])
-    def plots(self, request, pk=None):
-        """List or create plots for a farmer"""
+    @action(detail=True, methods=['post'])
+    def add_plot(self, request, pk=None):
+        """Manually add a plot"""
         farmer = self.get_object()
         
-        if request.method == 'GET':
-            plots = farmer.plots.all()
-            serializer = FarmerPlotSerializer(plots, many=True)
-            return Response(serializer.data)
-        
-        elif request.method == 'POST':
-            serializer = FarmerPlotSerializer(data=request.data)
-            if serializer.is_valid():
-                plot = serializer.save(farmer=farmer)
-                
-                # Log the creation
-                changed_by = request.user.username if request.user.is_authenticated else 'System'
-                FarmerEditHistory.objects.create(
-                    farmer=farmer,
-                    field_changed='Plot Added',
-                    old_value='',
-                    new_value=f"{plot.acres} acres - {plot.activity_name or 'No activity'}",
-                    changed_by=changed_by,
-                    model_name='FarmerPlot',
-                    object_id=plot.id
-                )
-                
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer = FarmerPlotSerializer(data=request.data)
+        if serializer.is_valid():
+            plot = serializer.save(farmer=farmer)
+            
+            # Log the creation
+            changed_by = request.user.username if request.user.is_authenticated else 'System'
+            FarmerEditHistory.objects.create(
+                farmer=farmer,
+                field_changed='Plot Added (Manual)',
+                old_value='',
+                new_value=f"{plot.acres} acres - {plot.activity_name or 'No activity'}",
+                changed_by=changed_by,
+                model_name='FarmerPlot',
+                object_id=plot.id
+            )
+            
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     @action(detail=True, methods=['patch', 'delete'], url_path='plots/(?P<plot_id>[^/.]+)')
     def plot_detail(self, request, pk=None, plot_id=None):
@@ -112,8 +231,7 @@ class FarmerViewSet(viewsets.ModelViewSet):
                 'acres': plot.acres,
                 'location': plot.location,
                 'activity_name': plot.activity_name,
-                'pruning_date': plot.pruning_date,
-                'notes': plot.notes
+                'pruning_date': plot.pruning_date
             }
             
             serializer = FarmerPlotSerializer(plot, data=request.data, partial=True)
@@ -154,7 +272,6 @@ class FarmerViewSet(viewsets.ModelViewSet):
             
             plot.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
-
 
 @api_view(['POST'])
 def confirm_job_and_set_price(request):
@@ -1156,71 +1273,55 @@ class JobViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def notify_mukadams(self, request, pk=None):
-        """Send simple Yes/No job notifications to selected mukadams"""
+        """Send notifications to mukadams - NOW WITH PUSH!"""
         try:
             job = self.get_object()
             mukadam_ids = request.data.get('mukadam_ids', [])
             
             if job.status != 'priced':
-                return Response(
-                    {"error": "Job must be priced first"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+                return Response({"error": "Job must be priced first"}, status=400)
             
             notifications_sent = []
+            push_sent_count = 0
             
             for mukadam_id in mukadam_ids:
                 mukadam = get_object_or_404(Mukadam, id=mukadam_id)
                 
                 # Create interest record
-                interest, created = MukadamInterest.objects.get_or_create(
+                MukadamInterest.objects.get_or_create(
                     job=job,
                     mukadam=mukadam
                 )
                 
-                # Send simple notification
-                notification_data = {
-                    "notification_type": "simple_job_offer",
-                    "job_id": str(job.id),
-                    "mukadam_id": str(mukadam.id),
-                    "mukadam_name": mukadam.name,
-                    
-                    "job_details": {
-                        "farmer_name": job.farmer.name,
-                        "activity": job.activity.name,
-                        "farm_size_acres": float(job.farm_size_acres),
-                        "location": job.location,
-                        "date": str(job.requested_date),
-                        "your_price": float(job.your_price_per_acre),
-                        "total_amount": float(job.your_price_per_acre * job.farm_size_acres)
-                    },
-                    
-                    "response_required": {
-                        "question": f"Are you interested in this {job.activity.name} job for ₹{job.your_price_per_acre}/acre?",
-                        "options": ["YES", "NO"],
-                        "respond_url": f"{settings.BASE_URL}/api/jobs/{job.id}/respond/"
-                    }
-                }
+                notifications_sent.append(mukadam.name)
                 
-                # Send webhook
-                try:
-                    self._send_simple_notification(notification_data)
-                    notifications_sent.append(mukadam.name)
-                except Exception as e:
-                    print(f"Failed to notify {mukadam.name}: {e}")
+                # ✅ SEND PUSH NOTIFICATION
+                if mukadam.fcm_token:
+                    success = send_push_notification(
+                        fcm_token=mukadam.fcm_token,
+                        title="नवीन काम उपलब्ध",
+                        body=f"{job.activity.name} - {job.location} - ₹{job.your_price_per_acre}/एकर",
+                        data={
+                            "job_id": str(job.id),
+                            "type": "new_job",
+                            "screen": "/available-jobs"
+                        }
+                    )
+                    if success:
+                        push_sent_count += 1
             
             job.status = 'notified'
             job.save()
             
             return Response({
                 "message": f"Notified {len(notifications_sent)} mukadams",
-                "notified": notifications_sent,
-                "job_price": float(job.your_price_per_acre)
+                "push_notifications_sent": push_sent_count
             })
             
         except Exception as e:
             return Response({"error": str(e)}, status=500)
-
+    
+    
     def _send_simple_notification(self, data):
         """Send simple notification to mukadam app"""
         webhook_url = settings.MUKADAM_WEBHOOK_URLS.get('default')
@@ -1282,55 +1383,49 @@ class JobViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'])
     def assign_final(self, request, pk=None):
-        """Assign job to selected mukadam (from interested ones)"""
-        
-        job = self.get_object()
-        mukadam_id = request.data.get('mukadam_id')
-        
-        mukadam = get_object_or_404(Mukadam, id=mukadam_id)
-        
-        # Check if they were interested
+        """Assign job to mukadam - NOW WITH PUSH!"""
         try:
+            job = self.get_object()
+            mukadam_id = request.data.get('mukadam_id')
+            
+            mukadam = get_object_or_404(Mukadam, id=mukadam_id)
+            
+            # Check if interested
             interest = MukadamInterest.objects.get(job=job, mukadam=mukadam)
             if not interest.is_interested:
-                return Response({"error": "This mukadam was not interested"}, status=400)
-        except MukadamInterest.DoesNotExist:
-            return Response({"error": "No response found from this mukadam"}, status=400)
+                return Response({"error": "Mukadam not interested"}, status=400)
+            
+            # Assign job
+            job.assigned_mukadam = mukadam
+            job.status = 'assigned'
+            job.assigned_at = timezone.now()
+            job.save()
+            
+            interest.response_status = 'assigned'
+            interest.save()
+            
+            # ✅ SEND PUSH NOTIFICATION
+            push_sent = False
+            if mukadam.fcm_token:
+                push_sent = send_push_notification(
+                    fcm_token=mukadam.fcm_token,
+                    title="काम मिळाले!",
+                    body=f"{job.activity.name} - ₹{job.your_price_per_acre}/एकर",
+                    data={
+                        "job_id": str(job.id),
+                        "type": "job_assigned",
+                        "screen": "/assigned-jobs"
+                    }
+                )
+            
+            return Response({
+                "message": f"Job assigned to {mukadam.name}",
+                "push_notification_sent": push_sent
+            })
+            
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
         
-        # Assign job
-        job.assigned_mukadam = mukadam
-        job.status = 'assigned'
-        job.assigned_at = timezone.now()
-        job.save()
-        
-        # ✅ DON'T change other mukadams' status - keep them as they responded
-        # Only mark the selected one as 'assigned'
-        interest.response_status = 'assigned'  # Add this field to track assignment
-        interest.save()
-        
-        # Create status history
-        JobStatusHistory.objects.create(
-            job=job,
-            from_status='notified',
-            to_status='assigned',
-            changed_by=request.user if request.user.is_authenticated else None,
-            notes=f'Assigned to {mukadam.name}'
-        )
-        
-        # Notify assigned mukadam
-        self._notify_assignment(job, mukadam)
-        
-        print(f"✅ Job {job.id} assigned to {mukadam.name}")
-        
-        return Response({
-            "message": f"Job assigned to {mukadam.name}",
-            "mukadam": mukadam.name,
-            "price": float(job.your_price_per_acre),
-            "total": float(job.your_price_per_acre * job.farm_size_acres),
-            "job_status": job.status
-        })
-    
-    
     def _notify_mukadam_about_job(self, job, mukadam):
         """Send notification to mukadam about new job assignment"""
         notification_data = {
@@ -1495,140 +1590,6 @@ class JobViewSet(viewsets.ModelViewSet):
         serializer = JobEditHistorySerializer(history, many=True)
         return Response(serializer.data)
 
-class MukadamBidViewSet(viewsets.ModelViewSet):
-    queryset = MukadamBid.objects.all()
-    serializer_class = MukadamBidSerializer
-    # def _send_websocket_update(self, update_type, data):
-    #     """Send real-time update via WebSocket"""
-    #     channel_layer = get_channel_layer()
-    #     if channel_layer:
-    #         async_to_sync(channel_layer.group_send)(
-    #             'job_updates',
-    #             {
-    #                 'type': update_type,
-    #                 'data': data
-    #             }
-    #         )
-
-    # Update your submit_bid function in views.py
-    @action(detail=False, methods=['post'])
-    def submit_bid(self,request):
-        try:
-            bid_data = request.data
-            
-            # Validate required fields
-            required_fields = ['job', 'mukadam', 'bid_price_per_acre']
-            missing_fields = [field for field in required_fields if not bid_data.get(field)]
-            
-            if missing_fields:
-                return Response({
-                    "error": f"Missing required fields: {', '.join(missing_fields)}"
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Get job and mukadam
-            try:
-                job = get_object_or_404(Job, id=bid_data['job'])
-                mukadam = get_object_or_404(Mukadam, id=bid_data['mukadam'])
-            except Exception as e:
-                return Response({
-                    "error": f"Job or Mukadam not found: {str(e)}"
-                }, status=status.HTTP_404_NOT_FOUND)
-            
-            # Check job status
-            if job.status not in ['bidding', 'assigned']:
-                return Response({
-                    "error": f"Job not accepting bids. Current status: {job.status}"
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
-            # ✅ Check if bid already exists
-            existing_bid = MukadamBid.objects.filter(job=job, mukadam=mukadam).first()
-            
-            if existing_bid:
-                # Update existing bid
-                existing_bid.status = 'interested'
-                existing_bid.bid_price_per_acre = bid_data['bid_price_per_acre']
-                existing_bid.estimated_duration_hours = bid_data.get('estimated_duration_hours')
-                existing_bid.comments = bid_data.get('comments', '')
-                existing_bid.responded_at = timezone.now()
-                existing_bid.save()
-                
-                bid = existing_bid
-                action = "updated"
-                
-                print(f"✅ Updated existing bid for {mukadam.name}")
-                
-            else:
-                # Create new bid
-                bid = MukadamBid.objects.create(
-                    job=job,
-                    mukadam=mukadam,
-                    status='interested',
-                    bid_price_per_acre=bid_data['bid_price_per_acre'],
-                    estimated_duration_hours=bid_data.get('estimated_duration_hours'),
-                    comments=bid_data.get('comments', ''),
-                    responded_at=timezone.now()
-                )
-                
-                action = "created"
-                
-                print(f"✅ Created new bid for {mukadam.name}")
-            
-            # Get bid summary
-            all_bids = MukadamBid.objects.filter(job=job)
-            interested_bids = all_bids.filter(status='interested').order_by('bid_price_per_acre')
-            
-            response_data = {
-                "status": "success",
-                "message": f"Bid {action} successfully",
-                "action": action,  # ✅ Tell them if it was created or updated
-                "bid": {
-                    "id": str(bid.id),
-                    "job_id": str(job.id),
-                    "mukadam_name": mukadam.name,
-                    "bid_price_per_acre": float(bid.bid_price_per_acre),
-                    "estimated_duration_hours": bid.estimated_duration_hours,
-                    "comments": bid.comments,
-                    "submitted_at": bid.responded_at,
-                    "status": bid.status
-                },
-                "job_info": {
-                    "farmer_name": job.farmer.name,
-                    "activity": job.activity.name,
-                    "farm_size_acres": float(job.farm_size_acres),
-                    "location": job.location
-                },
-                "bidding_summary": {
-                    "total_bids": all_bids.count(),
-                    "interested_bids": interested_bids.count(),
-                    "your_rank": list(interested_bids.values_list('id', flat=True)).index(bid.id) + 1 if interested_bids else 1,
-                    "lowest_bid": float(interested_bids.first().bid_price_per_acre) if interested_bids else None
-                }
-            }
-            
-            return Response(response_data, status=status.HTTP_200_OK)
-            
-        except Exception as e:
-            return Response({
-                "error": f"Bid submission failed: {str(e)}"
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    @action(detail=True, methods=['post'])
-    def cancel_bid(self, request, pk=None):
-        """
-        Mukadam cancels their bid
-        POST /api/bids/{id}/cancel_bid/
-        """
-        bid = self.get_object()
-        
-        if bid.status == 'selected':
-            return Response(
-                {"error": "Cannot cancel a selected bid"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        bid.status = 'cancelled'
-        bid.save()
-        
-        return Response({"message": "Bid cancelled successfully"})
 
 class MukadamViewSet(viewsets.ModelViewSet):
     queryset = Mukadam.objects.all()
@@ -1768,6 +1729,168 @@ class MukadamViewSet(viewsets.ModelViewSet):
             'total_available': len(serializer.data)
         })
     
+    @action(detail=True, methods=['post'], url_path='save-fcm-token')
+    def save_fcm_token(self, request, pk=None):
+        """Save FCM token from Flutter app"""
+        try:
+            mukadam = self.get_object()
+            
+            serializer = SaveFCMTokenSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=400)
+            
+            # Save token
+            fcm_token = serializer.validated_data['fcm_token']
+            mukadam.fcm_token = fcm_token
+            mukadam.fcm_token_updated_at = timezone.now()
+            mukadam.save()
+            
+            print(f"✅ FCM token saved for {mukadam.name}")
+            
+            return Response({
+                "message": "FCM token saved",
+                "mukadam_id": str(mukadam.id)
+            })
+            
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+
+
+class MukadamBidViewSet(viewsets.ModelViewSet):
+    queryset = MukadamBid.objects.all()
+    serializer_class = MukadamBidSerializer
+    # def _send_websocket_update(self, update_type, data):
+    #     """Send real-time update via WebSocket"""
+    #     channel_layer = get_channel_layer()
+    #     if channel_layer:
+    #         async_to_sync(channel_layer.group_send)(
+    #             'job_updates',
+    #             {
+    #                 'type': update_type,
+    #                 'data': data
+    #             }
+    #         )
+
+    # Update your submit_bid function in views.py
+    @action(detail=False, methods=['post'])
+    def submit_bid(self,request):
+        try:
+            bid_data = request.data
+            
+            # Validate required fields
+            required_fields = ['job', 'mukadam', 'bid_price_per_acre']
+            missing_fields = [field for field in required_fields if not bid_data.get(field)]
+            
+            if missing_fields:
+                return Response({
+                    "error": f"Missing required fields: {', '.join(missing_fields)}"
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Get job and mukadam
+            try:
+                job = get_object_or_404(Job, id=bid_data['job'])
+                mukadam = get_object_or_404(Mukadam, id=bid_data['mukadam'])
+            except Exception as e:
+                return Response({
+                    "error": f"Job or Mukadam not found: {str(e)}"
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            # Check job status
+            if job.status not in ['bidding', 'assigned']:
+                return Response({
+                    "error": f"Job not accepting bids. Current status: {job.status}"
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # ✅ Check if bid already exists
+            existing_bid = MukadamBid.objects.filter(job=job, mukadam=mukadam).first()
+            
+            if existing_bid:
+                # Update existing bid
+                existing_bid.status = 'interested'
+                existing_bid.bid_price_per_acre = bid_data['bid_price_per_acre']
+                existing_bid.estimated_duration_hours = bid_data.get('estimated_duration_hours')
+                existing_bid.comments = bid_data.get('comments', '')
+                existing_bid.responded_at = timezone.now()
+                existing_bid.save()
+                
+                bid = existing_bid
+                action = "updated"
+                
+                print(f"✅ Updated existing bid for {mukadam.name}")
+                
+            else:
+                # Create new bid
+                bid = MukadamBid.objects.create(
+                    job=job,
+                    mukadam=mukadam,
+                    status='interested',
+                    bid_price_per_acre=bid_data['bid_price_per_acre'],
+                    estimated_duration_hours=bid_data.get('estimated_duration_hours'),
+                    comments=bid_data.get('comments', ''),
+                    responded_at=timezone.now()
+                )
+                
+                action = "created"
+                
+                print(f"✅ Created new bid for {mukadam.name}")
+            
+            # Get bid summary
+            all_bids = MukadamBid.objects.filter(job=job)
+            interested_bids = all_bids.filter(status='interested').order_by('bid_price_per_acre')
+            
+            response_data = {
+                "status": "success",
+                "message": f"Bid {action} successfully",
+                "action": action,  # ✅ Tell them if it was created or updated
+                "bid": {
+                    "id": str(bid.id),
+                    "job_id": str(job.id),
+                    "mukadam_name": mukadam.name,
+                    "bid_price_per_acre": float(bid.bid_price_per_acre),
+                    "estimated_duration_hours": bid.estimated_duration_hours,
+                    "comments": bid.comments,
+                    "submitted_at": bid.responded_at,
+                    "status": bid.status
+                },
+                "job_info": {
+                    "farmer_name": job.farmer.name,
+                    "activity": job.activity.name,
+                    "farm_size_acres": float(job.farm_size_acres),
+                    "location": job.location
+                },
+                "bidding_summary": {
+                    "total_bids": all_bids.count(),
+                    "interested_bids": interested_bids.count(),
+                    "your_rank": list(interested_bids.values_list('id', flat=True)).index(bid.id) + 1 if interested_bids else 1,
+                    "lowest_bid": float(interested_bids.first().bid_price_per_acre) if interested_bids else None
+                }
+            }
+            
+            return Response(response_data, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                "error": f"Bid submission failed: {str(e)}"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    @action(detail=True, methods=['post'])
+    def cancel_bid(self, request, pk=None):
+        """
+        Mukadam cancels their bid
+        POST /api/bids/{id}/cancel_bid/
+        """
+        bid = self.get_object()
+        
+        if bid.status == 'selected':
+            return Response(
+                {"error": "Cannot cancel a selected bid"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        bid.status = 'cancelled'
+        bid.save()
+        
+        return Response({"message": "Bid cancelled successfully"})
+ 
 # views.py (replace your MukadamJobViewSet implementation with this)
 from rest_framework import viewsets
 from rest_framework.decorators import action
