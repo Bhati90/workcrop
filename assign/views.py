@@ -24,7 +24,7 @@ import os
 # Initialize Firebase if not already done
 if not firebase_admin._apps:
     try:
-        cred_path = 'firebase-service-account.json'
+        cred_path = 'crop/firebase-service-account.json'
         cred = credentials.Certificate(cred_path)
         firebase_admin.initialize_app(cred)
         print("✅ Firebase initialized in views.py")
