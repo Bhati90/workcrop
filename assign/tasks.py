@@ -1,112 +1,91 @@
 from celery import shared_task
 from django.utils import timezone
-from .models import Job, WhatsAppNotification
-from .views import WhatsAppNotificationViewSet
-import logging
+from datetime import datetime
+import pytz
+from .models import Job
+from .utils.fcm_helper import send_push_notification
 
-logger = logging.getLogger(__name__)
 
-@shared_task
-def send_daily_job_notifications():
-    """
-    Celery task to send WhatsApp notifications for jobs happening today
-    Run this task every morning at 6 AM
-    """
-    try:
-        today = timezone.now().date()
+@shared_task(name='assign.tasks.send_daily_job_reminders')
+def send_daily_job_reminders():
+    """Runs daily at 9 AM IST - sends job reminders"""
+    
+    print("🔔 Running job reminders...")
+    
+    IST = pytz.timezone('Asia/Kolkata')
+    today = timezone.now().astimezone(IST).date()
+    
+    # Get assigned jobs
+    assigned_jobs = Job.objects.filter(
+        status__in=['assigned', 'notified'],
+        assigned_mukadam__isnull=False,
+        requested_date__gte=today
+    ).select_related('assigned_mukadam', 'farmer', 'activity')
+    
+    reminders_sent = 0
+    
+    for job in assigned_jobs:
+        mukadam = job.assigned_mukadam
         
-        # Get finalized jobs for today that haven't been notified
-        jobs_today = Job.objects.filter(
-            requested_date=today,
-            status='finalized',
-            whatsapp_notifications__isnull=True
-        ).select_related('farmer', 'finalized_mukadam', 'activity')
+        if not mukadam.fcm_token:
+            continue
         
-        notifications_sent = 0
+        days_until = (job.requested_date - today).days
         
-        for job in jobs_today:
-            try:
-                # Use the existing WhatsApp notification logic
-                viewset = WhatsAppNotificationViewSet()
-                
-                # Send to farmer
-                farmer_message = viewset._generate_farmer_notification(job)
-                farmer_notification = WhatsAppNotification.objects.create(
-                    job=job,
-                    recipient_type='farmer',
-                    recipient_phone=job.farmer.phone,
-                    message=farmer_message
-                )
-                viewset._send_whatsapp_message(farmer_notification)
-                
-                # Send to mukadam
-                mukadam_message = viewset._generate_mukadam_notification(job)
-                mukadam_notification = WhatsAppNotification.objects.create(
-                    job=job,
-                    recipient_type='mukadam',
-                    recipient_phone=job.finalized_mukadam.phone,
-                    message=mukadam_message
-                )
-                viewset._send_whatsapp_message(mukadam_notification)
-                
-                notifications_sent += 2
-                logger.info(f"Sent notifications for job {job.id}")
-                
-            except Exception as e:
-                logger.error(f"Failed to send notifications for job {job.id}: {str(e)}")
-        
-        logger.info(f"Daily notification task completed. Sent {notifications_sent} notifications for {len(jobs_today)} jobs")
-        return f"Sent {notifications_sent} notifications"
-        
-    except Exception as e:
-        logger.error(f"Daily notification task failed: {str(e)}")
-        raise
+        # Send reminders based on days until job
+        if days_until == 2:
+            if send_reminder(job, mukadam, '2_days_before'):
+                reminders_sent += 1
+        elif days_until == 1:
+            if send_reminder(job, mukadam, '1_day_before'):
+                reminders_sent += 1
+        elif days_until == 0:
+            if send_reminder(job, mukadam, 'today'):
+                reminders_sent += 1
+    
+    print(f"✅ Sent {reminders_sent} reminders")
+    return {'success': True, 'reminders_sent': reminders_sent}
 
-@shared_task
-def send_job_reminder_notifications():
-    """
-    Send reminder notifications 1 day before job date
-    Run daily at 9 AM
-    """
-    try:
-        tomorrow = timezone.now().date() + timezone.timedelta(days=1)
-        
-        jobs_tomorrow = Job.objects.filter(
-            requested_date=tomorrow,
-            status='finalized'
-        ).select_related('farmer', 'finalized_mukadam')
-        
-        reminders_sent = 0
-        
-        for job in jobs_tomorrow:
-            # Send reminder to farmer
-            reminder_message = f"""🌱 FarmOps - Reminder
 
-Dear {job.farmer.name},
-
-Your {job.activity.name} is scheduled for TOMORROW:
-
-📅 Date: {job.requested_date.strftime('%B %d, %Y')}
-⏰ Time: {job.requested_time.strftime('%I:%M %p')}
-👷 Mukadam: {job.finalized_mukadam.name}
-📱 Contact: {job.finalized_mukadam.phone}
-
-Please ensure farm access is ready.
-
-- FarmOps Team"""
-            
-            WhatsAppNotification.objects.create(
-                job=job,
-                recipient_type='farmer',
-                recipient_phone=job.farmer.phone,
-                message=reminder_message
-            )
-            
-            reminders_sent += 1
+def send_reminder(job, mukadam, reminder_type):
+    """Send reminder notification"""
+    
+    job_time = job.requested_time or datetime.strptime('08:00', '%H:%M').time()
+    total_amount = float(job.your_price_per_acre * job.farm_size_acres)
+    
+    # Notification content
+    if reminder_type == '2_days_before':
+        title = "🔔 काम आठवण - 2 दिवस"
+        body = f"{job.activity.name} - {job.location}\n2 दिवसांत काम. {job.workers_needed} कामगार तयार ठेवा!"
         
-        logger.info(f"Sent {reminders_sent} reminder notifications")
-        return f"Sent {reminders_sent} reminders"
+    elif reminder_type == '1_day_before':
+        title = "⏰ काम आठवण - उद्या"
+        body = f"{job.activity.name} - {job.location}\nउद्या {job_time.strftime('%I:%M %p')} वाजता. कामगार तयार ठेवा!"
         
-    except Exception as e:
-        logger.error(f"Reminder task failed: {str(e)}")
-        raise
+    else:  # today
+        title = "🚨 आज काम आहे!"
+        body = f"{job.activity.name} - {job.location}\nआज {job_time.strftime('%I:%M %p')} वाजता!\nशेतकरी: {job.farmer.name}"
+    
+    # Send push notification
+    success = send_push_notification(
+        fcm_token=mukadam.fcm_token,
+        title=title,
+        body=body,
+        data={
+            "job_id": str(job.id),
+            "type": "job_reminder",
+            "reminder_type": reminder_type,
+            "farmer_name": job.farmer.name,
+            "farmer_phone": job.farmer.phone,
+            "activity": job.activity.name,
+            "location": job.location,
+            "workers_needed": str(job.workers_needed),
+            "total_amount": str(total_amount),
+            "screen": "/assigned-jobs"
+        }
+    )
+    
+    if success:
+        print(f"   ✅ Sent to {mukadam.name}")
+    
+    return success

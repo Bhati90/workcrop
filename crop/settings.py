@@ -271,7 +271,7 @@ INSTALLED_APPS = [
     'calender',
     'storages',
     'rest_framework',
-    
+    'django_celery_beat',
     
 ]
 
@@ -346,17 +346,27 @@ MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/media/'
 #             'client_encoding': 'UTF8',
 #         },
 #     }
-# }
-
-
 DATABASES = {
-    'default': dj_database_url.config(
-        # default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a.oregon-postgres.render.com/registerdb_od8n',
-        default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a/registerdb_od8n',
-        conn_max_age=600,
-        conn_health_checks=True,
-    )
+     'default': {
+         'ENGINE': config('DB_ENGINE', default='django.db.backends.postgresql'),
+        'NAME': config('DB_NAME'),
+         'USER': config('DB_USER'),
+         'PASSWORD': config('DB_PASSWORD'),
+         'HOST': config('DB_HOST'),
+         'PORT': config('DB_PORT', default='5432'),
+         'OPTIONS': {
+             'connect_timeout': 10,
+         }
+     }
 }
+# DATABASES = {
+#     'default': dj_database_url.config(
+#         default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a.oregon-postgres.render.com/registerdb_od8n',
+#         # default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a/registerdb_od8n',
+#         conn_max_age=600,
+#         conn_health_checks=True,
+#     )
+# }
 # At the end of settings.py
 APPEND_SLASH = False  # Prevent automatic slash redirects
 
@@ -434,40 +444,71 @@ AUTH_PASSWORD_VALIDATORS = [
         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
     },
 ]
-
+# ========================================
+# CELERY CONFIGURATION
+# ========================================
+import os
 from celery.schedules import crontab
-# Redis Configuration
-CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
-        'LOCATION': 'redis://127.0.0.1:6379/1',
-    }
-}
 
-# Celery Configuration
-CELERY_BROKER_URL = 'redis://localhost:6379/0'
-CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+# ========================================
+# CELERY CONFIGURATION
+# ========================================
 
-# WebSocket Configuration
-CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels_redis.core.RedisChannelLayer',
-        'CONFIG': {
-            'hosts': [('127.0.0.1', 6379)],
-        },
-    },
-}
-# settings.py
+# Redis URL from Render
+# REDIS_URL = os.environ.get('REDIS_URL', 'redis://red-d42rogmr433s73dumon0:6379')
+REDIS_URL = "redis://127.0.0.1:6379/0"
+
+# Celery Broker & Backend
+CELERY_BROKER_URL = REDIS_URL
+CELERY_RESULT_BACKEND = REDIS_URL
+
+# Celery Settings
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'Asia/Kolkata'
+CELERY_ENABLE_UTC = False
+
+# Schedule: Daily at 9 AM IST
 CELERY_BEAT_SCHEDULE = {
-    'send-daily-notifications': {
-        'task': 'farmops.tasks.send_daily_job_notifications',
-        'schedule': crontab(hour=6, minute=0),  # 6 AM daily
-    },
-    'send-reminder-notifications': {
-        'task': 'farmops.tasks.send_job_reminder_notifications',
-        'schedule': crontab(hour=9, minute=0),  # 9 AM daily
+    'send-job-reminders-daily': {
+        'task': 'assign.tasks.send_daily_job_reminders',
+        'schedule': crontab(hour=9, minute=0),
     },
 }
+# from celery.schedules import crontab
+# # Redis Configuration
+# CACHES = {
+#     'default': {
+#         'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+#         'LOCATION': 'redis://127.0.0.1:6379/1',
+#     }
+# }
+
+# # Celery Configuration
+# CELERY_BROKER_URL = 'redis://localhost:6379/0'
+# CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+
+# # WebSocket Configuration
+# CHANNEL_LAYERS = {
+#     'default': {
+#         'BACKEND': 'channels_redis.core.RedisChannelLayer',
+#         'CONFIG': {
+#             'hosts': [('127.0.0.1', 6379)],
+#         },
+#     },
+# }
+# # settings.py
+# CELERY_BEAT_SCHEDULE = {
+#     'send-daily-notifications': {
+#         'task': 'farmops.tasks.send_daily_job_notifications',
+#         'schedule': crontab(hour=6, minute=0),  # 6 AM daily
+#     },
+#     'send-reminder-notifications': {
+#         'task': 'farmops.tasks.send_job_reminder_notifications',
+#         'schedule': crontab(hour=9, minute=0),  # 9 AM daily
+#     },
+# }
 # settings.py
 
 # all your Django settings...
