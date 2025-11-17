@@ -93,48 +93,63 @@ class FarmerViewSet(viewsets.ModelViewSet):
     
     def _sync_plots_from_jobs(self):
         """Create missing plots from jobs for all farmers"""
-        jobs_without_plots = Job.objects.select_related('farmer', 'activity').all()
+        jobs = Job.objects.select_related('farmer', 'activity').all()
         
-        for job in jobs_without_plots:
-            if job.farmer and job.activity:
-                plot, created = FarmerPlot.objects.get_or_create(
+        for job in jobs:
+            if not job.farmer or not job.activity:
+                continue
+            
+            # ✅ NEW: Check if plot already exists (using filter instead of get_or_create)
+            existing_plot = FarmerPlot.objects.filter(
+                farmer=job.farmer,
+                activity_name=job.activity.name
+            ).first()
+            
+            if existing_plot:
+                # Update if this job has more acres
+                if job.farm_size_acres > existing_plot.acres:
+                    existing_plot.acres = job.farm_size_acres
+                    existing_plot.location = job.location or existing_plot.location
+                    existing_plot.save()
+            else:
+                # Create new plot
+                FarmerPlot.objects.create(
                     farmer=job.farmer,
                     activity_name=job.activity.name,
-                    defaults={
-                        'acres': job.farm_size_acres,
-                        'location': job.location or job.farmer.village,
-                        'pruning_date': job.requested_date,
-                        'notes': f"Auto-created from job history"
-                    }
+                    acres=job.farm_size_acres,
+                    location=job.location or job.farmer.village,
+                    pruning_date=job.requested_date,
+                    notes=f"Auto-synced from jobs"
                 )
-                
-                # Update if job has more acres
-                if not created and job.farm_size_acres > plot.acres:
-                    plot.acres = job.farm_size_acres
-                    plot.location = job.location or plot.location
-                    plot.save()
-    
     def _sync_farmer_plots(self, farmer):
         """Create missing plots for specific farmer from their jobs"""
         jobs = Job.objects.filter(farmer=farmer).select_related('activity')
         
         for job in jobs:
-            if job.activity:
-                plot, created = FarmerPlot.objects.get_or_create(
+            if not job.activity:
+                continue
+            
+            # ✅ NEW: Check if plot already exists
+            existing_plot = FarmerPlot.objects.filter(
+                farmer=farmer,
+                activity_name=job.activity.name
+            ).first()
+            
+            if existing_plot:
+                # Update if this job has more acres
+                if job.farm_size_acres > existing_plot.acres:
+                    existing_plot.acres = job.farm_size_acres
+                    existing_plot.save()
+            else:
+                # Create new plot
+                FarmerPlot.objects.create(
                     farmer=farmer,
                     activity_name=job.activity.name,
-                    defaults={
-                        'acres': job.farm_size_acres,
-                        'location': job.location or farmer.village,
-                        'pruning_date': job.requested_date,
-                        'notes': f"From job: {job.activity.name}"
-                    }
+                    acres=job.farm_size_acres,
+                    location=job.location or farmer.village,
+                    pruning_date=job.requested_date,
+                    notes=f"From job: {job.activity.name}"
                 )
-                
-                # Update if this job has more acres
-                if not created and job.farm_size_acres > plot.acres:
-                    plot.acres = job.farm_size_acres
-                    plot.save()
     
     @action(detail=True, methods=['get'])
     def edit_history(self, request, pk=None):
