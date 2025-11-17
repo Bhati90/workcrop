@@ -195,41 +195,39 @@ class FarmerViewSet(viewsets.ModelViewSet):
             'total_acres': farmer.total_acres
         })
     
-    @action(detail=True, methods=['get'])
+    @action(detail=True, methods=['get', 'post'], url_path='plots')
     def plots(self, request, pk=None):
-        """List plots for a farmer (with auto-sync)"""
+        """List or add plots for a farmer"""
         farmer = self.get_object()
         
-        # Auto-sync plots from jobs
-        self._sync_farmer_plots(farmer)
-        
-        plots = farmer.plots.all()
-        serializer = FarmerPlotSerializer(plots, many=True)
-        return Response(serializer.data)
-    
-    @action(detail=True, methods=['post'])
-    def add_plot(self, request, pk=None):
-        """Manually add a plot"""
-        farmer = self.get_object()
-        
-        serializer = FarmerPlotSerializer(data=request.data)
-        if serializer.is_valid():
-            plot = serializer.save(farmer=farmer)
+        if request.method == 'GET':
+            # Auto-sync plots from jobs
+            self._sync_farmer_plots(farmer)
             
-            # Log the creation
-            changed_by = request.user.username if request.user.is_authenticated else 'System'
-            FarmerEditHistory.objects.create(
-                farmer=farmer,
-                field_changed='Plot Added (Manual)',
-                old_value='',
-                new_value=f"{plot.acres} acres - {plot.activity_name or 'No activity'}",
-                changed_by=changed_by,
-                model_name='FarmerPlot',
-                object_id=plot.id
-            )
-            
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            plots = farmer.plots.all()
+            serializer = FarmerPlotSerializer(plots, many=True)
+            return Response(serializer.data)
+        
+        elif request.method == 'POST':
+            # Add new plot
+            serializer = FarmerPlotSerializer(data=request.data)
+            if serializer.is_valid():
+                plot = serializer.save(farmer=farmer)
+                
+                # Log the creation
+                changed_by = request.user.username if request.user.is_authenticated else 'System'
+                FarmerEditHistory.objects.create(
+                    farmer=farmer,
+                    field_changed='Plot Added (Manual)',
+                    old_value='',
+                    new_value=f"{plot.acres} acres - {plot.activity_name or 'No activity'}",
+                    changed_by=changed_by,
+                    model_name='FarmerPlot',
+                    object_id=plot.id
+                )
+                
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     @action(detail=True, methods=['patch', 'delete'], url_path='plots/(?P<plot_id>[^/.]+)')
     def plot_detail(self, request, pk=None, plot_id=None):
