@@ -1608,28 +1608,114 @@ class MukadamViewSet(viewsets.ModelViewSet):
             
         return queryset.order_by('name')
     
+    # views.py - Update the job_history action in MukadamViewSet
+
     @action(detail=True, methods=['get'])
     def job_history(self, request, pk=None):
-        """Get complete job history for a mukadam"""
+        """Get complete job history for a mukadam - including all jobs they were notified about"""
         mukadam = self.get_object()
-        jobs = Job.objects.filter(finalized_mukadam=mukadam).select_related('farmer', 'activity').order_by('-requested_date')
+        
+        # Get all jobs where this mukadam has an interest record (was notified)
+        interest_records = MukadamInterest.objects.filter(
+            mukadam=mukadam
+        ).select_related('job', 'job__farmer', 'job__activity').order_by('-job__requested_date')
         
         job_data = []
-        for job in jobs:
+        for interest in interest_records:
+            job = interest.job
             job_data.append({
                 'id': str(job.id),
                 'farmer_name': job.farmer.name,
                 'activity_name': job.activity.name,
-                'farm_size_acres': job.farm_size_acres,
-                'finalized_price': job.finalized_price,
+                'farm_size_acres': float(job.farm_size_acres),
+                'farmer_price_per_acre': float(job.farmer_price_per_acre),
+                'your_price_per_acre': float(job.your_price_per_acre) if job.your_price_per_acre else None,
+                'finalized_price': float(job.finalized_price) if job.finalized_price else None,
                 'status': job.status,
                 'requested_date': job.requested_date,
                 'completed_at': job.completed_at,
+                'location': job.location,
+                'workers_needed': job.workers_needed,
+                # Interest-specific fields
+                'mukadam_response': {
+                    'is_interested': interest.is_interested,
+                    'response_status': interest.response_status,
+                    'responded_at': interest.responded_at,
+                    'was_assigned': job.finalized_mukadam_id == mukadam.id if job.finalized_mukadam_id else False
+                }
             })
         
         return Response({
             'mukadam': MukadamDetailSerializer(mukadam).data,
-            'jobs': job_data
+            'jobs': job_data,
+            'summary': {
+                'total_notified': len(job_data),
+                'interested': sum(1 for j in job_data if j['mukadam_response']['is_interested']),
+                'won': sum(1 for j in job_data if j['mukadam_response']['was_assigned']),
+                'pending': sum(1 for j in job_data if j['mukadam_response']['response_status'] == 'pending'),
+                'declined': sum(1 for j in job_data if j['mukadam_response']['response_status'] == 'declined')
+            }
+        })
+    
+    # views.py - Add this new action to MukadamViewSet
+
+    @action(detail=True, methods=['get'])
+    def detailed_stats(self, request, pk=None):
+        """
+        Get comprehensive statistics for a mukadam
+        GET /api/mukadams/{id}/detailed_stats/
+        """
+        mukadam = self.get_object()
+        
+        # All interest records
+        all_interests = MukadamInterest.objects.filter(mukadam=mukadam)
+        
+        # Jobs actually won/assigned
+        won_jobs = Job.objects.filter(finalized_mukadam=mukadam)
+        completed_jobs = won_jobs.filter(status='completed')
+        
+        # Calculate earnings
+        total_earnings = sum(
+            (job.finalized_price or 0) * job.farm_size_acres 
+            for job in completed_jobs
+        )
+        
+        # Response rate
+        total_notified = all_interests.count()
+        responded = all_interests.exclude(response_status='pending').count()
+        response_rate = (responded / total_notified * 100) if total_notified > 0 else 0
+        
+        # Win rate (of jobs they showed interest in, how many did they win?)
+        interested_count = all_interests.filter(is_interested=True).count()
+        win_rate = (won_jobs.count() / interested_count * 100) if interested_count > 0 else 0
+        
+        return Response({
+            'mukadam': MukadamDetailSerializer(mukadam).data,
+            'job_statistics': {
+                'total_notified': total_notified,
+                'pending_responses': all_interests.filter(response_status='pending').count(),
+                'showed_interest': interested_count,
+                'declined': all_interests.filter(response_status='declined').count(),
+                'won_jobs': won_jobs.count(),
+                'active_jobs': won_jobs.filter(status__in=['finalized', 'assigned', 'in_progress']).count(),
+                'completed_jobs': completed_jobs.count(),
+            },
+            'performance_metrics': {
+                'response_rate_percent': round(response_rate, 2),
+                'win_rate_percent': round(win_rate, 2),
+                'total_earnings': float(total_earnings),
+                'avg_job_value': float(total_earnings / completed_jobs.count()) if completed_jobs.count() > 0 else 0,
+            },
+            'recent_activity': {
+                'last_30_days': {
+                    'notified': all_interests.filter(
+                        created_at__gte=timezone.now() - timezone.timedelta(days=30)
+                    ).count(),
+                    'won': won_jobs.filter(
+                        finalized_at__gte=timezone.now() - timezone.timedelta(days=30)
+                    ).count(),
+                }
+            }
         })
     
     @action(detail=True, methods=['get'])

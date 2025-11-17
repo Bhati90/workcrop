@@ -25,31 +25,58 @@ class MukadamDetailSerializer(serializers.ModelSerializer):
     completed_jobs = serializers.SerializerMethodField()
     won_bids = serializers.SerializerMethodField()
     avg_bid_price = serializers.SerializerMethodField()
+    interested_jobs = serializers.SerializerMethodField()  # ✅ NEW
+    pending_responses = serializers.SerializerMethodField()  # ✅ NEW
     
     class Meta:
         model = Mukadam
         fields = [
-            'id', 'name', 'phone', 'location', 'number_of_labourers', 
-            'is_active', 'created_at', 'activity_rates',
-            'total_jobs', 'completed_jobs', 'won_bids', 'avg_bid_price'
+            'id', 'name', 'phone', 'location', 'number_of_labourers',
+            'is_active', 'created_at', 'activity_rates', 
+            'total_jobs', 'completed_jobs', 'won_bids', 'avg_bid_price',
+            'interested_jobs', 'pending_responses'  # ✅ ADD these
         ]
     
     def get_total_jobs(self, obj):
-        return Job.objects.filter(finalized_mukadam=obj).count()
+        """Count ALL jobs this mukadam was notified about (has interest record for)"""
+        return MukadamInterest.objects.filter(mukadam=obj).count()
     
     def get_completed_jobs(self, obj):
-        return Job.objects.filter(finalized_mukadam=obj, status='completed').count()
+        """Count jobs actually completed by this mukadam"""
+        return Job.objects.filter(
+            finalized_mukadam=obj,
+            status='completed'
+        ).count()
     
     def get_won_bids(self, obj):
-        return MukadamBid.objects.filter(mukadam=obj, status='selected').count()
+        """Count jobs where this mukadam was actually assigned/finalized"""
+        return Job.objects.filter(
+            finalized_mukadam=obj,
+            status__in=['finalized', 'assigned', 'in_progress', 'completed']
+        ).count()
     
     def get_avg_bid_price(self, obj):
-        from django.db.models import Avg
-        avg = MukadamBid.objects.filter(mukadam=obj, status='selected').aggregate(
-            avg_price=Avg('bid_price_per_acre')
-        )['avg_price']
-        return round(float(avg), 2) if avg else 0
-
+        """Average bid price from completed jobs"""
+        completed = Job.objects.filter(
+            finalized_mukadam=obj,
+            status='completed'
+        ).aggregate(avg=models.Avg('finalized_price'))
+        return float(completed['avg'] or 0)
+    
+    def get_interested_jobs(self, obj):
+        """Count jobs where mukadam showed interest"""
+        return MukadamInterest.objects.filter(
+            mukadam=obj,
+            is_interested=True,
+            response_status='interested'
+        ).count()
+    
+    def get_pending_responses(self, obj):
+        """Count jobs waiting for mukadam's response"""
+        return MukadamInterest.objects.filter(
+            mukadam=obj,
+            response_status='pending'
+        ).count()
 class MukadamSerializer(serializers.ModelSerializer):
     activity_rates = MukadamActivityRateSerializer(many=True, read_only=True)
     
