@@ -1,6 +1,382 @@
+# from django.db import models
+# from django.contrib.auth.models import User
+# import uuid
+
+
+# class Activity(models.Model):
+#     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+#     name = models.CharField(max_length=100)
+#     description = models.TextField(blank=True)
+#     days_after_pruning = models.IntegerField(default=0)
+    
+
+# class Mukadam(models.Model):
+#     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+#     name = models.CharField(max_length=100)
+#     phone = models.CharField(max_length=15)
+#     location = models.CharField(max_length=100)
+#     number_of_labourers = models.IntegerField()
+#     is_active = models.BooleanField(default=True)
+#     created_at = models.DateTimeField(auto_now_add=True)
+#     fcm_token = models.CharField(
+#         max_length=255, 
+#         null=True, 
+#         blank=True,
+#         help_text="Firebase token for push notifications"
+#     )
+#     fcm_token_updated_at = models.DateTimeField(
+#         null=True, 
+#         blank=True
+#     )
+
+# class MukadamActivityRate(models.Model):
+#     """Track what activities each mukadam can do and their rates"""
+#     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+#     mukadam = models.ForeignKey(Mukadam, on_delete=models.CASCADE, related_name='activity_rates')
+#     activity = models.ForeignKey(Activity, on_delete=models.CASCADE)
+#     rate_per_acre = models.DecimalField(max_digits=10, decimal_places=2)
+#     is_available = models.BooleanField(default=True)
+#     created_at = models.DateTimeField(auto_now_add=True)
+#     updated_at = models.DateTimeField(auto_now=True)
+    
+#     class Meta:
+#         unique_together = ['mukadam', 'activity']
+#         ordering = ['activity__name']
+    
+#     def __str__(self):
+#         return f"{self.mukadam.name} - {self.activity.name} - ₹{self.rate_per_acre}/acre"
+
+
+# from django.db import models
+# from django.contrib.auth.models import User
+# import uuid
+
+# class Farmer(models.Model):
+#     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+#     name = models.CharField(max_length=200)
+#     phone = models.CharField(max_length=15, unique=True)
+#     village = models.CharField(max_length=200)
+#     created_at = models.DateTimeField(auto_now_add=True)
+#     updated_at = models.DateTimeField(auto_now=True)
+    
+#     def __str__(self):
+#         return f"{self.name} - {self.phone}"
+    
+#     @property
+#     def total_acres(self):
+#         """Calculate total acres from all plots"""
+#         return self.plots.aggregate(total=models.Sum('acres'))['total'] or 0
+    
+#     @property
+#     def jobs_count(self):
+#         """Count total jobs for this farmer"""
+#         return self.job_set.count()
+
+# class FarmerPlot(models.Model):
+#     """Individual plots for each farmer"""
+#     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+#     farmer = models.ForeignKey(Farmer, on_delete=models.CASCADE, related_name='plots')
+#     acres = models.DecimalField(max_digits=10, decimal_places=2)
+#     location = models.CharField(max_length=300, blank=True)
+#     activity_name = models.CharField(max_length=200, blank=True, help_text="e.g., SSN, Anushka")
+#     pruning_date = models.DateField()
+#     notes = models.TextField(blank=True)
+#     created_at = models.DateTimeField(auto_now_add=True)
+#     updated_at = models.DateTimeField(auto_now=True)
+    
+#     class Meta:
+#         ordering = ['-pruning_date']
+    
+#     def __str__(self):
+#         return f"{self.farmer.name} - {self.acres} acres"
+
+
+# # Farmer Edit History Model (add this)
+# class FarmerEditHistory(models.Model):
+#     """Track all edits made to farmer and plot data"""
+#     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+#     farmer = models.ForeignKey(Farmer, on_delete=models.CASCADE, related_name='edit_history')
+#     field_changed = models.CharField(max_length=100)
+#     old_value = models.TextField()
+#     new_value = models.TextField()
+#     changed_by = models.CharField(max_length=200)
+#     changed_at = models.DateTimeField(auto_now_add=True)
+#     reason = models.TextField(blank=True)
+#     model_name = models.CharField(max_length=50, default='Farmer')
+#     object_id = models.UUIDField(null=True, blank=True)
+    
+#     class Meta:
+#         ordering = ['-changed_at']
+
+
+# class Job(models.Model):
+#     STATUS_CHOICES = [
+#         ('confirmed', 'Confirmed'),
+#         ('assigned', 'Assigned to Mukadams'),
+#         ('bidding', 'Receiving Bids'),
+#         ('finalized', 'Mukadam Finalized'),
+#         ('in_progress', 'Work in Progress'),
+#         ('priced', 'Priced'),      # New status
+#         ('notified', 'Notified'),  # New status  
+#         ('completed', 'Completed'),
+#         ('cancelled', 'Cancelled'),
+
+#     ]
+#     assigned_mukadam = models.ForeignKey(Mukadam, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_jobs')
+#     assigned_at = models.DateTimeField(null=True, blank=True)
+#     your_price_per_acre = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    
+#     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+#     farmer = models.ForeignKey(Farmer, on_delete=models.CASCADE)
+#     activity = models.ForeignKey(Activity, on_delete=models.CASCADE)
+    
+#     # Job Details
+#     farm_size_acres = models.DecimalField(max_digits=10, decimal_places=2)
+#     location = models.CharField(max_length=200)
+#     requested_date = models.DateField()
+#     requested_time = models.TimeField()
+#     farmer_price_per_acre = models.DecimalField(max_digits=10, decimal_places=2)
+#     workers_needed = models.IntegerField(default=5, help_text="Number of workers required for this job")  # ✅ ADD this
+    
+#     # Status & Assignment
+#     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='confirmed')
+#     finalized_mukadam = models.ForeignKey(Mukadam, null=True, blank=True, on_delete=models.SET_NULL)
+#     finalized_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    
+#     # Timestamps
+#     confirmed_at = models.DateTimeField(auto_now_add=True)
+#     finalized_at = models.DateTimeField(null=True, blank=True)
+#     started_at = models.DateTimeField(null=True, blank=True)
+#     completed_at = models.DateTimeField(null=True, blank=True)
+    
+#     # Notes
+#     notes = models.TextField(blank=True)
+    
+#     class Meta:
+#         ordering = ['-confirmed_at']
+
+
+#     def save(self, *args, **kwargs):
+#         """Override save to automatically create plot when job is created"""
+#         is_new = self.pk is None
+#         super().save(*args, **kwargs)
+        
+#         # ✅ Create plot automatically when new job is created
+#         if is_new and self.farmer and self.activity:
+#             # Check if a plot already exists for this activity
+#             plot, created = FarmerPlot.objects.get_or_create(
+#                 farmer=self.farmer,
+#                 activity_name=self.activity.name,
+#                 defaults={
+#                     'acres': self.farm_size_acres,
+#                     'location': self.location,
+#                     'pruning_date': self.requested_date,
+#                     'notes': f"Created from job {self.id}"
+#                 }
+#             )
+            
+#             # If plot exists, update the acres if this job has more
+#             if not created and self.farm_size_acres > plot.acres:
+#                 old_acres = plot.acres
+#                 plot.acres = self.farm_size_acres
+#                 plot.location = self.location
+#                 plot.pruning_date = self.requested_date
+#                 plot.save()
+                
+#                 # Log the update
+#                 FarmerEditHistory.objects.create(
+#                     farmer=self.farmer,
+#                     field_changed='Plot Acres Updated',
+#                     old_value=str(old_acres),
+#                     new_value=str(self.farm_size_acres),
+#                     changed_by='System (from job)',
+#                     model_name='FarmerPlot',
+#                     object_id=plot.id,
+#                     reason=f'Updated from job {self.id}'
+#                 )
+
+
+
+# # Job Edit History Model (add this)
+# class JobEditHistory(models.Model):
+#     """Track all edits made to job data"""
+#     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+#     assign_job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name='edit_history')
+#     field_changed = models.CharField(max_length=100)
+#     old_value = models.TextField()
+#     new_value = models.TextField()
+#     changed_by = models.CharField(max_length=200)
+#     changed_at = models.DateTimeField(auto_now_add=True)
+#     reason = models.TextField(blank=True)
+    
+#     class Meta:
+#         ordering = ['-changed_at']
+    
+#     def __str__(self):
+#         return f"Job {self.job.id} - {self.field_changed} changed"
+
+# # # ✅ ADD NEW MODEL for Crop Management
+# class Crop(models.Model):
+#     """Different types of crops"""
+#     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+#     name = models.CharField(max_length=100, help_text="e.g., Grapes, Pomegranate")
+#     description = models.TextField(blank=True)
+#     created_at = models.DateTimeField(auto_now_add=True)
+    
+#     class Meta:
+#         ordering = ['name']
+    
+#     def __str__(self):
+#         return self.name
+
+# # ✅ ADD NEW MODEL for Crop Varieties
+# class CropVariety(models.Model):
+#     """Different varieties of each crop"""
+#     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+#     crop = models.ForeignKey(Crop, on_delete=models.CASCADE, related_name='varieties')
+#     name = models.CharField(max_length=100, help_text="e.g., Thompson Seedless, Sonaka")
+#     description = models.TextField(blank=True)
+#     created_at = models.DateTimeField(auto_now_add=True)
+    
+#     class Meta:
+#         ordering = ['name']
+#         verbose_name_plural = "Crop Varieties"
+#         unique_together = ['crop', 'name']
+    
+#     def __str__(self):
+#         return f"{self.crop.name} - {self.name}"
+
+# # In models.py - UPDATE MukadamInterest model
+# class MukadamInterest(models.Model):
+#     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+#     job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name='interests')
+#     mukadam = models.ForeignKey(Mukadam, on_delete=models.CASCADE)
+#     is_interested = models.BooleanField(default=False)
+#     responded_at = models.DateTimeField(null=True, blank=True)
+#     created_at = models.DateTimeField(auto_now_add=True) 
+
+#     # ✅ ADD this field
+#     RESPONSE_STATUS_CHOICES = [
+#         ('pending', 'Pending'),
+#         ('interested', 'Interested'), 
+#         ('declined', 'Declined'),
+#         ('assigned', 'Assigned'),
+#     ]
+#     response_status = models.CharField(
+#         max_length=20, 
+#         choices=RESPONSE_STATUS_CHOICES, 
+#         default='pending'
+#     )
+    
+#     class Meta:
+#         unique_together = ['job', 'mukadam']
+        
+#     def save(self, *args, **kwargs):
+#         # ✅ Auto-update response_status based on is_interested
+#         if self.responded_at and self.response_status == 'pending':
+#             self.response_status = 'interested' if self.is_interested else 'declined'
+#         super().save(*args, **kwargs)
+
+
+# class JobAssignment(models.Model):
+#     """Track which mukadams were assigned to bid on a job"""
+#     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+#     job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name='assignments')
+#     mukadam = models.ForeignKey(Mukadam, on_delete=models.CASCADE)
+#     assigned_at = models.DateTimeField(auto_now_add=True)
+#     notified_at = models.DateTimeField(null=True, blank=True)
+
+# # Update your MukadamBid model in models.py:
+# class MukadamBid(models.Model):
+#     PENDING = 'pending'
+#     INTERESTED = 'interested' 
+#     DECLINED = 'declined'
+#     SELECTED = 'selected'      # ✅ Add this
+#     REJECTED = 'rejected'      # ✅ Add this too for rejected bids
+    
+#     STATUS_CHOICES = [
+#         (PENDING, 'Pending'),
+#         (INTERESTED, 'Interested'),
+#         (DECLINED, 'Declined'), 
+#         (SELECTED, 'Selected'),     # ✅ Add this
+#         (REJECTED, 'Rejected'),     # ✅ Add this
+#     ]
+    
+#     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+#     job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name='bids')
+#     mukadam = models.ForeignKey(Mukadam, on_delete=models.CASCADE)
+#     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=PENDING)
+#     bid_price_per_acre = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+#     final_price_per_acre = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)  # ✅ Add if missing
+#     estimated_duration_hours = models.IntegerField(null=True, blank=True)
+#     comments = models.TextField(blank=True)
+#     created_at = models.DateTimeField(auto_now_add=True)
+#     responded_at = models.DateTimeField(null=True, blank=True)
+    
+#     class Meta:
+#         unique_together = ['job', 'mukadam']
+#         ordering = ['-created_at']
+    
+#     def __str__(self):
+#         return f"{self.mukadam.name} - {self.job.farmer.name} ({self.status})"
+
+# # models.py
+# class JobStatusHistory(models.Model):
+#     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+#     job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name='status_history')
+#     from_status = models.CharField(max_length=20)
+#     to_status = models.CharField(max_length=20)
+#     changed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)  # ✅ Allow null
+#     notes = models.TextField(blank=True)
+#     created_at = models.DateTimeField(auto_now_add=True)
+
+# class WhatsAppNotification(models.Model):
+#     STATUS_CHOICES = [
+#         ('pending', 'Pending'),
+#         ('sent', 'Sent'),
+#         ('delivered', 'Delivered'),
+#         ('failed', 'Failed'),
+#     ]
+    
+#     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+#     job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name='whatsapp_notifications')
+#     recipient_type = models.CharField(max_length=20)  # 'farmer', 'mukadam'
+#     recipient_phone = models.CharField(max_length=15)
+#     message = models.TextField()
+#     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+#     sent_at = models.DateTimeField(null=True, blank=True)
+#     created_at = models.DateTimeField(auto_now_add=True)
+
+
+
 from django.db import models
 from django.contrib.auth.models import User
 import uuid
+from datetime import timedelta
+from django.utils import timezone
+
+
+
+
+from django.db import models
+from django.contrib.auth.models import User
+import uuid
+
+
+# ✅ ADD NEW MODEL for Crop Management
+class Crop(models.Model):
+    """Different types of crops"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=100, help_text="e.g., Grapes, Pomegranate")
+    description = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['name']
+    
+    def __str__(self):
+        return self.name
+
 
 
 class Activity(models.Model):
@@ -8,6 +384,25 @@ class Activity(models.Model):
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
     days_after_pruning = models.IntegerField(default=0)
+    crop = models.ForeignKey(Crop, on_delete=models.SET_NULL, null=True, blank=True)  # ✅ ADD THIS
+
+# ✅ ADD NEW MODEL for Crop Varieties
+class CropVariety(models.Model):
+    """Different varieties of each crop"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    crop = models.ForeignKey(Crop, on_delete=models.CASCADE, related_name='varieties')
+    name = models.CharField(max_length=100, help_text="e.g., Thompson Seedless, Sonaka")
+    description = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['name']
+        verbose_name_plural = "Crop Varieties"
+        unique_together = ['crop', 'name']
+    
+    def __str__(self):
+        return f"{self.crop.name} - {self.name}"
+    
 
 class Mukadam(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -46,10 +441,6 @@ class MukadamActivityRate(models.Model):
         return f"{self.mukadam.name} - {self.activity.name} - ₹{self.rate_per_acre}/acre"
 
 
-from django.db import models
-from django.contrib.auth.models import User
-import uuid
-
 class Farmer(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=200)
@@ -75,10 +466,21 @@ class FarmerPlot(models.Model):
     """Individual plots for each farmer"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     farmer = models.ForeignKey(Farmer, on_delete=models.CASCADE, related_name='plots')
+    
+    # ✅ ADD Crop Information
+    crop = models.ForeignKey(Crop, on_delete=models.SET_NULL, null=True, blank=True, help_text="Type of crop")
+    crop_variety = models.ForeignKey(CropVariety, on_delete=models.SET_NULL, null=True, blank=True, help_text="Variety of crop")
+    
     acres = models.DecimalField(max_digits=10, decimal_places=2)
     location = models.CharField(max_length=300, blank=True)
-    activity_name = models.CharField(max_length=200, blank=True, help_text="e.g., SSN, Anushka")
-    pruning_date = models.DateField()
+    
+    # Activity Information
+    activity_name = models.CharField(max_length=200, blank=True, help_text="Legacy field - e.g., SSN, Anushka")
+    activity = models.ForeignKey(Activity, on_delete=models.SET_NULL, null=True, blank=True, help_text="Linked activity")
+    
+    # Date Information
+    pruning_date = models.DateField(help_text="Actual pruning date")
+    
     notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -87,9 +489,24 @@ class FarmerPlot(models.Model):
         ordering = ['-pruning_date']
     
     def __str__(self):
-        return f"{self.farmer.name} - {self.acres} acres"
-
-
+        crop_info = f"{self.crop.name}" if self.crop else "Unknown Crop"
+        variety_info = f" ({self.crop_variety.name})" if self.crop_variety else ""
+        return f"{self.farmer.name} - {self.acres} acres - {crop_info}{variety_info}"
+    
+    @property
+    def calculated_activity_date(self):
+        """Calculate when the activity should be performed based on pruning date"""
+        if self.activity and self.pruning_date:
+            return self.pruning_date + timedelta(days=self.activity.days_after_pruning)
+        return None
+    
+    @property
+    def days_until_activity(self):
+        """Days remaining until activity date"""
+        if self.calculated_activity_date:
+            delta = self.calculated_activity_date - timezone.now().date()
+            return delta.days
+        return None
 # Farmer Edit History Model (add this)
 class FarmerEditHistory(models.Model):
     """Track all edits made to farmer and plot data"""
@@ -107,7 +524,6 @@ class FarmerEditHistory(models.Model):
     class Meta:
         ordering = ['-changed_at']
 
-
 class Job(models.Model):
     STATUS_CHOICES = [
         ('confirmed', 'Confirmed'),
@@ -115,19 +531,19 @@ class Job(models.Model):
         ('bidding', 'Receiving Bids'),
         ('finalized', 'Mukadam Finalized'),
         ('in_progress', 'Work in Progress'),
-        ('priced', 'Priced'),      # New status
-        ('notified', 'Notified'),  # New status  
+        ('priced', 'Priced'),
+        ('notified', 'Notified'),
         ('completed', 'Completed'),
         ('cancelled', 'Cancelled'),
-
     ]
-    assigned_mukadam = models.ForeignKey(Mukadam, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_jobs')
-    assigned_at = models.DateTimeField(null=True, blank=True)
-    your_price_per_acre = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     farmer = models.ForeignKey(Farmer, on_delete=models.CASCADE)
     activity = models.ForeignKey(Activity, on_delete=models.CASCADE)
+    
+    # ✅ ADD Crop Information
+    crop = models.ForeignKey(Crop, on_delete=models.SET_NULL, null=True, blank=True)
+    crop_variety = models.ForeignKey(CropVariety, on_delete=models.SET_NULL, null=True, blank=True)
     
     # Job Details
     farm_size_acres = models.DecimalField(max_digits=10, decimal_places=2)
@@ -135,11 +551,14 @@ class Job(models.Model):
     requested_date = models.DateField()
     requested_time = models.TimeField()
     farmer_price_per_acre = models.DecimalField(max_digits=10, decimal_places=2)
-    workers_needed = models.IntegerField(default=5, help_text="Number of workers required for this job")  # ✅ ADD this
+    workers_needed = models.IntegerField(default=5, help_text="Number of workers required for this job")
     
     # Status & Assignment
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='confirmed')
-    finalized_mukadam = models.ForeignKey(Mukadam, null=True, blank=True, on_delete=models.SET_NULL)
+    assigned_mukadam = models.ForeignKey(Mukadam, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_jobs')
+    assigned_at = models.DateTimeField(null=True, blank=True)
+    your_price_per_acre = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    finalized_mukadam = models.ForeignKey(Mukadam, null=True, blank=True, on_delete=models.SET_NULL, related_name='finalized_jobs')
     finalized_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     
     # Timestamps
@@ -153,28 +572,30 @@ class Job(models.Model):
     
     class Meta:
         ordering = ['-confirmed_at']
-
-
+    
     def save(self, *args, **kwargs):
-        """Override save to automatically create plot when job is created"""
+        """Override save to automatically create/update plot when job is created"""
         is_new = self.pk is None
         super().save(*args, **kwargs)
         
-        # ✅ Create plot automatically when new job is created
+        # ✅ UPDATED: Create plot automatically with crop info
         if is_new and self.farmer and self.activity:
-            # Check if a plot already exists for this activity
+            # Try to find existing plot with same crop and variety
             plot, created = FarmerPlot.objects.get_or_create(
                 farmer=self.farmer,
-                activity_name=self.activity.name,
+                crop=self.crop,
+                crop_variety=self.crop_variety,
+                activity=self.activity,
                 defaults={
                     'acres': self.farm_size_acres,
                     'location': self.location,
                     'pruning_date': self.requested_date,
-                    'notes': f"Created from job {self.id}"
+                    'activity_name': self.activity.name,
+                    'notes': f"Auto-created from job {self.id}"
                 }
             )
             
-            # If plot exists, update the acres if this job has more
+            # If plot exists, update if this job has more acres
             if not created and self.farm_size_acres > plot.acres:
                 old_acres = plot.acres
                 plot.acres = self.farm_size_acres
@@ -193,7 +614,6 @@ class Job(models.Model):
                     object_id=plot.id,
                     reason=f'Updated from job {self.id}'
                 )
-
 
 
 # Job Edit History Model (add this)
@@ -315,3 +735,50 @@ class WhatsAppNotification(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     sent_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+# models.py - Add this new model
+
+class MukadamAvailability(models.Model):
+    """Track when mukadams are available for work"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    mukadam = models.ForeignKey(Mukadam, on_delete=models.CASCADE, related_name='availability_periods')
+    start_date = models.DateField()
+    end_date = models.DateField()
+    notes = models.TextField(blank=True, help_text="Any special notes about this availability period")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-start_date']
+        verbose_name = "Mukadam Availability"
+        verbose_name_plural = "Mukadam Availabilities"
+    
+    def __str__(self):
+        return f"{self.mukadam.name} - {self.start_date} to {self.end_date}"
+    
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.end_date < self.start_date:
+            raise ValidationError("End date cannot be before start date")
+        
+
+
+# models.py - Add this model
+
+class CompanyActivityRate(models.Model):
+    """Your company's standard rates for different activities"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    activity = models.ForeignKey(Activity, on_delete=models.CASCADE, related_name='company_rates')
+    rate_per_acre = models.DecimalField(max_digits=10, decimal_places=2, help_text="Your rate to pay mukadams")
+    notes = models.TextField(blank=True, help_text="Any notes about this rate")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['activity__name']
+        unique_together = ['activity']
+    
+    def __str__(self):
+        return f"{self.activity.name} - ₹{self.rate_per_acre}/acre"

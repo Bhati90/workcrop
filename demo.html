@@ -1,0 +1,1502 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WorkCrop - Complete Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                max-height: 0;
+            }
+
+            to {
+                opacity: 1;
+                max-height: 2000px;
+            }
+        }
+
+        .slide-down {
+            animation: slideDown 0.3s ease-out;
+        }
+
+        .rotate-180 {
+            transform: rotate(180deg);
+        }
+
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+
+        .filter-chip {
+            transition: all 0.2s;
+        }
+
+        .filter-chip:hover {
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100">
+    <!-- Mobile Header -->
+    <header class="bg-gradient-to-r from-green-600 to-blue-600 shadow-lg sticky top-0 z-50">
+        <div class="px-4 py-3">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <div class="bg-white p-1.5 rounded-lg">
+                        <span class="text-xl">🌾</span>
+                    </div>
+                    <div class="text-white">
+                        <h1 class="text-lg font-bold">WorkCrop</h1>
+                        <p class="text-xs text-green-100">मुक्कादम व्यवस्थापन</p>
+                    </div>
+                </div>
+                <button onclick="toggleMenu()" class="text-white p-2">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 6h16M4 12h16M4 18h16"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Mobile Navigation -->
+        <div id="mobileMenu" class="hidden border-t border-green-500">
+            <div class="flex overflow-x-auto px-4 py-2 space-x-2 scrollbar-hide">
+                <button onclick="showView('dashboard')"
+                    class="view-btn active flex-shrink-0 px-4 py-2 bg-white text-green-700 rounded-lg font-semibold text-sm">
+                    📊 Dashboard
+                </button>
+                <button onclick="showView('availability')"
+                    class="view-btn flex-shrink-0 px-4 py-2 text-white hover:bg-white hover:bg-opacity-20 rounded-lg font-semibold text-sm">
+                    📅 Manage Availability
+                </button>
+                <button onclick="showView('calendar')"
+                    class="view-btn flex-shrink-0 px-4 py-2 text-white hover:bg-white hover:bg-opacity-20 rounded-lg font-semibold text-sm">
+                    📆 Calendar
+                </button>
+                <button onclick="showView('villages')"
+                    class="view-btn flex-shrink-0 px-4 py-2 text-white hover:bg-white hover:bg-opacity-20 rounded-lg font-semibold text-sm">
+                    🏘️ Villages
+                </button>
+                <button onclick="showView('profile')"
+                    class="view-btn flex-shrink-0 px-4 py-2 text-white hover:bg-white hover:bg-opacity-20 rounded-lg font-semibold text-sm">
+                    👤 Profile
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Dashboard View -->
+    <div id="view-dashboard" class="view-content">
+        <!-- Quick Stats -->
+        <div class="bg-white border-b shadow-sm">
+            <div class="px-4 py-3">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
+                    <div class="bg-gradient-to-br from-blue-50 to-blue-100 p-3 rounded-lg">
+                        <p class="text-xs text-gray-600 font-medium">Total Mukkadams</p>
+                        <p class="text-2xl font-bold text-gray-800" id="stat-total">1,248</p>
+                    </div>
+                    <div class="bg-gradient-to-br from-green-50 to-green-100 p-3 rounded-lg">
+                        <p class="text-xs text-green-700 font-medium">Active Now</p>
+                        <p class="text-2xl font-bold text-green-600" id="stat-active">892</p>
+                    </div>
+                    <div class="bg-gradient-to-br from-purple-50 to-purple-100 p-3 rounded-lg">
+                        <p class="text-xs text-purple-700 font-medium">Total Workers</p>
+                        <p class="text-2xl font-bold text-purple-600" id="stat-workers">18.4K</p>
+                    </div>
+                    <div class="bg-gradient-to-br from-orange-50 to-orange-100 p-3 rounded-lg">
+                        <p class="text-xs text-orange-700 font-medium">Avg Crew Size</p>
+                        <p class="text-2xl font-bold text-orange-600" id="stat-avg-crew">14.7</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-2 mt-3">
+                    <div class="bg-gradient-to-br from-cyan-50 to-cyan-100 p-2 rounded-lg text-center">
+                        <p class="text-xs text-cyan-700 font-medium">Working Today</p>
+                        <p class="text-xl font-bold text-cyan-600" id="stat-working-today">342</p>
+                    </div>
+                    <div class="bg-gradient-to-br from-teal-50 to-teal-100 p-2 rounded-lg text-center">
+                        <p class="text-xs text-teal-700 font-medium">Available Today</p>
+                        <p class="text-xl font-bold text-teal-600" id="stat-available-today">550</p>
+                    </div>
+                    <div class="bg-gradient-to-br from-indigo-50 to-indigo-100 p-2 rounded-lg text-center">
+                        <p class="text-xs text-indigo-700 font-medium">Villages Covered</p>
+                        <p class="text-xl font-bold text-indigo-600" id="stat-villages">148</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Inline Filters Section -->
+        <div class="bg-white border-b shadow-sm">
+            <div class="px-4 py-3">
+                <h3 class="text-sm font-bold text-gray-800 mb-3">🎯 Filters (Real-time)</h3>
+
+                <!-- Village Filter -->
+                <div class="mb-3">
+                    <label class="block text-xs font-semibold text-gray-700 mb-1">📍 Village / गाव</label>
+                    <input type="text" id="villageFilter" placeholder="Type village name (e.g., Nashik, Pune)..."
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                        oninput="handleVillageInput()" onkeypress="if(event.key==='Enter') addVillageFilter()" />
+                    <button onclick="addVillageFilter()"
+                        class="mt-1 w-full px-3 py-2 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700">
+                        + Add Village
+                    </button>
+                    <div id="villageChips" class="flex flex-wrap gap-1 mt-2">
+                        <!-- Village chips will appear here -->
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">Logic: <span class="font-semibold text-blue-600">OR</span>
+                        (Show from ANY selected village)</p>
+                </div>
+
+                <!-- Activity Filter -->
+                <div class="mb-3">
+                    <label class="block text-xs font-semibold text-gray-700 mb-1">🔧 Activity / काम प्रकार</label>
+                    <input type="text" id="activityFilter" placeholder="Type activity (e.g., Fail Foot, Dipping)..."
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                        oninput="handleActivityInput()" onkeypress="if(event.key==='Enter') addActivityFilter()" />
+                    <button onclick="addActivityFilter()"
+                        class="mt-1 w-full px-3 py-2 bg-green-600 text-white rounded-lg text-xs font-semibold hover:bg-green-700">
+                        + Add Activity
+                    </button>
+                    <div id="activityChips" class="flex flex-wrap gap-1 mt-2">
+                        <!-- Activity chips will appear here -->
+                    </div>
+                    <div class="mt-1 flex flex-wrap gap-1">
+                        <button onclick="quickAddActivity('Fail Foot')"
+                            class="px-2 py-1 bg-gray-100 rounded text-xs hover:bg-gray-200">Fail Foot</button>
+                        <button onclick="quickAddActivity('Second Fail')"
+                            class="px-2 py-1 bg-gray-100 rounded text-xs hover:bg-gray-200">Second Fail</button>
+                        <button onclick="quickAddActivity('Dipping')"
+                            class="px-2 py-1 bg-gray-100 rounded text-xs hover:bg-gray-200">Dipping</button>
+                        <button onclick="quickAddActivity('Thinning')"
+                            class="px-2 py-1 bg-gray-100 rounded text-xs hover:bg-gray-200">Thinning</button>
+                        <button onclick="quickAddActivity('Shoot Tying')"
+                            class="px-2 py-1 bg-gray-100 rounded text-xs hover:bg-gray-200">Shoot Tying</button>
+                        <button onclick="quickAddActivity('Cane Tying')"
+                            class="px-2 py-1 bg-gray-100 rounded text-xs hover:bg-gray-200">Cane Tying</button>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">Logic: <span class="font-semibold text-green-600">OR</span>
+                        (Show who does ANY selected activity)</p>
+                </div>
+
+                <!-- Price Range Filter -->
+                <div class="mb-3">
+                    <label class="block text-xs font-semibold text-gray-700 mb-1">💰 Price Range / दर श्रेणी</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <input type="number" id="priceMin" placeholder="Min (₹)"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                            oninput="applyFilters()" />
+                        <input type="number" id="priceMax" placeholder="Max (₹)"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                            oninput="applyFilters()" />
+                    </div>
+                    <div class="mt-1 flex gap-1">
+                        <button onclick="setPrice(0, 400)"
+                            class="flex-1 px-2 py-1 bg-gray-100 rounded text-xs hover:bg-gray-200">Up to ₹400</button>
+                        <button onclick="setPrice(400, 500)"
+                            class="flex-1 px-2 py-1 bg-gray-100 rounded text-xs hover:bg-gray-200">₹400-500</button>
+                        <button onclick="setPrice(500, 999)"
+                            class="flex-1 px-2 py-1 bg-gray-100 rounded text-xs hover:bg-gray-200">₹500+</button>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">Logic: <span class="font-semibold text-yellow-600">AND</span>
+                        (Must be within range)</p>
+                </div>
+
+                <!-- Availability Filter -->
+                <div class="mb-3">
+                    <label class="block text-xs font-semibold text-gray-700 mb-1">📅 Availability / उपलब्धता</label>
+                    <div class="space-y-2">
+                        <label
+                            class="flex items-center p-2 border border-gray-300 rounded hover:bg-gray-50 cursor-pointer">
+                            <input type="checkbox" id="availableToday" class="mr-2" onchange="applyFilters()">
+                            <span class="text-sm">Available Today</span>
+                        </label>
+                        <label
+                            class="flex items-center p-2 border border-gray-300 rounded hover:bg-gray-50 cursor-pointer">
+                            <input type="checkbox" id="availableThisWeek" class="mr-2" onchange="applyFilters()">
+                            <span class="text-sm">Available This Week</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Other Filters -->
+                <div class="mb-3">
+                    <label class="block text-xs font-semibold text-gray-700 mb-1">🚗 Transport / वाहतूक</label>
+                    <div class="space-y-2">
+                        <label
+                            class="flex items-center p-2 border border-gray-300 rounded hover:bg-gray-50 cursor-pointer">
+                            <input type="checkbox" id="transportBike" class="mr-2" onchange="applyFilters()">
+                            <span class="text-sm">🏍️ Own Bike</span>
+                        </label>
+                        <label
+                            class="flex items-center p-2 border border-gray-300 rounded hover:bg-gray-50 cursor-pointer">
+                            <input type="checkbox" id="transportPickup" class="mr-2" onchange="applyFilters()">
+                            <span class="text-sm">🚗 Own Pickup</span>
+                        </label>
+                        <label
+                            class="flex items-center p-2 border border-gray-300 rounded hover:bg-gray-50 cursor-pointer">
+                            <input type="checkbox" id="transportNone" class="mr-2" onchange="applyFilters()">
+                            <span class="text-sm">🚶 No Vehicle</span>
+                        </label>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">Logic: <span class="font-semibold text-indigo-600">OR</span>
+                        (Show ANY selected transport)</p>
+                </div>
+
+                <!-- Crew Size -->
+                <div class="mb-3">
+                    <label class="block text-xs font-semibold text-gray-700 mb-1">👷 Crew Size / टोळी आकार</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <input type="number" id="crewMin" placeholder="Min"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                            oninput="applyFilters()" />
+                        <input type="number" id="crewMax" placeholder="Max"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                            oninput="applyFilters()" />
+                    </div>
+                </div>
+
+                <!-- Rating -->
+                <div class="mb-3">
+                    <label class="block text-xs font-semibold text-gray-700 mb-1">⭐ Minimum Rating</label>
+                    <input type="range" id="minRating" min="0" max="5" step="0.1" value="0" class="w-full"
+                        oninput="document.getElementById('ratingValue').textContent = this.value; applyFilters()" />
+                    <div class="flex items-center justify-between text-xs">
+                        <span class="text-gray-600">Any</span>
+                        <span class="font-bold text-orange-600">⭐ <span id="ratingValue">0</span>+</span>
+                        <span class="text-gray-600">5.0</span>
+                    </div>
+                </div>
+
+                <!-- Reset Button -->
+                <button onclick="resetAllFilters()"
+                    class="w-full px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 font-semibold text-sm">
+                    🔄 Reset All Filters
+                </button>
+            </div>
+        </div>
+
+        <!-- Results Info -->
+        <div class="px-4 py-2 bg-blue-50 border-b">
+            <p class="text-xs text-gray-700">
+                Showing <span class="font-bold" id="showingFrom">1</span>-<span class="font-bold"
+                    id="showingTo">20</span>
+                of <span class="font-bold" id="totalResults">1,248</span>
+            </p>
+        </div>
+
+        <!-- Team Grid -->
+        <div id="teamList" class="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+            <!-- Team cards will be loaded here -->
+        </div>
+
+        <!-- Pagination -->
+        <div class="px-4 py-3 bg-white border-t sticky bottom-0">
+            <div class="flex items-center justify-between mb-2">
+                <button onclick="previousPage()" id="prevBtn"
+                    class="px-3 py-1.5 bg-gray-200 text-gray-700 rounded text-xs font-semibold disabled:opacity-50">
+                    ← Prev
+                </button>
+                <div class="flex items-center space-x-1 overflow-x-auto scrollbar-hide" id="pageNumbers"></div>
+                <button onclick="nextPage()" id="nextBtn"
+                    class="px-3 py-1.5 bg-blue-600 text-white rounded text-xs font-semibold">
+                    Next →
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Availability Management View -->
+    <div id="view-availability" class="view-content hidden">
+        <div class="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
+            <div class="max-w-6xl mx-auto px-4 py-6">
+                <div class="bg-white rounded-xl shadow-lg p-6">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6">📅 Manage Availability</h2>
+
+                    <!-- Search Section -->
+                    <div class="mb-6">
+                        <label class="block text-sm font-bold text-gray-700 mb-2">🔍 Search Mukkadam</label>
+                        <input type="text" id="availSearchInput" placeholder="Enter name or mobile number..."
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                            oninput="searchMukkadam()" />
+                        <p class="text-xs text-gray-500 mt-1">💡 Tip: Mobile number gives instant result, name may need
+                            disambiguation</p>
+                    </div>
+
+                    <!-- Search Results / Disambiguation -->
+                    <div id="searchResults" class="mb-6 hidden">
+                        <!-- Dynamic content based on search -->
+                    </div>
+
+                    <!-- Selected Mukkadam Details -->
+                    <div id="selectedMukkadamSection" class="hidden">
+                        <div
+                            class="bg-gradient-to-r from-green-50 to-blue-50 rounded-lg p-4 mb-6 border-2 border-green-300">
+                            <h3 class="text-lg font-bold text-gray-800 mb-2">✅ Selected Mukkadam</h3>
+                            <div id="selectedMukkadamInfo" class="space-y-1 text-sm">
+                                <!-- Will be populated dynamically -->
+                            </div>
+                        </div>
+
+                        <!-- Current Availabilities -->
+                        <div class="mb-6">
+                            <h3 class="text-lg font-bold text-gray-800 mb-3">📋 Current Availabilities</h3>
+                            <div id="currentAvailabilities" class="space-y-2">
+                                <!-- Will be populated dynamically -->
+                            </div>
+                        </div>
+
+                        <!-- Add/Edit Availability Form -->
+                        <div class="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                            <h3 class="text-lg font-bold text-gray-800 mb-3">➕ Add New Availability</h3>
+                            <div class="space-y-3">
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-xs font-semibold text-gray-700 mb-1">From Date</label>
+                                        <input type="date" id="newAvailFrom"
+                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-semibold text-gray-700 mb-1">To Date</label>
+                                        <input type="date" id="newAvailTo"
+                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-700 mb-1">Status</label>
+                                    <select id="newAvailStatus"
+                                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                                        <option value="available">✅ Available</option>
+                                        <option value="busy">⏳ Busy</option>
+                                        <option value="on-leave">🏖️ On Leave</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-700 mb-1">Notes
+                                        (Optional)</label>
+                                    <input type="text" id="newAvailNotes" placeholder="e.g., Booked for Farm X"
+                                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                                </div>
+                                <div class="flex gap-2">
+                                    <button onclick="addAvailability()"
+                                        class="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold">
+                                        ✅ Add Availability
+                                    </button>
+                                    <button onclick="clearAvailabilityForm()"
+                                        class="px-4 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-semibold">
+                                        Clear
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Villages View -->
+    <div id="view-villages" class="view-content hidden">
+        <div class="p-4">
+            <div class="mb-3">
+                <input type="text" id="villageSearch" placeholder="🔍 Search villages..." onkeyup="searchVillages()"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div class="grid grid-cols-3 gap-3 mb-4">
+                <div class="bg-white rounded-lg shadow p-3 text-center">
+                    <p class="text-xs text-gray-500">Districts</p>
+                    <p class="text-2xl font-bold text-indigo-600">12</p>
+                </div>
+                <div class="bg-white rounded-lg shadow p-3 text-center">
+                    <p class="text-xs text-gray-500">Villages</p>
+                    <p class="text-2xl font-bold text-purple-600">148</p>
+                </div>
+                <div class="bg-white rounded-lg shadow p-3 text-center">
+                    <p class="text-xs text-gray-500">Avg</p>
+                    <p class="text-2xl font-bold text-pink-600">8</p>
+                </div>
+            </div>
+            <div id="villagesList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                <!-- Villages will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Calendar View -->
+    <div id="view-calendar" class="view-content hidden">
+        <div class="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-cyan-50">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <div class="bg-white rounded-xl shadow-md p-6 mb-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <h2 class="text-2xl font-bold text-gray-800">November 2025</h2>
+                        <div class="flex gap-2">
+                            <button
+                                class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-medium">←
+                                Previous</button>
+                            <button
+                                class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-medium">Next
+                                →</button>
+                        </div>
+                    </div>
+
+                    <!-- Calendar Grid -->
+                    <div class="grid grid-cols-7 gap-1">
+                        <div class="text-center font-bold text-gray-700 py-3 bg-gray-100">Sun</div>
+                        <div class="text-center font-bold text-gray-700 py-3 bg-gray-100">Mon</div>
+                        <div class="text-center font-bold text-gray-700 py-3 bg-gray-100">Tue</div>
+                        <div class="text-center font-bold text-gray-700 py-3 bg-gray-100">Wed</div>
+                        <div class="text-center font-bold text-gray-700 py-3 bg-gray-100">Thu</div>
+                        <div class="text-center font-bold text-gray-700 py-3 bg-gray-100">Fri</div>
+                        <div class="text-center font-bold text-gray-700 py-3 bg-gray-100">Sat</div>
+
+                        <!-- Sample Days -->
+                        <div class="min-h-[100px] p-2 border border-gray-200 bg-gray-50"></div>
+                        <div class="min-h-[100px] p-2 border border-gray-200 bg-gray-50"></div>
+                        <div class="min-h-[100px] p-2 border border-gray-200 bg-gray-50"></div>
+                        <div class="min-h-[100px] p-2 border border-gray-200 bg-gray-50"></div>
+                        <div class="min-h-[100px] p-2 border border-gray-200 bg-gray-50"></div>
+
+                        <div
+                            class="min-h-[100px] p-2 border border-gray-200 bg-yellow-100 hover:bg-yellow-200 cursor-pointer">
+                            <div class="text-right font-semibold text-gray-700 mb-1">1</div>
+                            <div class="text-center space-y-1">
+                                <div class="flex items-center justify-center space-x-1">
+                                    <span>👷</span><span class="font-bold text-gray-800">28</span>
+                                </div>
+                                <div class="text-xs text-gray-600 font-medium">420</div>
+                            </div>
+                        </div>
+
+                        <div
+                            class="min-h-[100px] p-2 border border-gray-200 bg-green-100 hover:bg-green-200 cursor-pointer">
+                            <div class="text-right font-semibold text-gray-700 mb-1">2</div>
+                            <div class="text-center space-y-1">
+                                <div class="flex items-center justify-center space-x-1">
+                                    <span>👷</span><span class="font-bold text-gray-800">30</span>
+                                </div>
+                                <div class="text-xs text-gray-600 font-medium">450</div>
+                            </div>
+                        </div>
+
+                        <!-- More sample days -->
+                        <div
+                            class="min-h-[100px] p-2 border border-gray-200 bg-green-100 hover:bg-green-200 cursor-pointer">
+                            <div class="text-right font-semibold text-gray-700 mb-1">14</div>
+                            <div class="text-center space-y-1">
+                                <div class="flex items-center justify-center space-x-1">
+                                    <span>👷</span><span class="font-bold text-gray-800">38</span>
+                                </div>
+                                <div class="text-xs text-gray-600 font-medium">570</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Legend -->
+                    <div class="mt-6 flex flex-wrap gap-4 text-sm">
+                        <div class="flex items-center space-x-2">
+                            <div class="w-4 h-4 bg-green-200 border border-gray-300"></div>
+                            <span class="text-gray-600">High (30+ teams)</span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <div class="w-4 h-4 bg-yellow-200 border border-gray-300"></div>
+                            <span class="text-gray-600">Medium (15-29 teams)</span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <div class="w-4 h-4 bg-red-200 border border-gray-300"></div>
+                            <span class="text-gray-600">Low (<15 teams)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Selected Date Info -->
+                <div class="bg-white rounded-xl shadow-md p-6">
+                    <h3 class="text-2xl font-bold text-gray-800 mb-4">📋 November 14, 2025</h3>
+                    <p class="text-gray-600 mb-6">38 Teams Available | 570 Total Workers</p>
+                    <div class="space-y-4">
+                        <div class="bg-white rounded-lg shadow-md p-4 border border-gray-200">
+                            <div class="flex items-start justify-between mb-3">
+                                <div>
+                                    <h4 class="text-lg font-bold text-gray-800">Ramesh Patil</h4>
+                                    <div class="flex gap-2 text-sm text-gray-600 mt-1">
+                                        <span>📍 Nashik</span>
+                                        <span>👷 Team: 15</span>
+                                    </div>
+                                    <p class="text-sm text-gray-600 mt-1">📅 Nov 10 - Dec 20 | 🚗 Own Pickup</p>
+                                </div>
+                                <span class="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold">✅
+                                    Active</span>
+                            </div>
+                            <div class="flex gap-2">
+                                <button onclick="showView('profile')"
+                                    class="flex-1 bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition text-sm font-medium">View
+                                    Profile</button>
+                                <button
+                                    class="flex-1 bg-purple-600 text-white px-3 py-2 rounded-lg hover:bg-purple-700 transition text-sm font-medium">Assign
+                                    to Farm</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Profile View -->
+    <div id="view-profile" class="view-content hidden">
+        <div class="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-purple-50">
+            <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <!-- Profile Header -->
+                <div class="bg-white rounded-xl shadow-xl p-8 mb-8">
+                    <div class="flex flex-col md:flex-row items-center md:items-start gap-6">
+                        <div
+                            class="w-32 h-32 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-6xl shadow-lg">
+                            👤
+                        </div>
+                        <div class="flex-1 text-center md:text-left">
+                            <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-3">
+                                <div>
+                                    <h1 class="text-3xl font-bold text-gray-800 mb-1">Ramesh Patil</h1>
+                                    <p class="text-xl text-gray-600 mb-2">रमेश पाटील</p>
+                                    <p class="text-gray-500">मुक्कादम / Mukkadam</p>
+                                </div>
+                                <span
+                                    class="px-6 py-3 rounded-full text-lg font-bold shadow-md bg-green-100 text-green-700 mt-4 md:mt-0">✅
+                                    ACTIVE</span>
+                            </div>
+                            <div class="space-y-2 mb-4">
+                                <p class="text-gray-700">📱 9876543210, 9988776655</p>
+                                <p class="text-gray-700">📍 Nashik, Maharashtra</p>
+                                <div class="flex items-center justify-center md:justify-start space-x-2">
+                                    <span class="text-yellow-500 text-xl">⭐</span>
+                                    <span class="font-bold text-gray-800">4.8/5</span>
+                                    <span class="text-gray-500">(24 Reviews)</span>
+                                </div>
+                            </div>
+                            <div class="flex flex-wrap gap-2 justify-center md:justify-start">
+                                <button
+                                    class="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition font-semibold shadow-md">🟢
+                                    Mark Inactive</button>
+                                <button
+                                    class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-semibold shadow-md">📞
+                                    Call</button>
+                                <button
+                                    class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold shadow-md">💬
+                                    WhatsApp</button>
+                                <button
+                                    class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-semibold shadow-md">✉️
+                                    SMS</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Stats -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div class="bg-white rounded-xl shadow-md p-6 text-center border-l-4 border-blue-500">
+                        <p class="text-gray-500 text-sm font-medium mb-2">Crew Size</p>
+                        <p class="text-4xl font-bold text-gray-800">15</p>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-md p-6 text-center border-l-4 border-green-500">
+                        <p class="text-gray-500 text-sm font-medium mb-2">Smartphone</p>
+                        <p class="text-4xl font-bold text-gray-800">✅</p>
+                        <p class="text-sm text-gray-600">YES</p>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-md p-6 text-center border-l-4 border-purple-500">
+                        <p class="text-gray-500 text-sm font-medium mb-2">Status</p>
+                        <p class="text-4xl font-bold text-gray-800">✅</p>
+                        <p class="text-sm text-gray-600">AVAILABLE</p>
+                    </div>
+                </div>
+
+                <!-- Detail Sections -->
+                <div class="bg-white rounded-lg shadow-md mb-4 overflow-hidden">
+                    <div class="px-6 py-4 bg-gray-50 border-b">
+                        <div class="flex items-center space-x-3">
+                            <span class="text-xl">🔹</span>
+                            <span class="font-bold text-gray-800 text-lg">Crew Details / टोळी माहिती</span>
+                        </div>
+                    </div>
+                    <div class="px-6 py-4 bg-gray-50">
+                        <div class="space-y-3">
+                            <p>• Current Crew Size: <span class="font-semibold">15 workers</span></p>
+                            <p>• Maximum Capacity: <span class="font-semibold">20 workers</span></p>
+                            <p>• Deputy Mukkadam: <span class="font-semibold">Sunil Patil (📱 9123456789)</span></p>
+                            <p>• Splitting Logic: <span class="font-semibold">Split into 2 teams of 7-8 when >12</span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-md mb-4 overflow-hidden">
+                    <div class="px-6 py-4 bg-gray-50 border-b">
+                        <div class="flex items-center space-x-3">
+                            <span class="text-xl">🔹</span>
+                            <span class="font-bold text-gray-800 text-lg">Rate Card / दर तक्ता</span>
+                        </div>
+                    </div>
+                    <div class="px-6 py-4 bg-gray-50">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="bg-yellow-50 p-3 rounded">
+                                <p class="text-sm text-gray-600">Fail Foot</p>
+                                <p class="font-bold text-gray-800">₹500</p>
+                            </div>
+                            <div class="bg-yellow-50 p-3 rounded">
+                                <p class="text-sm text-gray-600">Second Fail</p>
+                                <p class="font-bold text-gray-800">₹450</p>
+                            </div>
+                            <div class="bg-yellow-50 p-3 rounded">
+                                <p class="text-sm text-gray-600">Dipping</p>
+                                <p class="font-bold text-gray-800">₹400</p>
+                            </div>
+                            <div class="bg-yellow-50 p-3 rounded">
+                                <p class="text-sm text-gray-600">Thinning</p>
+                                <p class="font-bold text-gray-800">₹350</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Work History -->
+                <div class="bg-white rounded-xl shadow-md p-6 mb-8">
+                    <h3 class="text-2xl font-bold text-gray-800 mb-4">📊 Work History</h3>
+                    <div class="space-y-4">
+                        <div class="bg-gray-50 p-4 rounded-lg border-l-4 border-blue-500">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="font-bold text-gray-800">Nov 2025</span>
+                                <div class="flex items-center space-x-1">
+                                    <span class="text-yellow-500">⭐</span>
+                                    <span class="font-semibold">5/5</span>
+                                </div>
+                            </div>
+                            <p class="text-sm text-gray-600">Farmer: Rajesh Kumar</p>
+                            <p class="text-sm text-gray-600">Task: Fail Foot | Location: Nashik</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global state
+        let currentPage = 1;
+        let pageSize = 20;
+        let filters = {
+            villages: [],
+            activities: [],
+            priceMin: null,
+            priceMax: null,
+            availableToday: false,
+            availableThisWeek: false,
+            transport: [],
+            crewMin: null,
+            crewMax: null,
+            minRating: 0
+        };
+
+        let selectedMukkadam = null;
+        let mukkadamAvailabilities = {}; // Store availabilities for each mukkadam
+
+        const villages = ['Nashik', 'Satara', 'Pune', 'Solapur', 'Sangli', 'Ahmednagar', 'Kolhapur', 'Jalgaon', 'Aurangabad', 'Latur'];
+        const names = ['Ramesh', 'Suresh', 'Ganesh', 'Prakash', 'Vijay', 'Anil', 'Sunil', 'Mahesh', 'Rajesh', 'Santosh'];
+        const surnames = ['Patil', 'Jadhav', 'Desai', 'Shinde', 'Pawar', 'More', 'Kale', 'Salve', 'Bhosale', 'Gaikwad'];
+        const activities = ['Fail Foot', 'Second Fail', 'Dipping', 'Thinning', 'Shoot Tying', 'Cane Tying'];
+        const transports = ['Own Bike', 'Own Pickup', 'No Vehicle'];
+
+        function generateMockData(count) {
+            const data = [];
+            for (let i = 1; i <= count; i++) {
+                const name = `${names[Math.floor(Math.random() * names.length)]} ${surnames[Math.floor(Math.random() * surnames.length)]}`;
+                const status = Math.random() > 0.28 ? 'active' : 'inactive';
+                const crewSize = Math.floor(Math.random() * 18) + 8;
+                const rating = parseFloat((4 + Math.random()).toFixed(1));
+                const village = villages[Math.floor(Math.random() * villages.length)];
+                const mobile = `98765${String(i).padStart(5, '0')}`;
+                const activity = activities[Math.floor(Math.random() * activities.length)];
+                const transport = transports[Math.floor(Math.random() * transports.length)];
+                const pricePerWorker = Math.floor(Math.random() * 300) + 300;
+                const isAvailableToday = Math.random() > 0.38;
+                const isWorkingToday = Math.random() > 0.72;
+
+                data.push({
+                    id: i,
+                    name,
+                    status,
+                    crewSize,
+                    rating,
+                    village,
+                    mobile,
+                    activity,
+                    transport,
+                    pricePerWorker,
+                    isAvailableToday,
+                    isWorkingToday
+                });
+
+                // Generate mock availabilities
+                mukkadamAvailabilities[i] = [
+                    {
+                        from: '2025-11-20',
+                        to: '2025-11-30',
+                        status: 'available',
+                        notes: 'Ready for work'
+                    }
+                ];
+            }
+            return data;
+        }
+
+        const allMukkadams = generateMockData(1248);
+
+        // Filter Functions
+        function handleVillageInput() {
+            // Just for future autocomplete if needed
+        }
+
+        function addVillageFilter() {
+            const input = document.getElementById('villageFilter');
+            const value = input.value.trim().toLowerCase();
+
+            if (value && !filters.villages.some(v => v.toLowerCase() === value)) {
+                filters.villages.push(value);
+                renderVillageChips();
+                input.value = '';
+                applyFilters();
+            }
+        }
+
+        function renderVillageChips() {
+            const container = document.getElementById('villageChips');
+            container.innerHTML = filters.villages.map(v => `
+                <span class="filter-chip inline-flex items-center px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold">
+                    ${v}
+                    <button onclick="removeVillage('${v}')" class="ml-1 hover:text-blue-900 font-bold">×</button>
+                </span>
+            `).join('');
+        }
+
+        function removeVillage(village) {
+            filters.villages = filters.villages.filter(v => v.toLowerCase() !== village.toLowerCase());
+            renderVillageChips();
+            applyFilters();
+        }
+
+        function handleActivityInput() {
+            // Just for future autocomplete if needed
+        }
+
+        function addActivityFilter() {
+            const input = document.getElementById('activityFilter');
+            const value = input.value.trim().toLowerCase();
+
+            if (value && !filters.activities.some(a => a.toLowerCase() === value)) {
+                filters.activities.push(value);
+                renderActivityChips();
+                input.value = '';
+                applyFilters();
+            }
+        }
+
+        function quickAddActivity(activity) {
+            if (!filters.activities.some(a => a.toLowerCase() === activity.toLowerCase())) {
+                filters.activities.push(activity.toLowerCase());
+                renderActivityChips();
+                applyFilters();
+            }
+        }
+
+        function renderActivityChips() {
+            const container = document.getElementById('activityChips');
+            container.innerHTML = filters.activities.map(a => `
+                <span class="filter-chip inline-flex items-center px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold">
+                    ${a}
+                    <button onclick="removeActivity('${a}')" class="ml-1 hover:text-green-900 font-bold">×</button>
+                </span>
+            `).join('');
+        }
+        function toggleFilters() {
+            const el = document.getElementById("filtersContainer");
+            const icon = document.getElementById("filterToggleIcon");
+            el.classList.toggle("hidden");
+            icon.textContent = el.classList.contains("hidden") ? "▼" : "▲";
+        }
+        function removeActivity(activity) {
+            filters.activities = filters.activities.filter(a => a.toLowerCase() !== activity.toLowerCase());
+            renderActivityChips();
+            applyFilters();
+        }
+
+        function setPrice(min, max) {
+            document.getElementById('priceMin').value = min;
+            document.getElementById('priceMax').value = max;
+            applyFilters();
+        }
+
+        function applyFilters() {
+            // Collect all filter values
+            filters.priceMin = document.getElementById('priceMin').value ? parseInt(document.getElementById('priceMin').value) : null;
+            filters.priceMax = document.getElementById('priceMax').value ? parseInt(document.getElementById('priceMax').value) : null;
+            filters.availableToday = document.getElementById('availableToday').checked;
+            filters.availableThisWeek = document.getElementById('availableThisWeek').checked;
+
+            filters.transport = [];
+            if (document.getElementById('transportBike').checked) filters.transport.push('Own Bike');
+            if (document.getElementById('transportPickup').checked) filters.transport.push('Own Pickup');
+            if (document.getElementById('transportNone').checked) filters.transport.push('No Vehicle');
+
+            filters.crewMin = document.getElementById('crewMin').value ? parseInt(document.getElementById('crewMin').value) : null;
+            filters.crewMax = document.getElementById('crewMax').value ? parseInt(document.getElementById('crewMax').value) : null;
+            filters.minRating = parseFloat(document.getElementById('minRating').value);
+
+            currentPage = 1;
+            renderTeamList();
+            updateDashboardStats();
+        }
+
+        function getFilteredData() {
+            let filtered = allMukkadams;
+
+            // Village filter (OR logic)
+            if (filters.villages.length > 0) {
+                filtered = filtered.filter(m =>
+                    filters.villages.some(v => m.village.toLowerCase() === v.toLowerCase())
+                );
+            }
+
+            // Activity filter (OR logic)
+            if (filters.activities.length > 0) {
+                filtered = filtered.filter(m =>
+                    filters.activities.some(a => m.activity.toLowerCase() === a.toLowerCase())
+                );
+            }
+
+            // Price filter (AND logic)
+            if (filters.priceMin !== null) {
+                filtered = filtered.filter(m => m.pricePerWorker >= filters.priceMin);
+            }
+            if (filters.priceMax !== null) {
+                filtered = filtered.filter(m => m.pricePerWorker <= filters.priceMax);
+            }
+
+            // Availability (AND logic)
+            if (filters.availableToday) {
+                filtered = filtered.filter(m => m.isAvailableToday);
+            }
+
+            // Transport (OR logic)
+            if (filters.transport.length > 0) {
+                filtered = filtered.filter(m => filters.transport.includes(m.transport));
+            }
+
+            // Crew size (AND logic)
+            if (filters.crewMin !== null) {
+                filtered = filtered.filter(m => m.crewSize >= filters.crewMin);
+            }
+            if (filters.crewMax !== null) {
+                filtered = filtered.filter(m => m.crewSize <= filters.crewMax);
+            }
+
+            // Rating (AND logic)
+            if (filters.minRating > 0) {
+                filtered = filtered.filter(m => m.rating >= filters.minRating);
+            }
+
+            return filtered;
+        }
+
+        function resetAllFilters() {
+            filters = {
+                villages: [],
+                activities: [],
+                priceMin: null,
+                priceMax: null,
+                availableToday: false,
+                availableThisWeek: false,
+                transport: [],
+                crewMin: null,
+                crewMax: null,
+                minRating: 0
+            };
+
+            document.getElementById('villageFilter').value = '';
+            document.getElementById('activityFilter').value = '';
+            document.getElementById('priceMin').value = '';
+            document.getElementById('priceMax').value = '';
+            document.getElementById('availableToday').checked = false;
+            document.getElementById('availableThisWeek').checked = false;
+            document.getElementById('transportBike').checked = false;
+            document.getElementById('transportPickup').checked = false;
+            document.getElementById('transportNone').checked = false;
+            document.getElementById('crewMin').value = '';
+            document.getElementById('crewMax').value = '';
+            document.getElementById('minRating').value = '0';
+            document.getElementById('ratingValue').textContent = '0';
+
+            renderVillageChips();
+            renderActivityChips();
+            applyFilters();
+        }
+
+        function updateDashboardStats() {
+            const filtered = getFilteredData();
+            const active = filtered.filter(m => m.status === 'active').length;
+            const totalWorkers = filtered.reduce((sum, m) => sum + m.crewSize, 0);
+            const avgCrewSize = filtered.length > 0 ? (totalWorkers / filtered.length).toFixed(1) : 0;
+            const workingToday = filtered.filter(m => m.isWorkingToday).length;
+            const availableToday = filtered.filter(m => m.isAvailableToday && m.status === 'active').length;
+            const uniqueVillages = new Set(filtered.map(m => m.village)).size;
+
+            document.getElementById('stat-total').textContent = filtered.length.toLocaleString();
+            document.getElementById('stat-active').textContent = active.toLocaleString();
+            document.getElementById('stat-workers').textContent = totalWorkers > 1000 ? (totalWorkers / 1000).toFixed(1) + 'K' : totalWorkers;
+            document.getElementById('stat-avg-crew').textContent = avgCrewSize;
+            document.getElementById('stat-working-today').textContent = workingToday.toLocaleString();
+            document.getElementById('stat-available-today').textContent = availableToday.toLocaleString();
+            document.getElementById('stat-villages').textContent = uniqueVillages;
+        }
+
+        function renderTeamList() {
+            const filtered = getFilteredData();
+            const startIdx = (currentPage - 1) * pageSize;
+            const endIdx = Math.min(startIdx + pageSize, filtered.length);
+            const pageData = filtered.slice(startIdx, endIdx);
+
+            const listEl = document.getElementById('teamList');
+            listEl.innerHTML = '';
+
+            if (pageData.length === 0) {
+                listEl.innerHTML = `
+                    <div class="col-span-full text-center py-12">
+                        <p class="text-gray-500 text-lg">😔 No mukkadams found</p>
+                        <button onclick="resetAllFilters()" class="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                            Clear Filters
+                        </button>
+                    </div>
+                `;
+            } else {
+                pageData.forEach(mukkadam => {
+                    const card = createBoxCard(mukkadam);
+                    listEl.appendChild(card);
+                });
+            }
+
+            updatePagination(filtered.length);
+            updateResultsInfo(startIdx + 1, endIdx, filtered.length);
+        }
+
+        function createBoxCard(m) {
+            const div = document.createElement('div');
+            div.className = 'bg-white rounded-lg shadow hover:shadow-lg transition border border-gray-200';
+
+            const statusBadge = m.status === 'active'
+                ? '<span class="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs font-bold">✅</span>'
+                : '<span class="px-2 py-0.5 bg-gray-200 text-gray-600 rounded text-xs font-bold">⏸️</span>';
+
+            div.innerHTML = `
+                <div onclick="toggleDetail(${m.id})" class="p-3 cursor-pointer">
+                    <div class="flex items-start justify-between mb-2">
+                        <div class="flex-1 min-w-0">
+                            ${statusBadge}
+                            <h4 class="font-bold text-sm text-gray-800 mt-1 truncate">${m.name}</h4>
+                        </div>
+                        <svg id="arrow-${m.id}" class="w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                    </div>
+                    
+                    <div class="space-y-1 text-xs text-gray-600">
+                        <div class="flex items-center">
+                            <span class="mr-1">📍</span>
+                            <span class="truncate">${m.village}</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center">
+                                <span class="mr-1">👷</span>
+                                <span>${m.crewSize}</span>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="mr-1">⭐</span>
+                                <span class="font-semibold">${m.rating}</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center">
+                            <span class="mr-1">💰</span>
+                            <span class="font-semibold text-green-700">₹${m.pricePerWorker}/day</span>
+                        </div>
+                        <div class="flex items-center">
+                            <span class="mr-1">📱</span>
+                            <span class="truncate">${m.mobile}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="detail-${m.id}" class="hidden border-t bg-gray-50 p-3 slide-down">
+                    <div class="space-y-2">
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div class="bg-white p-2 rounded">
+                                <p class="text-gray-500 mb-1">Activity</p>
+                                <p class="font-semibold">🔧 ${m.activity}</p>
+                            </div>
+                            <div class="bg-white p-2 rounded">
+                                <p class="text-gray-500 mb-1">Status</p>
+                                <p class="font-semibold">${m.isAvailableToday ? '📅 Available' : '⏳ Busy'}</p>
+                            </div>
+                            <div class="bg-white p-2 rounded">
+                                <p class="text-gray-500 mb-1">Transport</p>
+                                <p class="font-semibold">${m.transport.includes('Bike') ? '🏍️' : m.transport.includes('Pickup') ? '🚗' : '🚶'} ${m.transport}</p>
+                            </div>
+                            <div class="bg-white p-2 rounded">
+                                <p class="text-gray-500 mb-1">Rate</p>
+                                <p class="font-semibold text-green-700">₹${m.pricePerWorker}</p>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <button onclick="event.stopPropagation()" class="bg-blue-600 text-white py-2 rounded text-xs font-semibold hover:bg-blue-700">
+                                Profile
+                            </button>
+                            <button onclick="event.stopPropagation()" class="bg-green-600 text-white py-2 rounded text-xs font-semibold hover:bg-green-700">
+                                📞 Call
+                            </button>
+                            <button onclick="event.stopPropagation()" class="bg-purple-600 text-white py-2 rounded text-xs font-semibold hover:bg-purple-700">
+                                Assign
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            return div;
+        }
+
+        function toggleDetail(id) {
+            const detail = document.getElementById(`detail-${id}`);
+            const arrow = document.getElementById(`arrow-${id}`);
+
+            if (detail.classList.contains('hidden')) {
+                detail.classList.remove('hidden');
+                arrow.classList.add('rotate-180');
+            } else {
+                detail.classList.add('hidden');
+                arrow.classList.remove('rotate-180');
+            }
+        }
+
+        // Availability Management Functions
+        function searchMukkadam() {
+            const query = document.getElementById('availSearchInput').value.trim().toLowerCase();
+            const resultsDiv = document.getElementById('searchResults');
+
+            if (!query) {
+                resultsDiv.classList.add('hidden');
+                return;
+            }
+
+            // Check if it's a mobile number (digits only)
+            const isMobile = /^\d+$/.test(query);
+
+            let matches = [];
+
+            if (isMobile) {
+                // Search by mobile - exact match
+                matches = allMukkadams.filter(m => m.mobile.includes(query));
+            } else {
+                // Search by name - case insensitive
+                matches = allMukkadams.filter(m => m.name.toLowerCase().includes(query));
+            }
+
+            if (matches.length === 0) {
+                resultsDiv.innerHTML = `
+                    <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                        <p class="text-red-700 font-semibold">❌ No mukkadam found</p>
+                    </div>
+                `;
+                resultsDiv.classList.remove('hidden');
+            } else if (matches.length === 1) {
+                // Single match - select directly
+                selectMukkadam(matches[0]);
+                resultsDiv.classList.add('hidden');
+            } else {
+                // Multiple matches - disambiguation
+                showDisambiguation(matches, 'village');
+            }
+        }
+
+        function showDisambiguation(matches, step) {
+            const resultsDiv = document.getElementById('searchResults');
+
+            if (step === 'village') {
+                // Group by village
+                const byVillage = {};
+                matches.forEach(m => {
+                    if (!byVillage[m.village]) byVillage[m.village] = [];
+                    byVillage[m.village].push(m);
+                });
+
+                // Check if all in same village
+                if (Object.keys(byVillage).length === 1) {
+                    showDisambiguation(matches, 'crewSize');
+                    return;
+                }
+
+                resultsDiv.innerHTML = `
+                    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                        <p class="font-semibold text-gray-800 mb-3">🔍 Multiple matches found. Select Village:</p>
+                        <div class="space-y-2">
+                            ${Object.entries(byVillage).map(([village, items]) => `
+                                <button onclick='disambiguateByVillage(${JSON.stringify(items)})' class="w-full text-left px-4 py-2 bg-white border border-gray-300 rounded hover:bg-blue-50 hover:border-blue-300">
+                                    📍 ${village} <span class="text-gray-500">(${items.length} mukkadam${items.length > 1 ? 's' : ''})</span>
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+                resultsDiv.classList.remove('hidden');
+            } else if (step === 'crewSize') {
+                // Group by crew size
+                const byCrewSize = {};
+                matches.forEach(m => {
+                    if (!byCrewSize[m.crewSize]) byCrewSize[m.crewSize] = [];
+                    byCrewSize[m.crewSize].push(m);
+                });
+
+                // Check if all have same crew size
+                if (Object.keys(byCrewSize).length === 1) {
+                    showDisambiguation(matches, 'mobile');
+                    return;
+                }
+
+                resultsDiv.innerHTML = `
+                    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                        <p class="font-semibold text-gray-800 mb-3">🔍 Still multiple matches. Select Crew Size:</p>
+                        <div class="space-y-2">
+                            ${Object.entries(byCrewSize).sort((a, b) => a[0] - b[0]).map(([size, items]) => `
+                                <button onclick='disambiguateByCrewSize(${JSON.stringify(items)})' class="w-full text-left px-4 py-2 bg-white border border-gray-300 rounded hover:bg-blue-50 hover:border-blue-300">
+                                    👷 ${size} workers <span class="text-gray-500">(${items.length} mukkadam${items.length > 1 ? 's' : ''})</span>
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+                resultsDiv.classList.remove('hidden');
+            } else if (step === 'mobile') {
+                // Final step - show all with mobile numbers
+                resultsDiv.innerHTML = `
+                    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                        <p class="font-semibold text-gray-800 mb-3">🔍 Select by Mobile Number:</p>
+                        <div class="space-y-2">
+                            ${matches.map(m => `
+                                <button onclick='selectMukkadamById(${m.id})' class="w-full text-left px-4 py-2 bg-white border border-gray-300 rounded hover:bg-blue-50 hover:border-blue-300">
+                                    <div class="font-semibold">${m.name}</div>
+                                    <div class="text-xs text-gray-600">📍 ${m.village} | 👷 ${m.crewSize} workers | 📱 ${m.mobile}</div>
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+                resultsDiv.classList.remove('hidden');
+            }
+        }
+
+        function disambiguateByVillage(matches) {
+            showDisambiguation(matches, 'crewSize');
+        }
+
+        function disambiguateByCrewSize(matches) {
+            showDisambiguation(matches, 'mobile');
+        }
+
+        function selectMukkadamById(id) {
+            const mukkadam = allMukkadams.find(m => m.id === id);
+            selectMukkadam(mukkadam);
+        }
+
+        function selectMukkadam(mukkadam) {
+            selectedMukkadam = mukkadam;
+
+            document.getElementById('selectedMukkadamInfo').innerHTML = `
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="font-bold text-lg">${mukkadam.name}</p>
+                        <p class="text-gray-600">📱 ${mukkadam.mobile}</p>
+                        <p class="text-gray-600">📍 ${mukkadam.village} | 👷 ${mukkadam.crewSize} workers</p>
+                    </div>
+                    <button onclick="clearSelection()" class="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 text-xs font-semibold">
+                        Clear
+                    </button>
+                </div>
+            `;
+
+            document.getElementById('selectedMukkadamSection').classList.remove('hidden');
+            renderCurrentAvailabilities();
+        }
+
+        function clearSelection() {
+            selectedMukkadam = null;
+            document.getElementById('selectedMukkadamSection').classList.add('hidden');
+            document.getElementById('availSearchInput').value = '';
+            document.getElementById('searchResults').classList.add('hidden');
+        }
+
+        function renderCurrentAvailabilities() {
+            const availabilities = mukkadamAvailabilities[selectedMukkadam.id] || [];
+            const container = document.getElementById('currentAvailabilities');
+
+            if (availabilities.length === 0) {
+                container.innerHTML = `
+                    <p class="text-gray-500 text-sm">No availabilities set yet.</p>
+                `;
+            } else {
+                container.innerHTML = availabilities.map((avail, index) => {
+                    const statusColors = {
+                        'available': 'bg-green-50 border-green-300 text-green-700',
+                        'busy': 'bg-yellow-50 border-yellow-300 text-yellow-700',
+                        'on-leave': 'bg-red-50 border-red-300 text-red-700'
+                    };
+                    const statusIcons = {
+                        'available': '✅',
+                        'busy': '⏳',
+                        'on-leave': '🏖️'
+                    };
+
+                    return `
+                        <div class="border-2 rounded-lg p-3 ${statusColors[avail.status]}">
+                            <div class="flex items-start justify-between">
+                                <div class="flex-1">
+                                    <p class="font-semibold">${statusIcons[avail.status]} ${avail.status.toUpperCase()}</p>
+                                    <p class="text-sm mt-1">📅 ${avail.from} to ${avail.to}</p>
+                                    ${avail.notes ? `<p class="text-xs mt-1">📝 ${avail.notes}</p>` : ''}
+                                </div>
+                                <button onclick="deleteAvailability(${index})" class="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-xs font-semibold">
+                                    Delete
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+
+        function addAvailability() {
+            if (!selectedMukkadam) return;
+
+            const from = document.getElementById('newAvailFrom').value;
+            const to = document.getElementById('newAvailTo').value;
+            const status = document.getElementById('newAvailStatus').value;
+            const notes = document.getElementById('newAvailNotes').value;
+
+            if (!from || !to) {
+                alert('Please select both From and To dates');
+                return;
+            }
+
+            if (new Date(from) > new Date(to)) {
+                alert('From date must be before To date');
+                return;
+            }
+
+            if (!mukkadamAvailabilities[selectedMukkadam.id]) {
+                mukkadamAvailabilities[selectedMukkadam.id] = [];
+            }
+
+            mukkadamAvailabilities[selectedMukkadam.id].push({
+                from,
+                to,
+                status,
+                notes
+            });
+
+            renderCurrentAvailabilities();
+            clearAvailabilityForm();
+
+            // Show success message
+            alert('✅ Availability added successfully!');
+        }
+
+        function deleteAvailability(index) {
+            if (!selectedMukkadam) return;
+
+            if (confirm('Are you sure you want to delete this availability?')) {
+                mukkadamAvailabilities[selectedMukkadam.id].splice(index, 1);
+                renderCurrentAvailabilities();
+            }
+        }
+
+        function clearAvailabilityForm() {
+            document.getElementById('newAvailFrom').value = '';
+            document.getElementById('newAvailTo').value = '';
+            document.getElementById('newAvailStatus').value = 'available';
+            document.getElementById('newAvailNotes').value = '';
+        }
+
+        // Villages view functions
+        function loadVillagesView() {
+            const districts = {};
+            allMukkadams.forEach(m => {
+                if (!districts[m.village]) districts[m.village] = [];
+                districts[m.village].push(m);
+            });
+
+            const listEl = document.getElementById('villagesList');
+            listEl.innerHTML = '';
+
+            Object.entries(districts).sort().forEach(([village, teams]) => {
+                const active = teams.filter(t => t.status === 'active').length;
+                const workers = teams.reduce((sum, t) => sum + t.crewSize, 0);
+
+                const div = document.createElement('div');
+                div.className = 'bg-white rounded-lg shadow hover:shadow-lg transition border border-gray-200 village-box';
+                div.innerHTML = `
+                    <div onclick="toggleVillage('${village}')" class="p-3 cursor-pointer">
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="flex items-center space-x-2">
+                                <span class="text-lg">📍</span>
+                                <h4 class="font-bold text-sm">${village}</h4>
+                            </div>
+                            <svg id="v-arrow-${village}" class="w-4 h-4 text-gray-400 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </div>
+                        <div class="grid grid-cols-3 gap-2 text-xs">
+                            <div class="text-center">
+                                <p class="text-gray-500">Teams</p>
+                                <p class="font-bold">${teams.length}</p>
+                            </div>
+                            <div class="text-center">
+                                <p class="text-green-600">Active</p>
+                                <p class="font-bold text-green-600">${active}</p>
+                            </div>
+                            <div class="text-center">
+                                <p class="text-gray-500">Workers</p>
+                                <p class="font-bold">${workers}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="v-detail-${village}" class="hidden border-t bg-gray-50 p-3 slide-down">
+                        <div class="space-y-2 max-h-60 overflow-y-auto">
+                            ${teams.slice(0, 10).map(t => `
+                                <div class="bg-white p-2 rounded text-xs">
+                                    <div class="flex justify-between items-center">
+                                        <span class="font-semibold">${t.name}</span>
+                                        <span class="text-gray-500">👷 ${t.crewSize}</span>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+                listEl.appendChild(div);
+            });
+        }
+
+        function toggleVillage(village) {
+            const detail = document.getElementById(`v-detail-${village}`);
+            const arrow = document.getElementById(`v-arrow-${village}`);
+
+            if (detail.classList.contains('hidden')) {
+                detail.classList.remove('hidden');
+                arrow.classList.add('rotate-180');
+            } else {
+                detail.classList.add('hidden');
+                arrow.classList.remove('rotate-180');
+            }
+        }
+
+        function searchVillages() {
+            const query = document.getElementById('villageSearch').value.toLowerCase();
+            document.querySelectorAll('.village-box').forEach(box => {
+                box.style.display = box.textContent.toLowerCase().includes(query) ? 'block' : 'none';
+            });
+        }
+
+        // Pagination functions
+        function updatePagination(total) {
+            const totalPages = Math.ceil(total / pageSize);
+            const pagesEl = document.getElementById('pageNumbers');
+            pagesEl.innerHTML = '';
+
+            if (totalPages === 0) {
+                document.getElementById('prevBtn').disabled = true;
+                document.getElementById('nextBtn').disabled = true;
+                return;
+            }
+
+            let start = Math.max(1, currentPage - 2);
+            let end = Math.min(totalPages, start + 4);
+            if (end - start < 4) start = Math.max(1, end - 4);
+
+            for (let i = start; i <= end; i++) {
+                const btn = document.createElement('button');
+                btn.textContent = i;
+                btn.className = `px-2 py-1 rounded text-xs ${i === currentPage ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`;
+                btn.onclick = () => goToPage(i);
+                pagesEl.appendChild(btn);
+            }
+
+            document.getElementById('prevBtn').disabled = currentPage === 1;
+            document.getElementById('nextBtn').disabled = currentPage === totalPages;
+        }
+
+        function updateResultsInfo(from, to, total) {
+            document.getElementById('showingFrom').textContent = from;
+            document.getElementById('showingTo').textContent = to;
+            document.getElementById('totalResults').textContent = total;
+        }
+
+        function goToPage(page) {
+            currentPage = page;
+            renderTeamList();
+            window.scrollTo(0, 0);
+        }
+
+        function previousPage() {
+            if (currentPage > 1) {
+                currentPage--;
+                renderTeamList();
+                window.scrollTo(0, 0);
+            }
+        }
+
+        function nextPage() {
+            const total = Math.ceil(getFilteredData().length / pageSize);
+            if (currentPage < total) {
+                currentPage++;
+                renderTeamList();
+                window.scrollTo(0, 0);
+            }
+        }
+
+        // View navigation
+        function showView(view) {
+            document.querySelectorAll('.view-content').forEach(v => v.classList.add('hidden'));
+            document.getElementById(`view-${view}`).classList.remove('hidden');
+
+            document.querySelectorAll('.view-btn').forEach(btn => {
+                btn.classList.remove('bg-white', 'text-green-700');
+                btn.classList.add('text-white');
+            });
+
+            const activeBtn = document.querySelector(`button[onclick*="showView('${view}')"]`);
+            if (activeBtn && activeBtn.classList.contains('view-btn')) {
+                activeBtn.classList.remove('text-white');
+                activeBtn.classList.add('bg-white', 'text-green-700');
+            }
+
+            if (view === 'villages') loadVillagesView();
+        }
+
+        function toggleMenu() {
+            document.getElementById('mobileMenu').classList.toggle('hidden');
+        }
+
+        // Initialize
+        renderTeamList();
+        updateDashboardStats();
+    </script>
+</body>
+
+</html>

@@ -4,6 +4,8 @@ from . import views
 
 router = DefaultRouter()
 router.register(r'jobs', views.JobViewSet)
+router.register(r'crops', views.CropViewSet, basename='crop')  # ✅ ADD
+router.register(r'crop-varieties', views.CropVarietyViewSet, basename='cropvariety') 
 router.register(r'bids', views.MukadamBidViewSet)
 router.register(r'mukadams', views.MukadamViewSet)
 router.register(r'mukadamprofile', views.MukadamProfileViewSet, basename='mukadamprofile')

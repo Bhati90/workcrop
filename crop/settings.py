@@ -241,19 +241,20 @@ CACHES = {
 SECRET_KEY = 'django-insecure-l6c$=vdsv7n-ng7cd_^6fvi7lig^+_a2!dzg5oy1^a6qklw$9t'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = True
+
 ALLOWED_HOSTS = ['*']
 
 
 # Add this for Render
 CORS_ALLOW_ALL_ORIGINS = True
-
+# 5. DRF Config
 REST_FRAMEWORK = {
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 1000,
-    'DEFAULT_RENDERER_CLASSES': [
-        'rest_framework.renderers.JSONRenderer',
-    'rest_framework.renderers.BrowsableAPIRenderer',  # For API browsing
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
     ],
 }
 # Application definition
@@ -265,12 +266,15 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    
     'corsheaders',
     'channels',
     'assign',
+    'core',
     'calender',
     'storages',
     'rest_framework',
+    'rest_framework.authtoken',
     'django_celery_beat',
     
 ]
@@ -316,22 +320,22 @@ GEMINI_API_KEY_2 = os.environ.get('GEMINI_API_KEY_2', 'AIzaSyDGCAaYBIoySFkgom_KH
 # Backward compatibility
 GEMINI_API_KEY = GEMINI_API_KEY_1
 
-AWS_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID')
-AWS_SECRET_ACCESS_KEY = config('AWS_SECRET_ACCESS_KEY')
-AWS_STORAGE_BUCKET_NAME = config('AWS_STORAGE_BUCKET_NAME')
-AWS_S3_REGION_NAME = config('AWS_S3_REGION_NAME', default='us-east-1')
-AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
-AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
-AWS_DEFAULT_ACL = 'public-read'
+# AWS_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID')
+# AWS_SECRET_ACCESS_KEY = config('AWS_SECRET_ACCESS_KEY')
+# AWS_STORAGE_BUCKET_NAME = config('AWS_STORAGE_BUCKET_NAME')
+# AWS_S3_REGION_NAME = config('AWS_S3_REGION_NAME', default='us-east-1')
+# AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
+# AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
+# AWS_DEFAULT_ACL = 'public-read'
 
 
 
-STATICFILES_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
-STATIC_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/static/'
+# STATICFILES_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+# STATIC_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/static/'
     
-    # Media files
-DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
-MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/media/'
+#     # Media files
+# DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+# MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/media/'
 
 # # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 # DATABASES = {
@@ -346,27 +350,28 @@ MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/media/'
 #             'client_encoding': 'UTF8',
 #         },
 #     }
-# DATABASES = {
-#      'default': {
-#          'ENGINE': config('DB_ENGINE', default='django.db.backends.postgresql'),
-#         'NAME': config('DB_NAME'),
-#          'USER': config('DB_USER'),
-#          'PASSWORD': config('DB_PASSWORD'),
-#          'HOST': config('DB_HOST'),
-#          'PORT': config('DB_PORT', default='5432'),
-#          'OPTIONS': {
-#              'connect_timeout': 10,
-#          }
-#      }
 # }
 DATABASES = {
-    'default': dj_database_url.config(
-        # default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a.oregon-postgres.render.com/registerdb_od8n',
-        default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a/registerdb_od8n',
-        conn_max_age=600,
-        conn_health_checks=True,
-    )
+     'default': {
+         'ENGINE': config('DB_ENGINE', default='django.db.backends.postgresql'),
+        'NAME': config('DB_NAME'),
+         'USER': config('DB_USER'),
+         'PASSWORD': config('DB_PASSWORD'),
+         'HOST': config('DB_HOST'),
+         'PORT': config('DB_PORT', default='5432'),
+         'OPTIONS': {
+             'connect_timeout': 10,
+         }
+     }
 }
+# DATABASES = {
+#     'default': dj_database_url.config(
+#         default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a.oregon-postgres.render.com/registerdb_od8n',
+#         # default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a/registerdb_od8n',
+#         conn_max_age=600,
+#         conn_health_checks=True,
+#     )
+# }
 # At the end of settings.py
 APPEND_SLASH = False  # Prevent automatic slash redirects
 
@@ -385,46 +390,6 @@ CORS_ALLOWED_ORIGINS = config(
 
 
 
-import os
-from pathlib import Path
-
-BASE_DIR = Path(__file__).resolve().parent.parent
-
-# Media files (user uploads)
-MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-
-# Static files (CSS, JavaScript, Images)
-STATIC_URL = '/static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-
-# File storage (use local, not S3)
-DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
-
-WHATSAPP_ALLOWED_MEDIA_TYPES = {
-    'image': ['image/jpeg', 'image/png'],
-    'video': ['video/mp4', 'video/3gpp'],
-    'audio': ['audio/aac', 'audio/mp4', 'audio/mpeg', 'audio/amr', 'audio/ogg'],
-    'document': [
-        'application/pdf',
-        'application/msword',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'application/vnd.ms-excel',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    ],
-}
-WHATSAPP_CONFIG = {
-    'ACCESS_TOKEN': config('WHATSAPP_ACCESS_TOKEN', default=''),
-    'PHONE_NUMBER_ID': config('WHATSAPP_PHONE_NUMBER_ID', default=''),
-    'BUSINESS_ACCOUNT_ID': config('WHATSAPP_BUSINESS_ACCOUNT_ID', default=''),
-    'API_VERSION': config('WHATSAPP_API_VERSION', default='v19.0'),
-}
-WHATSAPP_MAX_FILE_SIZE = {
-    'image': 5 * 1024 * 1024,      # 5MB
-    'video': 16 * 1024 * 1024,     # 16MB
-    'audio': 16 * 1024 * 1024,     # 16MB
-    'document': 100 * 1024 * 1024,  # 100MB
-}
 
 CORS_ALLOW_CREDENTIALS = True
 # Password validation
@@ -570,6 +535,14 @@ USE_I18N = True
 
 USE_TZ = True
 
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+STATIC_URL = '/static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
+STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
