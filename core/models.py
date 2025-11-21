@@ -7,7 +7,7 @@ def get_file_path(instance, filename):
     ext = filename.split('.')[-1]
     filename = f"{uuid.uuid4()}.{ext}"
     # This puts everything inside "products/" folder in your S3 bucket
-    return f"products/mukkadams/documents/{filename}"
+    return f"media/{filename}"
 class Mukkadam(models.Model):
     # --- Tracking Information ---
     # Who created/updated this profile (The Agent)

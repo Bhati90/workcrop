@@ -266,7 +266,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    
+
     'corsheaders',
     'channels',
     'assign',
@@ -276,7 +276,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework.authtoken',
     'django_celery_beat',
-    
+
 ]
 
 MIDDLEWARE = [
@@ -320,25 +320,38 @@ GEMINI_API_KEY_2 = os.environ.get('GEMINI_API_KEY_2', 'AIzaSyDGCAaYBIoySFkgom_KH
 # Backward compatibility
 GEMINI_API_KEY = GEMINI_API_KEY_1
 
+# ==============================================
+# AWS S3 SETTINGS (PRESIGNED URL MODE)
+# ==============================================
+
 AWS_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID')
 AWS_SECRET_ACCESS_KEY = config('AWS_SECRET_ACCESS_KEY')
 AWS_STORAGE_BUCKET_NAME = config('AWS_STORAGE_BUCKET_NAME')
-AWS_S3_REGION_NAME = config('AWS_S3_REGION_NAME', default='us-east-1')
-AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
-AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
-AWS_DEFAULT_ACL = 'None'
-AWS_QUERYSTRING_AUTH = True  
+AWS_S3_REGION_NAME = config('AWS_S3_REGION_NAME', default='ap-south-1')
+
+# --- 1. REMOVE THIS LINE ---
+# Do NOT use AWS_S3_CUSTOM_DOMAIN.
+# If this is set, Django assumes files are public and won't sign them.
+# AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
+
+# --- 2. ENABLE SIGNING ---
+AWS_QUERYSTRING_AUTH = True  # <--- This generates the '?Signature=...'
+AWS_QUERYSTRING_EXPIRE = 3600  # Link expires in 1 hour (adjust as needed)
 AWS_S3_SIGNATURE_VERSION = 's3v4'
 AWS_S3_URL_PROTOCOL = 'https:'
-# How long the link remains valid (in seconds). e.g., 3600 = 1 hour
-AWS_QUERYSTRING_EXPIRE = 3600 
 
-# 4. Switch Storage Backend
+# --- 3. SECURITY ---
+AWS_DEFAULT_ACL = None  # Use Bucket Owner Enforced (Private)
+AWS_S3_OBJECT_PARAMETERS = {
+    'CacheControl': 'max-age=86400',
+}
+
+# --- 4. STORAGE ENGINE ---
 DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
 
 # STATICFILES_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
 # STATIC_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/static/'
-    
+
 #     # Media files
 # DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
 # MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/media/'
@@ -505,11 +518,11 @@ else:
 def initialize_firebase():
     if firebase_admin._apps:
         return
-    
+
     try:
         # Try environment variable (for Render/production)
         firebase_base64 = os.environ.get('FIREBASE_CREDENTIALS_BASE64')
-        
+
         if firebase_base64:
             firebase_json = base64.b64decode(firebase_base64).decode('utf-8')
             firebase_dict = json.loads(firebase_json)
@@ -517,7 +530,7 @@ def initialize_firebase():
             firebase_admin.initialize_app(cred)
             print("✅ Firebase initialized from ENV VAR")
             return
-        
+
         # Fallback to file (for local dev)
         firebase_path = os.path.join(BASE_DIR, 'firebase-service-account.json')
         if os.path.exists(firebase_path):
@@ -525,9 +538,9 @@ def initialize_firebase():
             firebase_admin.initialize_app(cred)
             print("✅ Firebase initialized from FILE")
             return
-        
+
         print("⚠️ No Firebase credentials")
-        
+
     except Exception as e:
         print(f"❌ Firebase error: {e}")
 
@@ -601,7 +614,6 @@ LOGGING = {
 
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
-
 
 
 
