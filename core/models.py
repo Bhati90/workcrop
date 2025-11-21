@@ -1,6 +1,13 @@
 from django.db import models
 from django.contrib.auth.models import User
+import uuid
+import os
 
+def get_file_path(instance, filename):
+    ext = filename.split('.')[-1]
+    filename = f"{uuid.uuid4()}.{ext}"
+    # This puts everything inside "products/" folder in your S3 bucket
+    return f"products/mukkadams/documents/{filename}"
 class Mukkadam(models.Model):
     # --- Tracking Information ---
     # Who created/updated this profile (The Agent)
@@ -81,11 +88,10 @@ class Mukkadam(models.Model):
     pan_number = models.CharField(max_length=50, blank=True, null=True)
 
     # --- 12. Documents (Images) ---
-    profile_photo = models.ImageField(upload_to='mukkadams/profiles/', null=True, blank=True)
-    aadhar_card = models.ImageField(upload_to='mukkadams/aadhar/', null=True, blank=True)
-    pan_card = models.ImageField(upload_to='mukkadams/pan/', null=True, blank=True)
-    bank_proof = models.ImageField(upload_to='mukkadams/bank/', null=True, blank=True)
-
+    profile_photo = models.ImageField(upload_to=get_file_path, null=True, blank=True)
+    aadhar_card = models.ImageField(upload_to=get_file_path, null=True, blank=True)
+    pan_card = models.ImageField(upload_to=get_file_path, null=True, blank=True)
+    bank_proof = models.ImageField(upload_to=get_file_path, null=True, blank=True)
     def __str__(self):
         return f"{self.mukkadam_name} ({self.village})"
     

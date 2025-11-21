@@ -320,15 +320,21 @@ GEMINI_API_KEY_2 = os.environ.get('GEMINI_API_KEY_2', 'AIzaSyDGCAaYBIoySFkgom_KH
 # Backward compatibility
 GEMINI_API_KEY = GEMINI_API_KEY_1
 
-# AWS_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID')
-# AWS_SECRET_ACCESS_KEY = config('AWS_SECRET_ACCESS_KEY')
-# AWS_STORAGE_BUCKET_NAME = config('AWS_STORAGE_BUCKET_NAME')
-# AWS_S3_REGION_NAME = config('AWS_S3_REGION_NAME', default='us-east-1')
-# AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
-# AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
-# AWS_DEFAULT_ACL = 'public-read'
+AWS_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID')
+AWS_SECRET_ACCESS_KEY = config('AWS_SECRET_ACCESS_KEY')
+AWS_STORAGE_BUCKET_NAME = config('AWS_STORAGE_BUCKET_NAME')
+AWS_S3_REGION_NAME = config('AWS_S3_REGION_NAME', default='us-east-1')
+AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
+AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
+AWS_DEFAULT_ACL = 'None'
+AWS_QUERYSTRING_AUTH = True  
+AWS_S3_SIGNATURE_VERSION = 's3v4'
+AWS_S3_URL_PROTOCOL = 'https:'
+# How long the link remains valid (in seconds). e.g., 3600 = 1 hour
+AWS_QUERYSTRING_EXPIRE = 3600 
 
-
+# 4. Switch Storage Backend
+DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
 
 # STATICFILES_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
 # STATIC_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/static/'
@@ -338,32 +344,32 @@ GEMINI_API_KEY = GEMINI_API_KEY_1
 # MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/media/'
 
 # # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.postgresql',  # use this for normal Postgres
-#         'NAME': 'registration_db',
-#         'USER': 'postgres',
-#         'PASSWORD': 'new_password',
-#         'HOST': 'localhost',
-#         'PORT': '5432',
-#         'OPTIONS': {
-#             'client_encoding': 'UTF8',
-#         },
-#     }
-# }
 DATABASES = {
-     'default': {
-         'ENGINE': config('DB_ENGINE', default='django.db.backends.postgresql'),
-        'NAME': config('DB_NAME'),
-         'USER': config('DB_USER'),
-         'PASSWORD': config('DB_PASSWORD'),
-         'HOST': config('DB_HOST'),
-         'PORT': config('DB_PORT', default='5432'),
-         'OPTIONS': {
-             'connect_timeout': 10,
-         }
-     }
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',  # use this for normal Postgres
+        'NAME': 'registration_db',
+        'USER': 'postgres',
+        'PASSWORD': 'new_password',
+        'HOST': 'localhost',
+        'PORT': '5432',
+        'OPTIONS': {
+            'client_encoding': 'UTF8',
+        },
+    }
 }
+# DATABASES = {
+#      'default': {
+#          'ENGINE': config('DB_ENGINE', default='django.db.backends.postgresql'),
+#         'NAME': config('DB_NAME'),
+#          'USER': config('DB_USER'),
+#          'PASSWORD': config('DB_PASSWORD'),
+#          'HOST': config('DB_HOST'),
+#          'PORT': config('DB_PORT', default='5432'),
+#          'OPTIONS': {
+#              'connect_timeout': 10,
+#          }
+#      }
+# }
 # DATABASES = {
 #     'default': dj_database_url.config(
 #         default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a.oregon-postgres.render.com/registerdb_od8n',
@@ -541,7 +547,7 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
-DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
+
 STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
 
 # Static files (CSS, JavaScript, Images)
