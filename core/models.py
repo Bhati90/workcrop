@@ -35,8 +35,8 @@ class Mukkadam(models.Model):
     # --- 3. Availability ---
     start_date = models.DateField(null=True, blank=True)
     end_date = models.DateField(null=True, blank=True)
-    daily_work_timing = models.CharField(max_length=100, blank=True)
-    
+    # Add null=True to optional CharField fields
+    daily_work_timing = models.CharField(max_length=100, blank=True, null=True)
     # Stores: [{"teamNumber": "...", "startDate": "...", "endDate": "..."}]
     team_availabilities = models.JSONField(default=list, blank=True)
 
@@ -47,11 +47,11 @@ class Mukkadam(models.Model):
     # --- 5. Work Area Preference ---
     home_location = models.CharField(max_length=255, blank=True)
     preferred_work_locations = models.TextField(blank=True)
-    max_travel_distance = models.CharField(max_length=50, blank=True)
+    max_travel_distance = models.CharField(max_length=50, blank=True,null=True)
 
     # --- 6. Transport Details ---
     transport_mode = models.CharField(max_length=50) # own_bike, own_pickup, no_vehicle
-    transport_arranged_by = models.CharField(max_length=50, blank=True)
+    transport_arranged_by = models.CharField(max_length=50, blank=True,null=True) # self, company
     # Stores: { "bikeChargePerBike": "...", "currentlyStationedAt": "..." }
     transport_charges = models.JSONField(default=dict, blank=True)
 
@@ -61,11 +61,11 @@ class Mukkadam(models.Model):
 
     # --- 8. Work Mode ---
     work_mode = models.CharField(max_length=50) # daily_up_down, move_in, both
-    move_in_preferred_region = models.CharField(max_length=255, blank=True)
+    move_in_preferred_region = models.CharField(max_length=255, blank=True, null=True)
 
     # --- 9. Referral ---
     
-    referral_source = models.CharField(max_length=255, blank=True)
+    referral_source = models.CharField(max_length=255, blank=True, null=True)
     referred_by = models.ForeignKey(
         'self', 
         on_delete=models.SET_NULL, 
@@ -75,7 +75,7 @@ class Mukkadam(models.Model):
     )
     
     # Keep the old text field just in case they were referred by an outsider
-    referral_source_text = models.CharField(max_length=255, blank=True)
+    referral_source_text = models.CharField(max_length=255, blank=True, null=True)
 
     # --- 10. Notification Preferences ---
     notification_preferences = models.JSONField(default=dict, blank=True)
