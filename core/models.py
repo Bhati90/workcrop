@@ -108,3 +108,160 @@ class ActivityLog(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.action_type} - {self.timestamp}"
+    
+
+# Add these models to your existing models.py file
+
+from django.db import models
+from django.contrib.auth.models import User
+
+
+class Job(models.Model):
+    """
+    Job posted by farmers that needs mukkadams/workers
+    """
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('assigned', 'Assigned'),
+        ('in_progress', 'In Progress'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    # Job Details
+    title = models.CharField(max_length=255)
+    start_date = models.DateTimeField()
+    plot_name = models.CharField(max_length=255, blank=True, null=True)
+    plot_area = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    plot_crop = models.CharField(max_length=100, blank=True, null=True)
+    
+    # Farmer Details
+    farmer_name = models.CharField(max_length=255, blank=True, null=True)
+    farmer_phone = models.CharField(max_length=20, blank=True, null=True)
+    farmer_id = models.CharField(max_length=50, blank=True, null=True)
+    
+    # Location
+    location = models.CharField(max_length=255, blank=True, null=True)
+    village = models.CharField(max_length=255, blank=True, null=True)
+    taluka = models.CharField(max_length=255, blank=True, null=True)
+    district = models.CharField(max_length=255, blank=True, null=True)
+    
+    # Job Requirements
+    fir_id = models.IntegerField(blank=True, null=True)
+    notes = models.TextField(blank=True, null=True)
+    class_name = models.CharField(max_length=100, blank=True, null=True)  # fir-2, etc.
+    
+    # Workers needed
+    workers_required = models.IntegerField(default=0)
+    
+    # Job Status
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    all_day = models.BooleanField(default=False)
+    
+    # Tracking
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='jobs_created')
+
+    class Meta:
+        ordering = ['-start_date']
+
+    def __str__(self):
+        return f"{self.title} - {self.farmer_name} ({self.start_date.date()})"
+
+    @property
+    def total_assigned_workers(self):
+        """Count total workers assigned across all assignments"""
+        return sum(assignment.workers_count for assignment in self.assignments.all())
+
+    @property
+    def is_fully_assigned(self):
+        """Check if required workers are assigned"""
+        return self.total_assigned_workers >= self.workers_required
+
+
+class JobAssignment(models.Model):
+    """
+    Assignment of Mukkadam and team members to a Job
+    """
+    ASSIGNMENT_STATUS = [
+        ('assigned', 'Assigned'),
+        ('confirmed', 'Confirmed'),
+        ('in_progress', 'In Progress'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    # Relations
+    job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name='assignments')
+    mukkadam = models.ForeignKey('Mukkadam', on_delete=models.CASCADE, related_name='job_assignments')
+    
+    # Assignment Details
+    workers_count = models.IntegerField(default=0, help_text="Number of workers assigned")
+    team_members = models.JSONField(
+        default=list, 
+        blank=True,
+        help_text="List of team member names/IDs from mukkadam's team"
+    )
+    
+    # Assignment Status
+    status = models.CharField(max_length=20, choices=ASSIGNMENT_STATUS, default='assigned')
+    
+    # Payment & Rates
+    agreed_rate = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        blank=True, 
+        null=True,
+        help_text="Agreed payment rate for this assignment"
+    )
+    payment_status = models.CharField(
+        max_length=20,
+        choices=[
+            ('pending', 'Pending'),
+            ('partial', 'Partial'),
+            ('completed', 'Completed'),
+        ],
+        default='pending'
+    )
+    
+    # Notes
+    notes = models.TextField(blank=True, null=True)
+    
+    # Tracking
+    assigned_at = models.DateTimeField(auto_now_add=True)
+    assigned_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='assignments_made')
+    confirmed_at = models.DateTimeField(blank=True, null=True)
+    completed_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ['-assigned_at']
+        unique_together = ['job', 'mukkadam']  # One mukkadam per job
+
+    def __str__(self):
+        return f"{self.mukkadam.mukkadam_name} assigned to {self.job.title}"
+
+    def save(self, *args, **kwargs):
+        # Update job status when assignment is made
+        if self.pk is None:  # New assignment
+            if self.job.status == 'pending':
+                self.job.status = 'assigned'
+                self.job.save()
+        super().save(*args, **kwargs)
+
+
+class AssignmentLog(models.Model):
+    """
+    Track changes to assignments for audit trail
+    """
+    assignment = models.ForeignKey(JobAssignment, on_delete=models.CASCADE, related_name='logs')
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    action = models.CharField(max_length=50)  # 'created', 'updated', 'status_changed', 'cancelled'
+    details = models.JSONField(default=dict, blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return f"{self.action} - {self.assignment} - {self.timestamp}"
