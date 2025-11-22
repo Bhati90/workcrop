@@ -15,6 +15,17 @@ router.register(r'mukadam-activity-rates', views.MukadamActivityRateViewSet)
 router.register(r'mukadam-jobs', views.MukadamJobViewSet, basename='mukadam-jobs')  # ADD this
 router.register(r'farmers', views.FarmerViewSet, basename='farmer')
 
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from .views import JobViewSet, JobAssignmentViewSet, MukkadamViewSet
+
+router = DefaultRouter()
+router.register(r'jobs', JobViewSet, basename='job')
+router.register(r'assignments', JobAssignmentViewSet, basename='assignment')
+router.register(r'mukkadams', MukkadamViewSet, basename='mukkadam')
+
+
+
 
 urlpatterns = [
     path('', include(router.urls)),

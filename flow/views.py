@@ -1648,7 +1648,7 @@ from django.core.files.uploadedfile import InMemoryUploadedFile # Add this impor
 import google.generativeai as genai
 
 # Configure Gemini API
-GEMINI_API_KEY = 'AIzaSyCh0DeWCZr8m3kF4LDB2A_xoAlqbmKjvgs'  # Add to settings.py
+GEMINI_API_KEY = 'AIzaSyBwgjwmBlcQp2W5pX5UlopmKUOqVjWLcYg'  # Add to settings.py
 genai.configure(api_key=GEMINI_API_KEY)
 
 

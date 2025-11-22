@@ -315,8 +315,8 @@ WSGI_APPLICATION = 'crop.wsgi.application'
 # ===== GEMINI API KEYS (Add 5 keys) =====
 # Get free keys from: https://aistudio.google.com/apikey
 
-GEMINI_API_KEY_1 = os.environ.get('GEMINI_API_KEY_1', 'AIzaSyCh0DeWCZr8m3kF4LDB2A_xoAlqbmKjvgs')
-GEMINI_API_KEY_2 = os.environ.get('GEMINI_API_KEY_2', 'AIzaSyDGCAaYBIoySFkgom_KHm6wtk2m12wVLBw')
+GEMINI_API_KEY_1 = os.environ.get('GEMINI_API_KEY_1', 'AIzaSyBwgjwmBlcQp2W5pX5UlopmKUOqVjWLcYg')
+GEMINI_API_KEY_2 = os.environ.get('GEMINI_API_KEY_2', 'AIzaSyBwgjwmBlcQp2W5pX5UlopmKUOqVjWLcYg')
 # Backward compatibility
 GEMINI_API_KEY = GEMINI_API_KEY_1
 
@@ -385,8 +385,8 @@ DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
 # }
 DATABASES = {
     'default': dj_database_url.config(
-        # default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a.oregon-postgres.render.com/registerdb_od8n',
-        default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a/registerdb_od8n',
+        default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a.oregon-postgres.render.com/registerdb_od8n',
+        # default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a/registerdb_od8n',
         conn_max_age=600,
         conn_health_checks=True,
     )
