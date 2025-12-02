@@ -25,10 +25,10 @@
 #     'django.contrib.sessions',
 #     'django.contrib.messages',
 #     'django.contrib.staticfiles',
-    
+
 #     # Your apps
 #     'calender',  # Replace with your app name
-    
+
 #     # Third party
 #     'corsheaders',
 #     'rest_framework',
@@ -126,11 +126,11 @@
 #     AWS_S3_REGION_NAME = config('AWS_S3_REGION_NAME', default='us-east-1')
 #     AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
 #     AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
-    
+
 #     # Static files
 #     STATICFILES_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
 #     STATIC_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/static/'
-    
+
 #     # Media files
 #     DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
 #     MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/media/'
@@ -241,8 +241,7 @@ CACHES = {
 SECRET_KEY = 'django-insecure-l6c$=vdsv7n-ng7cd_^6fvi7lig^+_a2!dzg5oy1^a6qklw$9t'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
-
+DEBUG = False
 ALLOWED_HOSTS = ['*']
 
 
@@ -266,7 +265,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-'flow',
+
     'corsheaders',
     'channels',
     'assign',
@@ -315,8 +314,8 @@ WSGI_APPLICATION = 'crop.wsgi.application'
 # ===== GEMINI API KEYS (Add 5 keys) =====
 # Get free keys from: https://aistudio.google.com/apikey
 
-GEMINI_API_KEY_1 = os.environ.get('GEMINI_API_KEY_1', 'AIzaSyBwgjwmBlcQp2W5pX5UlopmKUOqVjWLcYg')
-GEMINI_API_KEY_2 = os.environ.get('GEMINI_API_KEY_2', 'AIzaSyBwgjwmBlcQp2W5pX5UlopmKUOqVjWLcYg')
+GEMINI_API_KEY_1 = os.environ.get('GEMINI_API_KEY_1', 'AIzaSyCh0DeWCZr8m3kF4LDB2A_xoAlqbmKjvgs')
+GEMINI_API_KEY_2 = os.environ.get('GEMINI_API_KEY_2', 'AIzaSyDGCAaYBIoySFkgom_KHm6wtk2m12wVLBw')
 # Backward compatibility
 GEMINI_API_KEY = GEMINI_API_KEY_1
 
@@ -329,10 +328,6 @@ AWS_SECRET_ACCESS_KEY = config('AWS_SECRET_ACCESS_KEY')
 AWS_STORAGE_BUCKET_NAME = config('AWS_STORAGE_BUCKET_NAME')
 AWS_S3_REGION_NAME = config('AWS_S3_REGION_NAME', default='ap-south-1')
 
-# --- 1. REMOVE THIS LINE ---
-# Do NOT use AWS_S3_CUSTOM_DOMAIN.
-# If this is set, Django assumes files are public and won't sign them.
-# AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
 
 # --- 2. ENABLE SIGNING ---
 AWS_QUERYSTRING_AUTH = True  # <--- This generates the '?Signature=...'
@@ -370,27 +365,27 @@ DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
 #         },
 #     }
 # }
-# DATABASES = {
-#      'default': {
-#          'ENGINE': config('DB_ENGINE', default='django.db.backends.postgresql'),
-#         'NAME': config('DB_NAME'),
-#          'USER': config('DB_USER'),
-#          'PASSWORD': config('DB_PASSWORD'),
-#          'HOST': config('DB_HOST'),
-#          'PORT': config('DB_PORT', default='5432'),
-#          'OPTIONS': {
-#              'connect_timeout': 10,
-#          }
-#      }
-# }
 DATABASES = {
-    'default': dj_database_url.config(
-        default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a.oregon-postgres.render.com/registerdb_od8n',
-        # default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a/registerdb_od8n',
-        conn_max_age=600,
-        conn_health_checks=True,
-    )
+     'default': {
+         'ENGINE': config('DB_ENGINE', default='django.db.backends.postgresql'),
+        'NAME': config('DB_NAME'),
+         'USER': config('DB_USER'),
+         'PASSWORD': config('DB_PASSWORD'),
+         'HOST': config('DB_HOST'),
+         'PORT': config('DB_PORT', default='5432'),
+         'OPTIONS': {
+             'connect_timeout': 10,
+         }
+     }
 }
+# DATABASES = {
+#     'default': dj_database_url.config(
+#         default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a.oregon-postgres.render.com/registerdb_od8n',
+#         # default='postgresql://postgress:nxJpZNoU4tirJexUiaPFTLvSPjiWwqyT@dpg-d3u7mhbe5dus739f6mjg-a/registerdb_od8n',
+#         conn_max_age=600,
+#         conn_health_checks=True,
+#     )
+# }
 # At the end of settings.py
 APPEND_SLASH = False  # Prevent automatic slash redirects
 
@@ -560,7 +555,7 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
-
+STATICFILES_DIRS = []
 STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
 
 # Static files (CSS, JavaScript, Images)
@@ -614,9 +609,3 @@ LOGGING = {
 
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
-
-
-
-
-
-# DEBUG = True  # Must be True for local development
